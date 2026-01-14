@@ -135,11 +135,24 @@
 ## Phase 6: Monetization & Scale (Week 8+)
 *Goal: Sustainable business model*
 
+### iOS App Store Setup
+- [x] Configure iOS App Store settings (bundle ID, entitlements)
+- [x] Add RevenueCat for subscription management
+- [x] Create subscription tiers (Weekly, Monthly, Annual)
+- [x] Build paywall UI with feature list
+- [x] Add premium feature gating logic
+- [x] Add privacy policy and terms of service screens
+- [x] Add settings screen with subscription management
+- [ ] Set up RevenueCat account and configure products
+- [ ] Create App Store Connect app listing
+- [ ] Configure in-app purchases in App Store Connect
+- [ ] Submit for App Store review
+
 ### Usage Controls
-- [ ] Free tier: 5 Claude queries/day
-- [ ] Premium tier: unlimited Claude queries
-- [ ] Stripe integration for subscriptions
-- [ ] Usage tracking and enforcement
+- [x] Free tier: 5 queries/day
+- [x] Premium tier: unlimited queries
+- [x] Usage tracking and enforcement
+- [ ] Stripe integration for web subscriptions (future)
 
 ### Analytics
 - [ ] Track decision accuracy (did user follow advice? what happened?)
@@ -172,10 +185,19 @@
 ## Current Sprint Focus
 
 **Active:**
-- [ ] *Next task goes here*
+- [ ] Set up RevenueCat account and configure products
+- [ ] Create App Store Connect app listing
+- [ ] Test subscription flow in sandbox environment
 
 **Blocked:**
 - *Nothing yet*
 
 **Completed This Sprint:**
-- *Nothing yet*
+- [x] iOS App Store configuration (bundle ID, entitlements, privacy manifests)
+- [x] RevenueCat SDK integration for subscriptions
+- [x] Subscription tiers and paywall UI
+- [x] Free tier query limits (5/day)
+- [x] Sport gating for free users (NBA only)
+- [x] Settings screen with subscription management
+- [x] Privacy Policy and Terms of Service screens
+- [x] App Store setup documentation

@@ -1,12 +1,22 @@
 import React from 'react';
-import { View, FlatList, StyleSheet, Text } from 'react-native';
+import { View, FlatList, StyleSheet, Text, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
+import { useSubscriptionStore, getAvailableSports } from '../stores/subscriptionStore';
 import { RiskModeSelector, SportSelector, MessageBubble, ChatInput } from '../components';
 import { Message } from '../types';
+import { FREE_TIER_LIMITS } from '../services/purchases';
 
 export function ChatScreen() {
+  const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { messages } = useAppStore();
+  const { isPro, getRemainingQueries, dailyQueriesUsed } = useSubscriptionStore();
+
+  const remainingQueries = getRemainingQueries();
+  const availableSports = getAvailableSports(isPro);
 
   const renderMessage = ({ item }: { item: Message }) => <MessageBubble message={item} />;
 
@@ -23,12 +33,55 @@ export function ChatScreen() {
     </View>
   );
 
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <View style={styles.headerTop}>
+        <View style={styles.headerLeft}>
+          {!isPro && (
+            <View style={styles.queriesContainer}>
+              <Text style={styles.queriesText}>
+                {remainingQueries}/{FREE_TIER_LIMITS.dailyQueries} queries left
+              </Text>
+            </View>
+          )}
+          {isPro && (
+            <View style={styles.proBadge}>
+              <Ionicons name="star" size={12} color="#fbbf24" />
+              <Text style={styles.proBadgeText}>PRO</Text>
+            </View>
+          )}
+        </View>
+        <TouchableOpacity
+          style={styles.settingsButton}
+          onPress={() => navigation.navigate('Settings')}
+        >
+          <Ionicons name="settings-outline" size={24} color="#9ca3af" />
+        </TouchableOpacity>
+      </View>
+      <SportSelector availableSports={availableSports} />
+      <RiskModeSelector />
+    </View>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <SportSelector />
-        <RiskModeSelector />
-      </View>
+      {renderHeader()}
+
+      {!isPro && remainingQueries === 0 && (
+        <TouchableOpacity
+          style={styles.upgradePrompt}
+          onPress={() => navigation.navigate('Paywall')}
+        >
+          <View style={styles.upgradeContent}>
+            <Ionicons name="lock-closed" size={20} color="#fbbf24" />
+            <View style={styles.upgradeTextContainer}>
+              <Text style={styles.upgradeTitle}>Daily limit reached</Text>
+              <Text style={styles.upgradeSubtitle}>Upgrade to Pro for unlimited queries</Text>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={24} color="#6366f1" />
+        </TouchableOpacity>
+      )}
 
       <FlatList
         data={messages}
@@ -39,7 +92,16 @@ export function ChatScreen() {
         inverted={messages.length > 0}
       />
 
-      <ChatInput />
+      <ChatInput disabled={!isPro && remainingQueries === 0} />
+
+      {!isPro && remainingQueries > 0 && (
+        <TouchableOpacity
+          style={styles.upgradeButton}
+          onPress={() => navigation.navigate('Paywall')}
+        >
+          <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
+        </TouchableOpacity>
+      )}
     </SafeAreaView>
   );
 }
@@ -52,6 +114,74 @@ const styles = StyleSheet.create({
   header: {
     borderBottomWidth: 1,
     borderBottomColor: '#1a1a2e',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  queriesContainer: {
+    backgroundColor: 'rgba(99, 102, 241, 0.1)',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  queriesText: {
+    fontSize: 13,
+    color: '#818cf8',
+    fontWeight: '500',
+  },
+  proBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(251, 191, 36, 0.1)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  proBadgeText: {
+    fontSize: 12,
+    color: '#fbbf24',
+    fontWeight: '700',
+  },
+  settingsButton: {
+    padding: 8,
+  },
+  upgradePrompt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#1a1a2e',
+    marginHorizontal: 16,
+    marginTop: 12,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#6366f1',
+  },
+  upgradeContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  upgradeTextContainer: {
+    gap: 2,
+  },
+  upgradeTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  upgradeSubtitle: {
+    fontSize: 13,
+    color: '#9ca3af',
   },
   messageList: {
     flexGrow: 1,
@@ -89,5 +219,20 @@ const styles = StyleSheet.create({
     color: '#64748b',
     marginBottom: 8,
     fontStyle: 'italic',
+  },
+  upgradeButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#6366f1',
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  upgradeButtonText: {
+    color: '#6366f1',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
