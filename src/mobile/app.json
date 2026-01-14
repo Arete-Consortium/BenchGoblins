@@ -30,6 +30,7 @@
       "config": {
         "usesNonExemptEncryption": false
       },
+      "associatedDomains": ["applinks:aretedriver.github.io"],
       "privacyManifests": {
         "NSPrivacyAccessedAPITypes": [
           {
@@ -68,6 +69,10 @@
       "revenueCatApiKey": {
         "ios": "YOUR_REVENUECAT_IOS_API_KEY",
         "android": "YOUR_REVENUECAT_ANDROID_API_KEY"
+      },
+      "legalUrls": {
+        "privacyPolicy": "https://aretedriver.github.io/GameSpace/legal/privacy-policy.html",
+        "termsOfService": "https://aretedriver.github.io/GameSpace/legal/terms-of-service.html"
       }
     },
     "owner": "gamespace"
