@@ -1,0 +1,201 @@
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+type TermsOfServiceScreenProps = {
+  navigation: NativeStackNavigationProp<any>;
+};
+
+export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScreenProps) {
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Terms of Service</Text>
+        <View style={styles.placeholder} />
+      </View>
+
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.content}>
+        <Text style={styles.lastUpdated}>Last Updated: January 2026</Text>
+
+        <Text style={styles.sectionTitle}>1. Acceptance of Terms</Text>
+        <Text style={styles.paragraph}>
+          By accessing or using GameSpace, you agree to be bound by these Terms of Service.
+          If you do not agree to these terms, do not use the app.
+        </Text>
+
+        <Text style={styles.sectionTitle}>2. Description of Service</Text>
+        <Text style={styles.paragraph}>
+          GameSpace is a fantasy sports decision engine that provides analysis and
+          recommendations for start/sit, waiver, and trade decisions. The service is
+          for entertainment and informational purposes only.
+        </Text>
+
+        <Text style={styles.sectionTitle}>3. No Guarantee of Results</Text>
+        <Text style={styles.paragraph}>
+          GameSpace provides probabilistic analysis, not predictions or guarantees. Fantasy
+          sports involve uncertainty, and our recommendations are based on available data
+          and analytical models. We do not guarantee any specific outcomes or results.
+          Past performance is not indicative of future results.
+        </Text>
+
+        <Text style={styles.sectionTitle}>4. User Accounts</Text>
+        <Text style={styles.paragraph}>
+          You are responsible for maintaining the confidentiality of your account credentials.
+          You agree to notify us immediately of any unauthorized use of your account.
+        </Text>
+
+        <Text style={styles.sectionTitle}>5. Subscriptions and Payments</Text>
+        <Text style={styles.paragraph}>
+          GameSpace offers subscription plans that provide access to premium features.
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Payment will be charged to your Apple ID account at confirmation of purchase
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Subscriptions automatically renew unless auto-renew is turned off at least
+          24 hours before the end of the current period
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Your account will be charged for renewal within 24 hours prior to the end
+          of the current period
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} You can manage or cancel your subscription in your App Store account settings
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} No refunds will be provided for partial subscription periods
+        </Text>
+
+        <Text style={styles.sectionTitle}>6. Acceptable Use</Text>
+        <Text style={styles.paragraph}>
+          You agree not to:
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Use the service for any illegal purpose
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Attempt to reverse engineer or extract source code
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Interfere with or disrupt the service
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Share your account credentials with others
+        </Text>
+        <Text style={styles.bulletPoint}>
+          {'\u2022'} Use automated systems to access the service
+        </Text>
+
+        <Text style={styles.sectionTitle}>7. Intellectual Property</Text>
+        <Text style={styles.paragraph}>
+          All content, features, and functionality of GameSpace are owned by us and are
+          protected by copyright, trademark, and other intellectual property laws. You
+          may not copy, modify, distribute, or create derivative works without our
+          prior written consent.
+        </Text>
+
+        <Text style={styles.sectionTitle}>8. Disclaimer of Warranties</Text>
+        <Text style={styles.paragraph}>
+          GAMESPACE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED.
+          WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE.
+          WE DISCLAIM ALL WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR
+          PURPOSE, AND NON-INFRINGEMENT.
+        </Text>
+
+        <Text style={styles.sectionTitle}>9. Limitation of Liability</Text>
+        <Text style={styles.paragraph}>
+          TO THE MAXIMUM EXTENT PERMITTED BY LAW, WE SHALL NOT BE LIABLE FOR ANY INDIRECT,
+          INCIDENTAL, SPECIAL, CONSEQUENTIAL, OR PUNITIVE DAMAGES, INCLUDING LOSS OF PROFITS,
+          DATA, OR OTHER INTANGIBLE LOSSES, RESULTING FROM YOUR USE OF THE SERVICE.
+        </Text>
+
+        <Text style={styles.sectionTitle}>10. Changes to Terms</Text>
+        <Text style={styles.paragraph}>
+          We reserve the right to modify these terms at any time. We will notify you of
+          significant changes through the app or via email. Your continued use of the
+          service after changes constitutes acceptance of the new terms.
+        </Text>
+
+        <Text style={styles.sectionTitle}>11. Governing Law</Text>
+        <Text style={styles.paragraph}>
+          These Terms shall be governed by and construed in accordance with the laws of
+          the State of Delaware, without regard to its conflict of law provisions.
+        </Text>
+
+        <Text style={styles.sectionTitle}>12. Contact Us</Text>
+        <Text style={styles.paragraph}>
+          If you have questions about these Terms, please contact us at:
+        </Text>
+        <Text style={styles.contactInfo}>legal@gamespace.app</Text>
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#0f0f1a',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a2e',
+  },
+  backButton: {
+    padding: 8,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+  },
+  placeholder: {
+    width: 40,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 24,
+  },
+  lastUpdated: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#fff',
+    marginTop: 24,
+    marginBottom: 12,
+  },
+  paragraph: {
+    fontSize: 15,
+    color: '#d1d5db',
+    lineHeight: 24,
+    marginBottom: 12,
+  },
+  bulletPoint: {
+    fontSize: 15,
+    color: '#d1d5db',
+    lineHeight: 24,
+    marginLeft: 16,
+    marginBottom: 4,
+  },
+  contactInfo: {
+    fontSize: 15,
+    color: '#6366f1',
+    marginTop: 8,
+  },
+});

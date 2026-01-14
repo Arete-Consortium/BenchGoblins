@@ -2,7 +2,7 @@
   "expo": {
     "name": "GameSpace",
     "slug": "gamespace",
-    "version": "0.1.0",
+    "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
@@ -14,7 +14,30 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gamespace.app"
+      "bundleIdentifier": "com.gamespace.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSUserTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you.",
+        "SKAdNetworkItems": [
+          {
+            "SKAdNetworkIdentifier": "cstr6suwn9.skadnetwork"
+          }
+        ]
+      },
+      "entitlements": {
+        "com.apple.developer.in-app-payments": ["merchant.com.gamespace.app"]
+      },
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": ["CA92.1"]
+          }
+        ]
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -23,15 +46,30 @@
       },
       "package": "com.gamespace.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "versionCode": 1
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.0"
+          }
+        }
+      ]
+    ],
     "extra": {
       "eas": {
         "projectId": ""
+      },
+      "revenueCatApiKey": {
+        "ios": "YOUR_REVENUECAT_IOS_API_KEY",
+        "android": "YOUR_REVENUECAT_ANDROID_API_KEY"
       }
-    }
+    },
+    "owner": "gamespace"
   }
 }

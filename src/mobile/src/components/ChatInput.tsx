@@ -10,16 +10,28 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppStore } from '../stores/appStore';
+import { useSubscriptionStore } from '../stores/subscriptionStore';
 
-export function ChatInput() {
+interface ChatInputProps {
+  disabled?: boolean;
+}
+
+export function ChatInput({ disabled = false }: ChatInputProps) {
   const [text, setText] = useState('');
   const { sendMessage, isLoading } = useAppStore();
+  const { incrementQueryCount, isPro } = useSubscriptionStore();
 
   const handleSend = async () => {
-    if (!text.trim() || isLoading) return;
+    if (!text.trim() || isLoading || disabled) return;
 
     const message = text.trim();
     setText('');
+
+    // Increment query count for free users before making the request
+    if (!isPro) {
+      await incrementQueryCount();
+    }
+
     await sendMessage(message);
   };
 
@@ -30,20 +42,20 @@ export function ChatInput() {
     >
       <View style={styles.container}>
         <TextInput
-          style={styles.input}
-          placeholder="Ask about a player..."
+          style={[styles.input, disabled && styles.disabledInput]}
+          placeholder={disabled ? "Upgrade to Pro for more queries" : "Ask about a player..."}
           placeholderTextColor="#64748b"
           value={text}
           onChangeText={setText}
           onSubmitEditing={handleSend}
           returnKeyType="send"
-          editable={!isLoading}
+          editable={!isLoading && !disabled}
           multiline
         />
         <TouchableOpacity
-          style={[styles.sendButton, (!text.trim() || isLoading) && styles.disabledButton]}
+          style={[styles.sendButton, (!text.trim() || isLoading || disabled) && styles.disabledButton]}
           onPress={handleSend}
-          disabled={!text.trim() || isLoading}
+          disabled={!text.trim() || isLoading || disabled}
         >
           {isLoading ? (
             <ActivityIndicator color="#ffffff" size="small" />
@@ -87,5 +99,8 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#374151',
+  },
+  disabledInput: {
+    opacity: 0.6,
   },
 });
