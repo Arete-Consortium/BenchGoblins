@@ -5,6 +5,12 @@ services:
     build:
       context: ./src/api
       dockerfile: Dockerfile
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 256M
     ports:
       - "8000:8000"
     environment:
