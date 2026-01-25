@@ -10,6 +10,7 @@ from enum import Enum
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 # Add parent directory to path for imports
@@ -488,6 +489,92 @@ async def _claude_decision(
             status_code=500,
             detail=f"Error processing request: {str(e)}",
         )
+
+
+@app.post("/decide/stream")
+async def make_decision_stream(request: DecisionRequest):
+    """
+    Stream a fantasy sports decision (Server-Sent Events).
+
+    Returns streamed text chunks from Claude for faster perceived response.
+    Complex queries only - simple queries should use /decide.
+    """
+    if not claude_service.is_available:
+        raise HTTPException(
+            status_code=503,
+            detail="Claude API not configured. Set ANTHROPIC_API_KEY environment variable.",
+        )
+
+    # Extract players from query if not provided
+    player_a = request.player_a
+    player_b = request.player_b
+
+    if not player_a or not player_b:
+        extracted_a, extracted_b = extract_players_from_query(request.query)
+        player_a = player_a or extracted_a
+        player_b = player_b or extracted_b
+
+    # Fetch player data for context
+    player_context = None
+    if player_a or player_b:
+        context_parts = []
+        if player_a:
+            player_a_data = await espn_service.find_player_by_name(player_a, request.sport.value)
+            if player_a_data:
+                info, stats = player_a_data
+                context_parts.append(
+                    f"Player A:\n{format_player_context(info, stats, request.sport.value)}"
+                )
+        if player_b:
+            player_b_data = await espn_service.find_player_by_name(player_b, request.sport.value)
+            if player_b_data:
+                info, stats = player_b_data
+                context_parts.append(
+                    f"Player B:\n{format_player_context(info, stats, request.sport.value)}"
+                )
+        if context_parts:
+            player_context = "\n\n".join(context_parts)
+
+    async def event_generator():
+        """Generate Server-Sent Events."""
+        try:
+            async for chunk in claude_service.make_decision_stream(
+                query=request.query,
+                sport=request.sport.value,
+                risk_mode=request.risk_mode.value,
+                decision_type=request.decision_type.value,
+                player_a=player_a,
+                player_b=player_b,
+                league_type=request.league_type,
+                player_context=player_context,
+            ):
+                # Format as SSE
+                yield f"data: {chunk}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as e:
+            yield f"data: [ERROR] {str(e)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+        },
+    )
+
+
+@app.get("/cache/stats")
+async def get_cache_stats():
+    """Get Claude response cache statistics."""
+    return claude_service.get_cache_stats()
+
+
+@app.post("/cache/clear")
+async def clear_cache():
+    """Clear the Claude response cache."""
+    claude_service.clear_cache()
+    return {"status": "cleared"}
 
 
 @app.get("/history")

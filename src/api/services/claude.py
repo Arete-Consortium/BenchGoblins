@@ -4,10 +4,15 @@ Claude API integration for GameSpace.
 Handles complex queries that require nuanced reasoning beyond local scoring.
 """
 
+import hashlib
 import os
 import re
+import time
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from anthropic import Anthropic
+from cachetools import TTLCache
 
 SYSTEM_PROMPT = """You are GameSpace, a fantasy sports decision engine.
 
@@ -71,11 +76,56 @@ Confidence reflects role clarity and data agreement — NOT likelihood of succes
 class ClaudeService:
     """Service for making Claude API calls for fantasy decisions."""
 
+    # Cache: max 100 entries, TTL 1 hour
+    _response_cache: TTLCache = TTLCache(maxsize=100, ttl=3600)
+    _cache_hits = 0
+    _cache_misses = 0
+
     def __init__(self):
         self.client: Anthropic | None = None
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key:
             self.client = Anthropic(api_key=api_key)
+
+    @staticmethod
+    def _cache_key(
+        query: str,
+        sport: str,
+        risk_mode: str,
+        decision_type: str,
+        player_a: str | None,
+        player_b: str | None,
+    ) -> str:
+        """Generate cache key from request parameters."""
+        key_parts = [
+            query.lower().strip(),
+            sport.lower(),
+            risk_mode.lower(),
+            decision_type.lower(),
+            (player_a or "").lower().strip(),
+            (player_b or "").lower().strip(),
+        ]
+        key_str = "|".join(key_parts)
+        return hashlib.md5(key_str.encode()).hexdigest()
+
+    @classmethod
+    def get_cache_stats(cls) -> dict:
+        """Return cache hit/miss statistics."""
+        total = cls._cache_hits + cls._cache_misses
+        hit_rate = cls._cache_hits / total if total > 0 else 0
+        return {
+            "hits": cls._cache_hits,
+            "misses": cls._cache_misses,
+            "hit_rate": round(hit_rate, 3),
+            "size": len(cls._response_cache),
+        }
+
+    @classmethod
+    def clear_cache(cls):
+        """Clear the response cache."""
+        cls._response_cache.clear()
+        cls._cache_hits = 0
+        cls._cache_misses = 0
 
     @property
     def is_available(self) -> bool:
@@ -136,15 +186,29 @@ class ClaudeService:
         player_b: str | None = None,
         league_type: str | None = None,
         player_context: str | None = None,
+        use_cache: bool = True,
     ) -> dict:
         """
         Make a fantasy decision using Claude.
 
+        Args:
+            use_cache: If True, check cache before calling API.
+
         Returns:
-            dict with decision, confidence, rationale, details, source
+            dict with decision, confidence, rationale, details, source, cached
         """
         if not self.client:
             raise RuntimeError("Claude API not configured - set ANTHROPIC_API_KEY")
+
+        # Check cache
+        cache_key = self._cache_key(query, sport, risk_mode, decision_type, player_a, player_b)
+        if use_cache and cache_key in self._response_cache:
+            ClaudeService._cache_hits += 1
+            cached_result = self._response_cache[cache_key].copy()
+            cached_result["cached"] = True
+            return cached_result
+
+        ClaudeService._cache_misses += 1
 
         user_message = self.build_user_message(
             query=query,
@@ -164,7 +228,54 @@ class ClaudeService:
             messages=[{"role": "user", "content": user_message}],
         )
 
-        return self._parse_response(response.content[0].text)
+        result = self._parse_response(response.content[0].text)
+        result["cached"] = False
+
+        # Store in cache
+        if use_cache:
+            self._response_cache[cache_key] = result.copy()
+
+        return result
+
+    async def make_decision_stream(
+        self,
+        query: str,
+        sport: str,
+        risk_mode: str,
+        decision_type: str,
+        player_a: str | None = None,
+        player_b: str | None = None,
+        league_type: str | None = None,
+        player_context: str | None = None,
+    ) -> AsyncGenerator[str, None]:
+        """
+        Stream a fantasy decision from Claude.
+
+        Yields:
+            Text chunks as they arrive from the API.
+        """
+        if not self.client:
+            raise RuntimeError("Claude API not configured - set ANTHROPIC_API_KEY")
+
+        user_message = self.build_user_message(
+            query=query,
+            sport=sport,
+            risk_mode=risk_mode,
+            decision_type=decision_type,
+            player_a=player_a,
+            player_b=player_b,
+            league_type=league_type,
+            player_context=player_context,
+        )
+
+        with self.client.messages.stream(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        ) as stream:
+            for text in stream.text_stream:
+                yield text
 
     def _parse_response(self, response_text: str) -> dict:
         """Parse Claude's response into structured data."""
