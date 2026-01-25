@@ -59,25 +59,25 @@
 *Goal: Working iOS/Android app with core decision flow*
 
 ### React Native Setup
-- [ ] Initialize Expo project
-- [ ] Configure navigation (React Navigation)
-- [ ] Set up state management (Zustand or Redux Toolkit)
-- [ ] API client setup with axios
-- [ ] Environment configuration (dev/staging/prod)
+- [x] Initialize Expo project
+- [x] Configure navigation (React Navigation)
+- [x] Set up state management (Zustand or Redux Toolkit)
+- [x] API client setup with axios
+- [x] Environment configuration (dev/staging/prod)
 
 ### Screens
-- [ ] **Dashboard** — Quick actions, recent decisions, league overview
-- [ ] **Ask GameSpace** — Chat interface for queries
-- [ ] **Roster Manager** — View/edit rosters manually
-- [ ] **Decision History** — Past decisions with outcomes
-- [ ] **Settings** — Risk mode default, notification prefs
+- [x] **Dashboard** — Quick actions, recent decisions, league overview
+- [x] **Ask GameSpace** — Chat interface for queries
+- [x] **Roster Manager** — View/edit rosters manually
+- [x] **Decision History** — Past decisions with outcomes
+- [x] **Settings** — Risk mode default, notification prefs
 
 ### Components
-- [ ] Player card component
-- [ ] Decision summary card (expandable)
-- [ ] Risk mode selector (Floor/Median/Ceiling)
-- [ ] Sport selector
-- [ ] Loading/streaming text indicator
+- [x] Player card component
+- [x] Decision summary card (expandable)
+- [x] Risk mode selector (Floor/Median/Ceiling)
+- [x] Sport selector
+- [x] Loading/streaming text indicator
 
 ### UX Polish
 - [ ] Skeleton loaders while fetching
