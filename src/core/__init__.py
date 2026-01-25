@@ -1,4 +1,5 @@
 """GameSpace Core Logic"""
+
 from .scoring import (
     RiskMode,
     PlayerStats,
