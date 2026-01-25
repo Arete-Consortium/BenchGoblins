@@ -14,6 +14,13 @@ from typing import Any
 
 import redis.asyncio as redis
 
+# Import monitoring helpers (optional - gracefully degrade if not available)
+try:
+    from monitoring import track_cache_operation
+except ImportError:
+    def track_cache_operation(operation: str, hit: bool) -> None:
+        pass
+
 # Redis URL from environment
 REDIS_URL = os.getenv("REDIS_URL", "")
 
@@ -92,7 +99,9 @@ class RedisService:
             return None
         try:
             data = await self._client.get(self._player_key(sport, player_id))
-            return json.loads(data) if data else None
+            result = json.loads(data) if data else None
+            track_cache_operation("get", hit=result is not None)
+            return result
         except (redis.ConnectionError, json.JSONDecodeError):
             return None
 
@@ -116,7 +125,9 @@ class RedisService:
             return None
         try:
             data = await self._client.get(self._player_search_key(sport, query))
-            return json.loads(data) if data else None
+            result = json.loads(data) if data else None
+            track_cache_operation("get", hit=result is not None)
+            return result
         except (redis.ConnectionError, json.JSONDecodeError):
             return None
 
@@ -149,7 +160,9 @@ class RedisService:
             return None
         try:
             data = await self._client.get(self._decision_key(sport, risk_mode, query))
-            return json.loads(data) if data else None
+            result = json.loads(data) if data else None
+            track_cache_operation("get", hit=result is not None)
+            return result
         except (redis.ConnectionError, json.JSONDecodeError):
             return None
 

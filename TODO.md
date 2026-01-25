@@ -165,7 +165,7 @@
 - [x] Set up CI/CD pipeline (GitHub Actions)
 - [x] Database backups (scripts + GitHub Actions + docker-compose)
 - [x] Error monitoring (Sentry)
-- [ ] Performance monitoring
+- [x] Performance monitoring (Prometheus metrics + /metrics endpoint)
 
 ---
 
