@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { PurchasesPackage, PurchasesOffering } from 'react-native-purchases';
 import { purchasesService } from '../services/purchases';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useThemeStore } from '../stores/themeStore';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 type PaywallScreenProps = {
@@ -35,6 +36,7 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
   const [isPurchasing, setIsPurchasing] = useState(false);
 
   const { purchasePackage, restorePurchases, isPro } = useSubscriptionStore();
+  const { theme } = useThemeStore();
 
   useEffect(() => {
     loadOfferings();
@@ -135,22 +137,22 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ActivityIndicator size="large" color="#6366f1" />
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+        <ActivityIndicator size="large" color={theme.primary} />
       </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.closeButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="close" size={28} color="#fff" />
+            <Ionicons name="close" size={28} color={theme.text} />
           </TouchableOpacity>
-          <Text style={styles.title}>Upgrade to Pro</Text>
-          <Text style={styles.subtitle}>
+          <Text style={[styles.title, { color: theme.text }]}>Upgrade to Pro</Text>
+          <Text style={[styles.subtitle, { color: theme.textSecondary }]}>
             Unlock unlimited fantasy sports intelligence
           </Text>
         </View>
@@ -160,11 +162,11 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
           {FEATURES.map((feature, index) => (
             <View key={index} style={styles.featureRow}>
               <View style={styles.featureIcon}>
-                <Ionicons name={feature.icon as any} size={24} color="#6366f1" />
+                <Ionicons name={feature.icon as any} size={24} color={theme.primary} />
               </View>
               <View style={styles.featureText}>
-                <Text style={styles.featureTitle}>{feature.title}</Text>
-                <Text style={styles.featureDescription}>{feature.description}</Text>
+                <Text style={[styles.featureTitle, { color: theme.text }]}>{feature.title}</Text>
+                <Text style={[styles.featureDescription, { color: theme.textSecondary }]}>{feature.description}</Text>
               </View>
             </View>
           ))}
@@ -179,21 +181,21 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
             return (
               <TouchableOpacity
                 key={pkg.identifier}
-                style={[styles.packageCard, isSelected && styles.packageCardSelected]}
+                style={[styles.packageCard, { backgroundColor: theme.backgroundSecondary }, isSelected && { borderColor: theme.primary }]}
                 onPress={() => setSelectedPackage(pkg)}
               >
                 {savings && (
-                  <View style={styles.savingsBadge}>
+                  <View style={[styles.savingsBadge, { backgroundColor: theme.primary }]}>
                     <Text style={styles.savingsText}>{savings}</Text>
                   </View>
                 )}
                 <View style={styles.packageContent}>
-                  <View style={styles.radioOuter}>
-                    {isSelected && <View style={styles.radioInner} />}
+                  <View style={[styles.radioOuter, { borderColor: theme.primary }]}>
+                    {isSelected && <View style={[styles.radioInner, { backgroundColor: theme.primary }]} />}
                   </View>
                   <View style={styles.packageInfo}>
-                    <Text style={styles.packageLabel}>{getPackageLabel(pkg)}</Text>
-                    <Text style={styles.packagePrice}>{formatPrice(pkg)}</Text>
+                    <Text style={[styles.packageLabel, { color: theme.text }]}>{getPackageLabel(pkg)}</Text>
+                    <Text style={[styles.packagePrice, { color: theme.textSecondary }]}>{formatPrice(pkg)}</Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -203,7 +205,7 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
 
         {/* CTA */}
         <TouchableOpacity
-          style={[styles.purchaseButton, isPurchasing && styles.purchaseButtonDisabled]}
+          style={[styles.purchaseButton, { backgroundColor: theme.primary }, isPurchasing && styles.purchaseButtonDisabled]}
           onPress={handlePurchase}
           disabled={isPurchasing || !selectedPackage}
         >
@@ -218,11 +220,11 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
 
         {/* Restore */}
         <TouchableOpacity style={styles.restoreButton} onPress={handleRestore}>
-          <Text style={styles.restoreButtonText}>Restore Purchases</Text>
+          <Text style={[styles.restoreButtonText, { color: theme.primary }]}>Restore Purchases</Text>
         </TouchableOpacity>
 
         {/* Legal */}
-        <Text style={styles.legalText}>
+        <Text style={[styles.legalText, { color: theme.textTertiary }]}>
           Payment will be charged to your Apple ID account at confirmation of purchase.
           Subscription automatically renews unless auto-renew is turned off at least
           24 hours before the end of the current period. Your account will be charged
@@ -231,11 +233,11 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
 
         <View style={styles.legalLinks}>
           <TouchableOpacity onPress={() => navigation.navigate('PrivacyPolicy')}>
-            <Text style={styles.legalLink}>Privacy Policy</Text>
+            <Text style={[styles.legalLink, { color: theme.primary }]}>Privacy Policy</Text>
           </TouchableOpacity>
-          <Text style={styles.legalSeparator}>|</Text>
+          <Text style={[styles.legalSeparator, { color: theme.textTertiary }]}>|</Text>
           <TouchableOpacity onPress={() => navigation.navigate('TermsOfService')}>
-            <Text style={styles.legalLink}>Terms of Service</Text>
+            <Text style={[styles.legalLink, { color: theme.primary }]}>Terms of Service</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

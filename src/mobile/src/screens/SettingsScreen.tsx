@@ -1,10 +1,12 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Linking, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useThemeStore, ThemeMode } from '../stores/themeStore';
 import { FREE_TIER_LIMITS } from '../services/purchases';
+import { hapticSelection } from '../utils/haptics';
 
 type SettingsScreenProps = {
   navigation: NativeStackNavigationProp<any>;
@@ -12,6 +14,12 @@ type SettingsScreenProps = {
 
 export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   const { isPro, restorePurchases, dailyQueriesUsed, isLoading } = useSubscriptionStore();
+  const { mode, isDark, setMode, theme } = useThemeStore();
+
+  const handleThemeChange = (newMode: ThemeMode) => {
+    hapticSelection();
+    setMode(newMode);
+  };
 
   const handleRestorePurchases = async () => {
     try {
@@ -31,21 +39,21 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      <View style={[styles.header, { borderBottomColor: theme.border }]}>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color="#fff" />
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Settings</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Settings</Text>
         <View style={styles.placeholder} />
       </View>
 
       <ScrollView style={styles.scrollView}>
         {/* Subscription Status */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Subscription</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>Subscription</Text>
 
-          <View style={styles.subscriptionCard}>
+          <View style={[styles.subscriptionCard, { backgroundColor: theme.backgroundSecondary }]}>
             <View style={styles.subscriptionHeader}>
               {isPro ? (
                 <>
@@ -80,66 +88,142 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
           </View>
         </View>
 
+        {/* Appearance */}
+        <View style={styles.section}>
+          <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>Appearance</Text>
+
+          <View style={[styles.themeCard, { backgroundColor: theme.backgroundSecondary }]}>
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                mode === 'dark' && styles.themeOptionActive,
+              ]}
+              onPress={() => handleThemeChange('dark')}
+            >
+              <Ionicons
+                name="moon"
+                size={20}
+                color={mode === 'dark' ? theme.primary : theme.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.themeOptionText,
+                  { color: mode === 'dark' ? theme.primary : theme.textSecondary },
+                ]}
+              >
+                Dark
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                mode === 'light' && styles.themeOptionActive,
+              ]}
+              onPress={() => handleThemeChange('light')}
+            >
+              <Ionicons
+                name="sunny"
+                size={20}
+                color={mode === 'light' ? theme.primary : theme.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.themeOptionText,
+                  { color: mode === 'light' ? theme.primary : theme.textSecondary },
+                ]}
+              >
+                Light
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[
+                styles.themeOption,
+                mode === 'system' && styles.themeOptionActive,
+              ]}
+              onPress={() => handleThemeChange('system')}
+            >
+              <Ionicons
+                name="phone-portrait"
+                size={20}
+                color={mode === 'system' ? theme.primary : theme.textSecondary}
+              />
+              <Text
+                style={[
+                  styles.themeOptionText,
+                  { color: mode === 'system' ? theme.primary : theme.textSecondary },
+                ]}
+              >
+                System
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
         {/* Account */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Account</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>Account</Text>
 
-          <TouchableOpacity style={styles.menuItem} onPress={handleRestorePurchases}>
+          <TouchableOpacity
+            style={[styles.menuItem, { backgroundColor: theme.backgroundSecondary }]}
+            onPress={handleRestorePurchases}
+          >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="refresh" size={22} color="#9ca3af" />
-              <Text style={styles.menuItemText}>Restore Purchases</Text>
+              <Ionicons name="refresh" size={22} color={theme.textSecondary} />
+              <Text style={[styles.menuItemText, { color: theme.text }]}>Restore Purchases</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
           </TouchableOpacity>
         </View>
 
         {/* Legal */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Legal</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>Legal</Text>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => navigation.navigate('PrivacyPolicy')}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="shield-checkmark-outline" size={22} color="#9ca3af" />
-              <Text style={styles.menuItemText}>Privacy Policy</Text>
+              <Ionicons name="shield-checkmark-outline" size={22} color={theme.textSecondary} />
+              <Text style={[styles.menuItemText, { color: theme.text }]}>Privacy Policy</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => navigation.navigate('TermsOfService')}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="document-text-outline" size={22} color="#9ca3af" />
-              <Text style={styles.menuItemText}>Terms of Service</Text>
+              <Ionicons name="document-text-outline" size={22} color={theme.textSecondary} />
+              <Text style={[styles.menuItemText, { color: theme.text }]}>Terms of Service</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
           </TouchableOpacity>
         </View>
 
         {/* Support */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Support</Text>
+          <Text style={[styles.sectionTitle, { color: theme.textTertiary }]}>Support</Text>
 
           <TouchableOpacity
-            style={styles.menuItem}
+            style={[styles.menuItem, { backgroundColor: theme.backgroundSecondary }]}
             onPress={() => Linking.openURL('mailto:support@gamespace.app')}
           >
             <View style={styles.menuItemLeft}>
-              <Ionicons name="mail-outline" size={22} color="#9ca3af" />
-              <Text style={styles.menuItemText}>Contact Support</Text>
+              <Ionicons name="mail-outline" size={22} color={theme.textSecondary} />
+              <Text style={[styles.menuItemText, { color: theme.text }]}>Contact Support</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#6b7280" />
+            <Ionicons name="chevron-forward" size={20} color={theme.textTertiary} />
           </TouchableOpacity>
         </View>
 
         {/* App Info */}
         <View style={styles.appInfo}>
-          <Text style={styles.appName}>GameSpace</Text>
-          <Text style={styles.appVersion}>Version 1.0.0</Text>
+          <Text style={[styles.appName, { color: theme.textTertiary }]}>GameSpace</Text>
+          <Text style={[styles.appVersion, { color: theme.textTertiary }]}>Version 1.0.0</Text>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -241,6 +325,28 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 15,
     fontWeight: '600',
+  },
+  themeCard: {
+    flexDirection: 'row',
+    borderRadius: 12,
+    padding: 4,
+  },
+  themeOption: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  themeOptionActive: {
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  themeOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
   menuItem: {
     flexDirection: 'row',

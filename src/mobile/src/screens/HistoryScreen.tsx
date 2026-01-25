@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
+import { useThemeStore } from '../stores/themeStore';
 import { Message, DecisionResponse } from '../types';
 import { hapticWarning } from '../utils/haptics';
 
@@ -39,6 +40,7 @@ function getPlayerDetail(details: Record<string, unknown> | undefined, key: stri
 export function HistoryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { messages, clearMessages } = useAppStore();
+  const { theme } = useThemeStore();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(() => {
@@ -110,22 +112,22 @@ export function HistoryScreen() {
     if (!playerA || !playerB) return null;
 
     return (
-      <View style={styles.detailsRow}>
+      <View style={[styles.detailsRow, { borderTopColor: theme.borderLight }]}>
         <View style={styles.playerScore}>
-          <Text style={styles.playerName}>{playerA.name}</Text>
-          <Text style={styles.playerScoreValue}>{playerA.score}</Text>
+          <Text style={[styles.playerName, { color: theme.textSecondary }]}>{playerA.name}</Text>
+          <Text style={[styles.playerScoreValue, { color: theme.primaryLight }]}>{playerA.score}</Text>
         </View>
-        <Text style={styles.vsText}>vs</Text>
+        <Text style={[styles.vsText, { color: theme.textTertiary }]}>vs</Text>
         <View style={styles.playerScore}>
-          <Text style={styles.playerName}>{playerB.name}</Text>
-          <Text style={styles.playerScoreValue}>{playerB.score}</Text>
+          <Text style={[styles.playerName, { color: theme.textSecondary }]}>{playerB.name}</Text>
+          <Text style={[styles.playerScoreValue, { color: theme.primaryLight }]}>{playerB.score}</Text>
         </View>
       </View>
     );
   };
 
   const renderItem = ({ item }: { item: DecisionHistoryItem }) => (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: theme.backgroundSecondary }]}>
       <View style={styles.cardHeader}>
         <View style={styles.cardHeaderLeft}>
           <View
@@ -137,10 +139,10 @@ export function HistoryScreen() {
             <Ionicons
               name={item.decision.source === 'claude' ? 'sparkles' : 'flash'}
               size={14}
-              color={item.decision.source === 'claude' ? '#a78bfa' : '#818cf8'}
+              color={item.decision.source === 'claude' ? '#a78bfa' : theme.primaryLight}
             />
           </View>
-          <Text style={styles.timestamp}>{formatDate(item.timestamp)}</Text>
+          <Text style={[styles.timestamp, { color: theme.textTertiary }]}>{formatDate(item.timestamp)}</Text>
         </View>
         <View
           style={[
@@ -165,16 +167,16 @@ export function HistoryScreen() {
         </View>
       </View>
 
-      <Text style={styles.userQuery} numberOfLines={2}>
+      <Text style={[styles.userQuery, { color: theme.textSecondary }]} numberOfLines={2}>
         {item.userQuery}
       </Text>
 
       <View style={styles.decisionRow}>
-        <Ionicons name="checkmark-circle" size={20} color="#22c55e" />
-        <Text style={styles.decisionText}>{item.decision.decision}</Text>
+        <Ionicons name="checkmark-circle" size={20} color={theme.success} />
+        <Text style={[styles.decisionText, { color: theme.text }]}>{item.decision.decision}</Text>
       </View>
 
-      <Text style={styles.rationale} numberOfLines={3}>
+      <Text style={[styles.rationale, { color: theme.textSecondary }]} numberOfLines={3}>
         {item.decision.rationale}
       </Text>
 
@@ -184,13 +186,13 @@ export function HistoryScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="time-outline" size={64} color="#4b5563" />
-      <Text style={styles.emptyTitle}>No decisions yet</Text>
-      <Text style={styles.emptySubtitle}>
+      <Ionicons name="time-outline" size={64} color={theme.textTertiary} />
+      <Text style={[styles.emptyTitle, { color: theme.text }]}>No decisions yet</Text>
+      <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
         Your decision history will appear here after you ask GameSpace for advice
       </Text>
       <TouchableOpacity
-        style={styles.askButton}
+        style={[styles.askButton, { backgroundColor: theme.primary }]}
         onPress={() => {
           // @ts-ignore - nested navigation
           navigation.navigate('Ask');
@@ -203,42 +205,42 @@ export function HistoryScreen() {
   );
 
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, { borderBottomColor: theme.border }]}>
       <View style={styles.headerTop}>
-        <Text style={styles.headerTitle}>Decision History</Text>
+        <Text style={[styles.headerTitle, { color: theme.text }]}>Decision History</Text>
         <TouchableOpacity
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
         >
-          <Ionicons name="settings-outline" size={24} color="#9ca3af" />
+          <Ionicons name="settings-outline" size={24} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
       {decisions.length > 0 && (
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, { backgroundColor: theme.backgroundSecondary }]}>
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>{decisions.length}</Text>
-            <Text style={styles.statLabel}>Decisions</Text>
+            <Text style={[styles.statValue, { color: theme.primaryLight }]}>{decisions.length}</Text>
+            <Text style={[styles.statLabel, { color: theme.textTertiary }]}>Decisions</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>
+            <Text style={[styles.statValue, { color: theme.primaryLight }]}>
               {decisions.filter((d) => d.decision.source === 'local').length}
             </Text>
-            <Text style={styles.statLabel}>Local</Text>
+            <Text style={[styles.statLabel, { color: theme.textTertiary }]}>Local</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>
+            <Text style={[styles.statValue, { color: theme.primaryLight }]}>
               {decisions.filter((d) => d.decision.source === 'claude').length}
             </Text>
-            <Text style={styles.statLabel}>Claude</Text>
+            <Text style={[styles.statLabel, { color: theme.textTertiary }]}>Claude</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.statItem}>
-            <Text style={styles.statValue}>
+            <Text style={[styles.statValue, { color: theme.primaryLight }]}>
               {decisions.filter((d) => d.decision.confidence === 'high').length}
             </Text>
-            <Text style={styles.statLabel}>High Conf.</Text>
+            <Text style={[styles.statLabel, { color: theme.textTertiary }]}>High Conf.</Text>
           </View>
         </View>
       )}
@@ -257,7 +259,7 @@ export function HistoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {renderHeader()}
       <FlatList
         data={decisions}
@@ -271,8 +273,8 @@ export function HistoryScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#818cf8"
-            colors={['#818cf8']}
+            tintColor={theme.primaryLight}
+            colors={[theme.primaryLight]}
           />
         }
       />

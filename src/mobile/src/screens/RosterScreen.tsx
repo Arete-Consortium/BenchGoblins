@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
 import { useRosterStore } from '../stores/rosterStore';
+import { useThemeStore } from '../stores/themeStore';
 import { searchPlayers } from '../services/api';
 import { Player } from '../types';
 import { hapticSuccess, hapticWarning } from '../utils/haptics';
@@ -24,6 +25,7 @@ export function RosterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { sport } = useAppStore();
   const { roster, addPlayer, removePlayer } = useRosterStore();
+  const { theme } = useThemeStore();
 
   const [isSearching, setIsSearching] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -89,19 +91,19 @@ export function RosterScreen() {
   };
 
   const renderPlayer = ({ item }: { item: Player }) => (
-    <View style={styles.playerCard}>
+    <View style={[styles.playerCard, { backgroundColor: theme.backgroundSecondary }]}>
       <View style={styles.playerInfo}>
-        <Text style={styles.playerName}>{item.name}</Text>
+        <Text style={[styles.playerName, { color: theme.text }]}>{item.name}</Text>
         <View style={styles.playerMeta}>
-          <Text style={styles.playerTeam}>{item.team}</Text>
-          <Text style={styles.playerPosition}>{item.position}</Text>
+          <Text style={[styles.playerTeam, { color: theme.textSecondary }]}>{item.team}</Text>
+          <Text style={[styles.playerPosition, { color: theme.primaryLight }]}>{item.position}</Text>
         </View>
       </View>
       <TouchableOpacity
         style={styles.removeButton}
         onPress={() => handleRemovePlayer(item.id)}
       >
-        <Ionicons name="close-circle" size={24} color="#ef4444" />
+        <Ionicons name="close-circle" size={24} color={theme.error} />
       </TouchableOpacity>
     </View>
   );
@@ -111,23 +113,23 @@ export function RosterScreen() {
 
     return (
       <TouchableOpacity
-        style={[styles.searchResultCard, isOnRoster && styles.searchResultDisabled]}
+        style={[styles.searchResultCard, { backgroundColor: theme.backgroundSecondary }, isOnRoster && styles.searchResultDisabled]}
         onPress={() => !isOnRoster && handleAddPlayer(item)}
         disabled={isOnRoster}
       >
         <View style={styles.playerInfo}>
-          <Text style={styles.playerName}>{item.name}</Text>
+          <Text style={[styles.playerName, { color: theme.text }]}>{item.name}</Text>
           <View style={styles.playerMeta}>
-            <Text style={styles.playerTeam}>{item.team}</Text>
-            <Text style={styles.playerPosition}>{item.position}</Text>
+            <Text style={[styles.playerTeam, { color: theme.textSecondary }]}>{item.team}</Text>
+            <Text style={[styles.playerPosition, { color: theme.primaryLight }]}>{item.position}</Text>
           </View>
         </View>
         {isOnRoster ? (
           <View style={styles.onRosterBadge}>
-            <Text style={styles.onRosterText}>On Roster</Text>
+            <Text style={[styles.onRosterText, { color: theme.primaryLight }]}>On Roster</Text>
           </View>
         ) : (
-          <Ionicons name="add-circle" size={24} color="#22c55e" />
+          <Ionicons name="add-circle" size={24} color={theme.success} />
         )}
       </TouchableOpacity>
     );
@@ -135,13 +137,13 @@ export function RosterScreen() {
 
   const renderEmptyRoster = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="people-outline" size={64} color="#4b5563" />
-      <Text style={styles.emptyTitle}>No players yet</Text>
-      <Text style={styles.emptySubtitle}>
+      <Ionicons name="people-outline" size={64} color={theme.textTertiary} />
+      <Text style={[styles.emptyTitle, { color: theme.text }]}>No players yet</Text>
+      <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
         Add players to your {sportLabels[sport]} roster to get quick comparisons
       </Text>
       <TouchableOpacity
-        style={styles.addButton}
+        style={[styles.addButton, { backgroundColor: theme.primary }]}
         onPress={() => setIsSearching(true)}
       >
         <Ionicons name="add" size={20} color="#fff" />
@@ -151,11 +153,11 @@ export function RosterScreen() {
   );
 
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, { borderBottomColor: theme.border }]}>
       <View style={styles.headerTop}>
         <View>
-          <Text style={styles.headerTitle}>My Roster</Text>
-          <Text style={styles.headerSubtitle}>{sportLabels[sport]}</Text>
+          <Text style={[styles.headerTitle, { color: theme.text }]}>My Roster</Text>
+          <Text style={[styles.headerSubtitle, { color: theme.primaryLight }]}>{sportLabels[sport]}</Text>
         </View>
         <View style={styles.headerActions}>
           {sportRoster.length > 0 && (
@@ -163,20 +165,20 @@ export function RosterScreen() {
               style={styles.addIconButton}
               onPress={() => setIsSearching(true)}
             >
-              <Ionicons name="person-add" size={22} color="#818cf8" />
+              <Ionicons name="person-add" size={22} color={theme.primaryLight} />
             </TouchableOpacity>
           )}
           <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Ionicons name="settings-outline" size={24} color="#9ca3af" />
+            <Ionicons name="settings-outline" size={24} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
       </View>
       {sportRoster.length > 0 && (
-        <View style={styles.statsBar}>
-          <Text style={styles.statsText}>
+        <View style={[styles.statsBar, { backgroundColor: theme.backgroundSecondary }]}>
+          <Text style={[styles.statsText, { color: theme.textSecondary }]}>
             {sportRoster.length} player{sportRoster.length !== 1 ? 's' : ''}
           </Text>
         </View>
@@ -187,8 +189,8 @@ export function RosterScreen() {
   // Search mode view
   if (isSearching) {
     return (
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.searchHeader}>
+      <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
+        <View style={[styles.searchHeader, { borderBottomColor: theme.border }]}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => {
@@ -197,14 +199,14 @@ export function RosterScreen() {
               setSearchResults([]);
             }}
           >
-            <Ionicons name="arrow-back" size={24} color="#fff" />
+            <Ionicons name="arrow-back" size={24} color={theme.text} />
           </TouchableOpacity>
-          <View style={styles.searchInputContainer}>
-            <Ionicons name="search" size={20} color="#64748b" />
+          <View style={[styles.searchInputContainer, { backgroundColor: theme.backgroundSecondary }]}>
+            <Ionicons name="search" size={20} color={theme.textTertiary} />
             <TextInput
-              style={styles.searchInput}
+              style={[styles.searchInput, { color: theme.text }]}
               placeholder={`Search ${sportLabels[sport]} players...`}
-              placeholderTextColor="#64748b"
+              placeholderTextColor={theme.textTertiary}
               value={searchQuery}
               onChangeText={setSearchQuery}
               onSubmitEditing={handleSearch}
@@ -213,7 +215,7 @@ export function RosterScreen() {
             />
             {searchQuery.length > 0 && (
               <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <Ionicons name="close-circle" size={20} color="#64748b" />
+                <Ionicons name="close-circle" size={20} color={theme.textTertiary} />
               </TouchableOpacity>
             )}
           </View>
@@ -221,8 +223,8 @@ export function RosterScreen() {
 
         {isLoading ? (
           <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#818cf8" />
-            <Text style={styles.loadingText}>Searching...</Text>
+            <ActivityIndicator size="large" color={theme.primaryLight} />
+            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>Searching...</Text>
           </View>
         ) : (
           <FlatList
@@ -233,7 +235,7 @@ export function RosterScreen() {
             ListEmptyComponent={
               searchQuery.length > 0 ? (
                 <View style={styles.noResultsContainer}>
-                  <Text style={styles.noResultsText}>
+                  <Text style={[styles.noResultsText, { color: theme.textTertiary }]}>
                     {searchResults.length === 0 && !isLoading
                       ? 'No players found. Try a different search.'
                       : 'Type to search for players'}
@@ -249,7 +251,7 @@ export function RosterScreen() {
 
   // Main roster view
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {renderHeader()}
       <FlatList
         data={sportRoster}
@@ -262,8 +264,8 @@ export function RosterScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#818cf8"
-            colors={['#818cf8']}
+            tintColor={theme.primaryLight}
+            colors={[theme.primaryLight]}
           />
         }
       />

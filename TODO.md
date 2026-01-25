@@ -83,7 +83,7 @@
 - [x] Skeleton loaders while fetching
 - [x] Pull-to-refresh on lists
 - [x] Haptic feedback on decisions
-- [ ] Dark mode support (already dark, toggle not implemented)
+- [x] Dark mode support (theme toggle with Dark/Light/System modes)
 
 ---
 

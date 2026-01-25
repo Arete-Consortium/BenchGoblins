@@ -13,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
 import { useSubscriptionStore } from '../stores/subscriptionStore';
+import { useThemeStore } from '../stores/themeStore';
 import { FREE_TIER_LIMITS } from '../services/purchases';
 import { Message } from '../types';
 
@@ -59,6 +60,7 @@ export function DashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { messages, sport, riskMode } = useAppStore();
   const { isPro, getRemainingQueries } = useSubscriptionStore();
+  const { theme } = useThemeStore();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = useCallback(() => {
@@ -97,7 +99,7 @@ export function DashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
@@ -105,40 +107,40 @@ export function DashboardScreen() {
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor="#818cf8"
-            colors={['#818cf8']}
+            tintColor={theme.primaryLight}
+            colors={[theme.primaryLight]}
           />
         }
       >
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>GameSpace</Text>
-            <Text style={styles.subtitle}>Fantasy decision engine</Text>
+            <Text style={[styles.greeting, { color: theme.primaryLight }]}>GameSpace</Text>
+            <Text style={[styles.subtitle, { color: theme.textTertiary }]}>Fantasy decision engine</Text>
           </View>
           <TouchableOpacity
             style={styles.settingsButton}
             onPress={() => navigation.navigate('Settings')}
           >
-            <Ionicons name="settings-outline" size={24} color="#9ca3af" />
+            <Ionicons name="settings-outline" size={24} color={theme.textSecondary} />
           </TouchableOpacity>
         </View>
 
         {/* Status Bar */}
-        <View style={styles.statusBar}>
+        <View style={[styles.statusBar, { backgroundColor: theme.backgroundSecondary }]}>
           <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Sport</Text>
-            <Text style={styles.statusValue}>{sportLabels[sport]}</Text>
+            <Text style={[styles.statusLabel, { color: theme.textTertiary }]}>Sport</Text>
+            <Text style={[styles.statusValue, { color: theme.text }]}>{sportLabels[sport]}</Text>
           </View>
-          <View style={styles.statusDivider} />
+          <View style={[styles.statusDivider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Mode</Text>
-            <Text style={styles.statusValue}>{riskLabels[riskMode]}</Text>
+            <Text style={[styles.statusLabel, { color: theme.textTertiary }]}>Mode</Text>
+            <Text style={[styles.statusValue, { color: theme.text }]}>{riskLabels[riskMode]}</Text>
           </View>
-          <View style={styles.statusDivider} />
+          <View style={[styles.statusDivider, { backgroundColor: theme.borderLight }]} />
           <View style={styles.statusItem}>
-            <Text style={styles.statusLabel}>Queries</Text>
-            <Text style={styles.statusValue}>
+            <Text style={[styles.statusLabel, { color: theme.textTertiary }]}>Queries</Text>
+            <Text style={[styles.statusValue, { color: theme.text }]}>
               {isPro ? 'Unlimited' : `${remainingQueries}/${FREE_TIER_LIMITS.dailyQueries}`}
             </Text>
           </View>
@@ -147,37 +149,37 @@ export function DashboardScreen() {
         {/* Pro Upgrade Banner (for free users) */}
         {!isPro && (
           <TouchableOpacity
-            style={styles.upgradeBanner}
+            style={[styles.upgradeBanner, { borderColor: theme.primary }]}
             onPress={() => navigation.navigate('Paywall')}
           >
             <View style={styles.upgradeContent}>
-              <Ionicons name="star" size={24} color="#fbbf24" />
+              <Ionicons name="star" size={24} color={theme.warning} />
               <View style={styles.upgradeText}>
-                <Text style={styles.upgradeTitle}>Upgrade to Pro</Text>
-                <Text style={styles.upgradeSubtitle}>
+                <Text style={[styles.upgradeTitle, { color: theme.text }]}>Upgrade to Pro</Text>
+                <Text style={[styles.upgradeSubtitle, { color: theme.textSecondary }]}>
                   Unlimited queries + all sports
                 </Text>
               </View>
             </View>
-            <Ionicons name="chevron-forward" size={24} color="#6366f1" />
+            <Ionicons name="chevron-forward" size={24} color={theme.primary} />
           </TouchableOpacity>
         )}
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             {QUICK_ACTIONS.map((action) => (
               <TouchableOpacity
                 key={action.id}
-                style={styles.actionCard}
+                style={[styles.actionCard, { backgroundColor: theme.backgroundSecondary }]}
                 onPress={() => handleQuickAction(action)}
               >
                 <View style={styles.actionIcon}>
-                  <Ionicons name={action.icon} size={24} color="#818cf8" />
+                  <Ionicons name={action.icon} size={24} color={theme.primaryLight} />
                 </View>
-                <Text style={styles.actionTitle}>{action.title}</Text>
-                <Text style={styles.actionSubtitle}>{action.subtitle}</Text>
+                <Text style={[styles.actionTitle, { color: theme.text }]}>{action.title}</Text>
+                <Text style={[styles.actionSubtitle, { color: theme.textTertiary }]}>{action.subtitle}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -185,21 +187,21 @@ export function DashboardScreen() {
 
         {/* Recent Decisions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Recent Decisions</Text>
+          <Text style={[styles.sectionTitle, { color: theme.text }]}>Recent Decisions</Text>
           {recentDecisions.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Ionicons name="chatbubbles-outline" size={48} color="#4b5563" />
-              <Text style={styles.emptyText}>No decisions yet</Text>
-              <Text style={styles.emptySubtext}>
+            <View style={[styles.emptyState, { backgroundColor: theme.backgroundSecondary }]}>
+              <Ionicons name="chatbubbles-outline" size={48} color={theme.textTertiary} />
+              <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No decisions yet</Text>
+              <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>
                 Ask GameSpace for your first recommendation
               </Text>
             </View>
           ) : (
             <View style={styles.decisionsList}>
               {recentDecisions.map((message: Message) => (
-                <View key={message.id} style={styles.decisionCard}>
+                <View key={message.id} style={[styles.decisionCard, { backgroundColor: theme.backgroundSecondary }]}>
                   <View style={styles.decisionHeader}>
-                    <Text style={styles.decisionText}>
+                    <Text style={[styles.decisionText, { color: theme.text }]}>
                       {message.decision?.decision}
                     </Text>
                     <View
@@ -215,10 +217,10 @@ export function DashboardScreen() {
                       </Text>
                     </View>
                   </View>
-                  <Text style={styles.decisionRationale} numberOfLines={2}>
+                  <Text style={[styles.decisionRationale, { color: theme.textSecondary }]} numberOfLines={2}>
                     {message.decision?.rationale}
                   </Text>
-                  <Text style={styles.decisionSource}>
+                  <Text style={[styles.decisionSource, { color: theme.textTertiary }]}>
                     via {message.decision?.source}
                   </Text>
                 </View>
