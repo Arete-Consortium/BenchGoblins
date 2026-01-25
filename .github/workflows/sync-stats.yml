@@ -1,0 +1,149 @@
+# GameSpace Nightly Stats Sync
+# Syncs player stats from ESPN to PostgreSQL database
+
+name: Nightly Stats Sync
+
+on:
+  schedule:
+    # Run at 4:00 AM UTC daily (after games finish)
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+    inputs:
+      sport:
+        description: 'Sport to sync (leave empty for all)'
+        required: false
+        type: choice
+        options:
+          - ''
+          - nba
+          - nfl
+          - mlb
+          - nhl
+      force:
+        description: 'Force update even if recently synced'
+        required: false
+        type: boolean
+        default: false
+      dry_run:
+        description: 'Dry run (no database writes)'
+        required: false
+        type: boolean
+        default: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  sync-stats:
+    name: Sync Player Stats
+    runs-on: ubuntu-latest
+    # Only run if explicitly enabled
+    if: vars.STATS_SYNC_ENABLED == 'true'
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/api/requirements.txt
+
+      - name: Run stats sync
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: |
+          ARGS=""
+
+          if [ -n "${{ inputs.sport }}" ]; then
+            ARGS="$ARGS --sport ${{ inputs.sport }}"
+          fi
+
+          if [ "${{ inputs.force }}" == "true" ]; then
+            ARGS="$ARGS --force"
+          fi
+
+          if [ "${{ inputs.dry_run }}" == "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+
+          python scripts/sync_stats.py $ARGS --verbose
+
+      - name: Create issue on failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Stats Sync Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `The nightly stats sync job failed.
+
+            **Workflow Run:** ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+
+            Please investigate and re-run if needed.`;
+
+            // Check if similar issue exists
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'sync-failure',
+              per_page: 5
+            });
+
+            const existingIssue = issues.data.find(i => i.title.startsWith('Stats Sync Failed'));
+
+            if (existingIssue) {
+              // Add comment to existing issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: existingIssue.number,
+                body: `Another sync failure occurred.\n\n${body}`
+              });
+            } else {
+              // Create new issue
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: title,
+                body: body,
+                labels: ['sync-failure', 'automated']
+              });
+            }
+
+  # Sync specific sports in parallel for faster execution
+  sync-sports-parallel:
+    name: Sync ${{ matrix.sport }} Stats
+    runs-on: ubuntu-latest
+    if: vars.STATS_SYNC_PARALLEL == 'true' && vars.STATS_SYNC_ENABLED == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        sport: [nba, nfl, mlb, nhl]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r src/api/requirements.txt
+
+      - name: Sync ${{ matrix.sport }} stats
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          REDIS_URL: ${{ secrets.REDIS_URL }}
+        run: |
+          python scripts/sync_stats.py --sport ${{ matrix.sport }} --verbose

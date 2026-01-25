@@ -6,7 +6,7 @@
 ### Data Layer
 - [x] Set up PostgreSQL schema for players, stats, rosters
 - [x] Build ESPN API client for player data
-- [ ] Create nightly stats sync job (cron or scheduled task)
+- [x] Create nightly stats sync job (cron or scheduled task)
 - [x] Implement Redis caching layer for hot player data
 - [ ] Add Basketball Reference scraper for advanced stats (NBA)
 - [ ] Add Pro Football Reference scraper (NFL)
