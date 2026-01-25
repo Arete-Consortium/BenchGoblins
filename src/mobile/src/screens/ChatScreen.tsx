@@ -6,19 +6,28 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
 import { useSubscriptionStore, getAvailableSports } from '../stores/subscriptionStore';
-import { RiskModeSelector, SportSelector, MessageBubble, ChatInput } from '../components';
+import { RiskModeSelector, SportSelector, MessageBubble, ChatInput, SkeletonMessage } from '../components';
 import { Message } from '../types';
 import { FREE_TIER_LIMITS } from '../services/purchases';
 
 export function ChatScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { messages } = useAppStore();
+  const { messages, isLoading } = useAppStore();
   const { isPro, getRemainingQueries, dailyQueriesUsed } = useSubscriptionStore();
 
   const remainingQueries = getRemainingQueries();
   const availableSports = getAvailableSports(isPro);
 
   const renderMessage = ({ item }: { item: Message }) => <MessageBubble message={item} />;
+
+  const renderLoadingSkeleton = () => {
+    if (!isLoading) return null;
+    return (
+      <View style={styles.skeletonContainer}>
+        <SkeletonMessage />
+      </View>
+    );
+  };
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
@@ -89,6 +98,7 @@ export function ChatScreen() {
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.messageList}
         ListEmptyComponent={renderEmptyState}
+        ListHeaderComponent={renderLoadingSkeleton}
         inverted={messages.length > 0}
       />
 
@@ -234,5 +244,8 @@ const styles = StyleSheet.create({
     color: '#6366f1',
     fontSize: 14,
     fontWeight: '600',
+  },
+  skeletonContainer: {
+    transform: [{ scaleY: -1 }],
   },
 });
