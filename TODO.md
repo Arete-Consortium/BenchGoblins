@@ -162,9 +162,9 @@
 
 ### Infrastructure
 - [x] Deploy backend to AWS/GCP/Railway (Railway config + docs)
-- [ ] Set up CI/CD pipeline
+- [x] Set up CI/CD pipeline (GitHub Actions)
 - [ ] Database backups
-- [ ] Error monitoring (Sentry)
+- [x] Error monitoring (Sentry)
 - [ ] Performance monitoring
 
 ---

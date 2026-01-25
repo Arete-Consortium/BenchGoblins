@@ -8,3 +8,4 @@ redis>=5.0.0
 asyncpg>=0.29.0
 sqlalchemy>=2.0.0
 cachetools>=5.3.0
+sentry-sdk[fastapi]>=1.40.0

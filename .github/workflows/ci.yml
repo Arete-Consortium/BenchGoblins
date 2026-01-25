@@ -1,0 +1,123 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "20"
+
+jobs:
+  # ============================================================================
+  # Backend Tests
+  # ============================================================================
+  backend-test:
+    name: Backend Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: "pip"
+          cache-dependency-path: "src/api/requirements.txt"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r src/api/requirements.txt
+          pip install pytest pytest-asyncio pytest-cov
+
+      - name: Run tests
+        run: |
+          cd /home/runner/work/GameSpace/GameSpace
+          python -m pytest tests/ -v --cov=src/api --cov-report=xml --cov-report=term-missing
+        env:
+          PYTHONPATH: src/api
+
+      - name: Upload coverage
+        uses: codecov/codecov-action@v4
+        if: github.event_name == 'push'
+        with:
+          files: ./coverage.xml
+          fail_ci_if_error: false
+
+  # ============================================================================
+  # Backend Lint
+  # ============================================================================
+  backend-lint:
+    name: Backend Lint
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: Run ruff check
+        run: ruff check src/api/
+
+      - name: Run ruff format check
+        run: ruff format --check src/api/
+
+  # ============================================================================
+  # Mobile TypeScript Check
+  # ============================================================================
+  mobile-typecheck:
+    name: Mobile TypeScript
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: "src/mobile/package-lock.json"
+
+      - name: Install dependencies
+        run: |
+          cd src/mobile
+          npm ci
+
+      - name: TypeScript check
+        run: |
+          cd src/mobile
+          npx tsc --noEmit
+
+  # ============================================================================
+  # Docker Build (API)
+  # ============================================================================
+  docker-build:
+    name: Docker Build
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build API image
+        uses: docker/build-push-action@v5
+        with:
+          context: ./src/api
+          push: false
+          tags: gamespace-api:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
