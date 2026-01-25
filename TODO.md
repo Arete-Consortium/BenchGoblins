@@ -127,9 +127,9 @@
 - [x] Decision update alerts
 
 ### Real-Time Updates
-- [ ] WebSocket connection for live stat updates (during games)
-- [ ] Live scoring view during game windows
-- [ ] In-game decision adjustments ("Player X is questionable to return")
+- [x] WebSocket connection for live stat updates (during games)
+- [x] Live scoring view during game windows
+- [x] In-game decision adjustments ("Player X is questionable to return")
 
 ---
 

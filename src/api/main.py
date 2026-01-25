@@ -10,7 +10,7 @@ from uuid import UUID
 
 import sentry_sdk
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -48,6 +48,7 @@ from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
 from services.sleeper import sleeper_service
 from services.yahoo import yahoo_service
+from services.websocket import connection_manager, MessageType
 from monitoring import MetricsMiddleware, metrics_endpoint
 
 # ---------------------------------------------------------------------------
@@ -1541,6 +1542,45 @@ async def list_registered_tokens():
     """
     tokens = notification_service.get_all_tokens()
     return {"count": len(tokens), "tokens": tokens}
+
+
+# ---------------------------------------------------------------------------
+# WebSocket — Real-Time Updates
+# ---------------------------------------------------------------------------
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """
+    WebSocket endpoint for real-time updates.
+
+    Message Protocol:
+    - Client sends: {"type": "subscribe", "topic": "player:nba:12345"}
+    - Client sends: {"type": "unsubscribe", "topic": "player:nba:12345"}
+    - Client sends: {"type": "ping"}
+    - Server sends: {"type": "connected", "timestamp": "...", "data": {"connection_id": "..."}}
+    - Server sends: {"type": "stat_update", "timestamp": "...", "data": {...}}
+    - Server sends: {"type": "injury_alert", "timestamp": "...", "data": {...}}
+
+    Topics:
+    - player:{sport}:{player_id} — Updates for a specific player
+    - game:{sport}:{game_id} — Updates for a specific game
+    - sport:{sport} — All updates for a sport (nba, nfl, mlb, nhl)
+    - injuries — All injury alerts
+    """
+    connection_id = await connection_manager.connect(websocket)
+    try:
+        while True:
+            message = await websocket.receive_text()
+            await connection_manager.handle_message(connection_id, message)
+    except WebSocketDisconnect:
+        await connection_manager.disconnect(connection_id)
+
+
+@app.get("/ws/stats")
+async def websocket_stats():
+    """Get WebSocket connection statistics."""
+    return connection_manager.get_stats()
 
 
 if __name__ == "__main__":
