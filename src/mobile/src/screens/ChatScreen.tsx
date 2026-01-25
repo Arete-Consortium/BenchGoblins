@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
 import { useSubscriptionStore, getAvailableSports } from '../stores/subscriptionStore';
+import { useThemeStore } from '../stores/themeStore';
 import { RiskModeSelector, SportSelector, MessageBubble, ChatInput, SkeletonMessage } from '../components';
 import { Message } from '../types';
 import { FREE_TIER_LIMITS } from '../services/purchases';
@@ -14,6 +15,7 @@ export function ChatScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { messages, isLoading } = useAppStore();
   const { isPro, getRemainingQueries, dailyQueriesUsed } = useSubscriptionStore();
+  const { theme } = useThemeStore();
 
   const remainingQueries = getRemainingQueries();
   const availableSports = getAvailableSports(isPro);
@@ -31,32 +33,32 @@ export function ChatScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={styles.emptyTitle}>GameSpace</Text>
-      <Text style={styles.emptySubtitle}>Fantasy sports decision engine</Text>
+      <Text style={[styles.emptyTitle, { color: theme.primaryLight }]}>GameSpace</Text>
+      <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>Fantasy sports decision engine</Text>
       <View style={styles.examplesContainer}>
-        <Text style={styles.examplesHeader}>Try asking:</Text>
-        <Text style={styles.example}>"Should I start Jalen Brunson or Tyrese Maxey?"</Text>
-        <Text style={styles.example}>"Is Shai Gilgeous-Alexander a good ceiling play?"</Text>
-        <Text style={styles.example}>"Who should I start at flex: Puka or Deebo?"</Text>
+        <Text style={[styles.examplesHeader, { color: theme.textSecondary }]}>Try asking:</Text>
+        <Text style={[styles.example, { color: theme.textTertiary }]}>"Should I start Jalen Brunson or Tyrese Maxey?"</Text>
+        <Text style={[styles.example, { color: theme.textTertiary }]}>"Is Shai Gilgeous-Alexander a good ceiling play?"</Text>
+        <Text style={[styles.example, { color: theme.textTertiary }]}>"Who should I start at flex: Puka or Deebo?"</Text>
       </View>
     </View>
   );
 
   const renderHeader = () => (
-    <View style={styles.header}>
+    <View style={[styles.header, { borderBottomColor: theme.border }]}>
       <View style={styles.headerTop}>
         <View style={styles.headerLeft}>
           {!isPro && (
             <View style={styles.queriesContainer}>
-              <Text style={styles.queriesText}>
+              <Text style={[styles.queriesText, { color: theme.primaryLight }]}>
                 {remainingQueries}/{FREE_TIER_LIMITS.dailyQueries} queries left
               </Text>
             </View>
           )}
           {isPro && (
             <View style={styles.proBadge}>
-              <Ionicons name="star" size={12} color="#fbbf24" />
-              <Text style={styles.proBadgeText}>PRO</Text>
+              <Ionicons name="star" size={12} color={theme.warning} />
+              <Text style={[styles.proBadgeText, { color: theme.warning }]}>PRO</Text>
             </View>
           )}
         </View>
@@ -64,7 +66,7 @@ export function ChatScreen() {
           style={styles.settingsButton}
           onPress={() => navigation.navigate('Settings')}
         >
-          <Ionicons name="settings-outline" size={24} color="#9ca3af" />
+          <Ionicons name="settings-outline" size={24} color={theme.textSecondary} />
         </TouchableOpacity>
       </View>
       <SportSelector availableSports={availableSports} />
@@ -73,22 +75,22 @@ export function ChatScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]} edges={['top']}>
       {renderHeader()}
 
       {!isPro && remainingQueries === 0 && (
         <TouchableOpacity
-          style={styles.upgradePrompt}
+          style={[styles.upgradePrompt, { backgroundColor: theme.backgroundSecondary, borderColor: theme.primary }]}
           onPress={() => navigation.navigate('Paywall')}
         >
           <View style={styles.upgradeContent}>
-            <Ionicons name="lock-closed" size={20} color="#fbbf24" />
+            <Ionicons name="lock-closed" size={20} color={theme.warning} />
             <View style={styles.upgradeTextContainer}>
-              <Text style={styles.upgradeTitle}>Daily limit reached</Text>
-              <Text style={styles.upgradeSubtitle}>Upgrade to Pro for unlimited queries</Text>
+              <Text style={[styles.upgradeTitle, { color: theme.text }]}>Daily limit reached</Text>
+              <Text style={[styles.upgradeSubtitle, { color: theme.textSecondary }]}>Upgrade to Pro for unlimited queries</Text>
             </View>
           </View>
-          <Ionicons name="chevron-forward" size={24} color="#6366f1" />
+          <Ionicons name="chevron-forward" size={24} color={theme.primary} />
         </TouchableOpacity>
       )}
 
@@ -106,10 +108,10 @@ export function ChatScreen() {
 
       {!isPro && remainingQueries > 0 && (
         <TouchableOpacity
-          style={styles.upgradeButton}
+          style={[styles.upgradeButton, { borderColor: theme.primary }]}
           onPress={() => navigation.navigate('Paywall')}
         >
-          <Text style={styles.upgradeButtonText}>Upgrade to Pro</Text>
+          <Text style={[styles.upgradeButtonText, { color: theme.primary }]}>Upgrade to Pro</Text>
         </TouchableOpacity>
       )}
     </SafeAreaView>
