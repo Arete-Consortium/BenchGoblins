@@ -2,23 +2,96 @@ import { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ChatScreen } from './src/screens';
+import { Ionicons } from '@expo/vector-icons';
+import { ChatScreen, DashboardScreen, HistoryScreen, RosterScreen } from './src/screens';
 import PaywallScreen from './src/screens/PaywallScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 import TermsOfServiceScreen from './src/screens/TermsOfServiceScreen';
 import { useSubscriptionStore } from './src/stores/subscriptionStore';
 
+// Type definitions for navigation
 export type RootStackParamList = {
-  Chat: undefined;
+  MainTabs: undefined;
   Paywall: undefined;
   Settings: undefined;
   PrivacyPolicy: undefined;
   TermsOfService: undefined;
 };
 
+export type MainTabParamList = {
+  Dashboard: undefined;
+  Roster: undefined;
+  Ask: undefined;
+  History: undefined;
+};
+
 const Stack = createNativeStackNavigator<RootStackParamList>();
+const Tab = createBottomTabNavigator<MainTabParamList>();
+
+
+function MainTabs() {
+  return (
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: '#0f0f1a',
+          borderTopColor: '#1a1a2e',
+          borderTopWidth: 1,
+          height: 85,
+          paddingBottom: 25,
+          paddingTop: 10,
+        },
+        tabBarActiveTintColor: '#818cf8',
+        tabBarInactiveTintColor: '#64748b',
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: '500',
+        },
+      }}
+    >
+      <Tab.Screen
+        name="Dashboard"
+        component={DashboardScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Roster"
+        component={RosterScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="people" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="Ask"
+        component={ChatScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="chatbubbles" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen
+        name="History"
+        component={HistoryScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="time" size={size} color={color} />
+          ),
+        }}
+      />
+    </Tab.Navigator>
+  );
+}
 
 function AppContent() {
   const initialize = useSubscriptionStore((state) => state.initialize);
@@ -36,7 +109,7 @@ function AppContent() {
           contentStyle: { backgroundColor: '#0f0f1a' },
         }}
       >
-        <Stack.Screen name="Chat" component={ChatScreen} />
+        <Stack.Screen name="MainTabs" component={MainTabs} />
         <Stack.Screen
           name="Paywall"
           component={PaywallScreen}
