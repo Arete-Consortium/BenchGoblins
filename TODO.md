@@ -4,10 +4,10 @@
 *Goal: Local scoring engine works for simple A vs B comparisons*
 
 ### Data Layer
-- [ ] Set up PostgreSQL schema for players, stats, rosters
-- [ ] Build ESPN API client for player data
+- [x] Set up PostgreSQL schema for players, stats, rosters
+- [x] Build ESPN API client for player data
 - [ ] Create nightly stats sync job (cron or scheduled task)
-- [ ] Implement Redis caching layer for hot player data
+- [x] Implement Redis caching layer for hot player data
 - [ ] Add Basketball Reference scraper for advanced stats (NBA)
 - [ ] Add Pro Football Reference scraper (NFL)
 
@@ -91,10 +91,10 @@
 *Goal: Auto-sync rosters from fantasy platforms*
 
 ### ESPN Integration
-- [ ] OAuth flow for ESPN Fantasy
-- [ ] Fetch user's leagues
-- [ ] Sync rosters automatically
-- [ ] Map ESPN player IDs to internal IDs
+- [x] OAuth flow for ESPN Fantasy (cookie-based auth)
+- [x] Fetch user's leagues
+- [x] Sync rosters automatically
+- [x] Map ESPN player IDs to internal IDs
 
 ### Yahoo Integration
 - [ ] OAuth flow for Yahoo Fantasy
@@ -119,11 +119,11 @@
 *Goal: Push alerts for injury news, lineup changes, decision updates*
 
 ### Push Notifications
-- [ ] Firebase Cloud Messaging setup
-- [ ] Notification permission flow
-- [ ] Injury alert triggers
-- [ ] Lineup lock reminders
-- [ ] "Your player is trending down" alerts
+- [x] Expo Push Notifications setup (mobile + backend)
+- [x] Notification permission flow
+- [x] Injury alert triggers
+- [x] Lineup lock reminders
+- [x] Decision update alerts
 
 ### Real-Time Updates
 - [ ] WebSocket connection for live stat updates (during games)

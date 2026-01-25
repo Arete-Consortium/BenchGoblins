@@ -70,21 +70,26 @@ services:
     networks:
       - gamespace-net
 
-  # Optional: Redis for caching (uncomment when needed)
-  # redis:
-  #   image: redis:7-alpine
-  #   container_name: gamespace-redis
-  #   ports:
-  #     - "6379:6379"
-  #   volumes:
-  #     - redis_data:/data
-  #   restart: unless-stopped
-  #   networks:
-  #     - gamespace-net
+  redis:
+    image: redis:7-alpine
+    container_name: gamespace-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gamespace-net
 
 volumes:
   postgres_data:
-  # redis_data:
+  redis_data:
 
 networks:
   gamespace-net:

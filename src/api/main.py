@@ -6,20 +6,27 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from enum import Enum
+from uuid import UUID
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
 
+from models.database import Decision as DecisionModel
 from services.claude import claude_service
+from services.database import db_service
 from services.espn import espn_service, format_player_context
+from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
+from services.notifications import notification_service, PushNotification
+from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
 
 # ---------------------------------------------------------------------------
@@ -30,14 +37,41 @@ from services.router import QueryComplexity, classify_query, extract_players_fro
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup app resources"""
+    # Initialize services
     if claude_service.is_available:
         print("Claude API configured and ready")
     else:
         print("WARNING: ANTHROPIC_API_KEY not set - Claude integration disabled")
+
+    # Connect to PostgreSQL
+    if db_service.is_configured:
+        try:
+            await db_service.connect()
+            print("PostgreSQL connected")
+        except Exception as e:
+            print(f"WARNING: PostgreSQL connection failed: {e}")
+    else:
+        print("WARNING: DATABASE_URL not set - persistence disabled")
+
+    # Connect to Redis
+    if redis_service.is_configured:
+        try:
+            await redis_service.connect()
+            print("Redis connected")
+        except Exception as e:
+            print(f"WARNING: Redis connection failed: {e}")
+    else:
+        print("WARNING: REDIS_URL not set - caching disabled")
+
     print("ESPN data service ready")
     yield
+
     # Cleanup
     await espn_service.close()
+    await espn_fantasy_service.close()
+    await notification_service.close()
+    await db_service.disconnect()
+    await redis_service.disconnect()
 
 
 # ---------------------------------------------------------------------------
@@ -156,11 +190,14 @@ class PlayerDetail(BaseModel):
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
+    redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
     return {
         "status": "healthy",
-        "version": "0.2.0",
+        "version": "0.3.0",
         "claude_available": claude_service.is_available,
         "espn_available": True,
+        "postgres_connected": db_service.is_configured,
+        "redis_connected": redis_healthy,
     }
 
 
@@ -215,6 +252,42 @@ async def get_player(sport: Sport, player_id: str):
     )
 
 
+async def _store_decision(
+    request: DecisionRequest,
+    response: DecisionResponse,
+    player_a_name: str | None = None,
+    player_b_name: str | None = None,
+    player_context: str | None = None,
+) -> None:
+    """Store decision in database for history and analytics."""
+    if not db_service.is_configured:
+        return
+
+    try:
+        async with db_service.session() as session:
+            decision = DecisionModel(
+                sport=request.sport.value,
+                risk_mode=request.risk_mode.value,
+                decision_type=request.decision_type.value,
+                query=request.query,
+                player_a_name=player_a_name,
+                player_b_name=player_b_name,
+                decision=response.decision,
+                confidence=response.confidence.value,
+                rationale=response.rationale,
+                source=response.source,
+                score_a=response.details.get("player_a", {}).get("score") if response.details else None,
+                score_b=response.details.get("player_b", {}).get("score") if response.details else None,
+                margin=response.details.get("margin") if response.details else None,
+                league_type=request.league_type,
+                player_context=player_context,
+            )
+            session.add(decision)
+    except Exception as e:
+        # Don't fail the request if persistence fails
+        print(f"Failed to store decision: {e}")
+
+
 @app.post("/decide", response_model=DecisionResponse)
 async def make_decision(request: DecisionRequest):
     """
@@ -265,13 +338,52 @@ async def make_decision(request: DecisionRequest):
         player_b=player_b,
     )
 
+    # Check Redis cache for Claude decisions first
+    if redis_service.is_connected:
+        cached = await redis_service.get_decision(
+            request.sport.value, request.risk_mode.value, request.query
+        )
+        if cached:
+            confidence_map = {
+                "low": Confidence.LOW,
+                "medium": Confidence.MEDIUM,
+                "high": Confidence.HIGH,
+            }
+            return DecisionResponse(
+                decision=cached["decision"],
+                confidence=confidence_map.get(cached.get("confidence", "medium"), Confidence.MEDIUM),
+                rationale=cached.get("rationale", ""),
+                details=cached.get("details"),
+                source=cached.get("source", "claude") + "_cached",
+            )
+
     # Route based on complexity
     if complexity == QueryComplexity.SIMPLE and player_a_data and player_b_data:
         # Use local scoring engine with real data
-        return await _local_decision(request, player_a, player_b, player_a_data, player_b_data)
+        response = await _local_decision(request, player_a, player_b, player_a_data, player_b_data)
     else:
         # Use Claude for complex queries or when we need more reasoning
-        return await _claude_decision(request, player_a, player_b, player_context)
+        response = await _claude_decision(request, player_a, player_b, player_context)
+
+    # Store decision in database (async, non-blocking)
+    await _store_decision(request, response, player_a, player_b, player_context)
+
+    # Cache Claude decisions in Redis
+    if response.source == "claude" and redis_service.is_connected:
+        await redis_service.set_decision(
+            request.sport.value,
+            request.risk_mode.value,
+            request.query,
+            {
+                "decision": response.decision,
+                "confidence": response.confidence.value,
+                "rationale": response.rationale,
+                "details": response.details,
+                "source": response.source,
+            },
+        )
+
+    return response
 
 
 async def _local_decision(
@@ -566,25 +678,356 @@ async def make_decision_stream(request: DecisionRequest):
 
 @app.get("/cache/stats")
 async def get_cache_stats():
-    """Get Claude response cache statistics."""
-    return claude_service.get_cache_stats()
+    """Get cache statistics (Claude in-memory + Redis)."""
+    claude_stats = claude_service.get_cache_stats()
+    redis_stats = await redis_service.get_stats()
+    return {
+        "claude_memory_cache": claude_stats,
+        "redis_cache": redis_stats,
+    }
 
 
 @app.post("/cache/clear")
 async def clear_cache():
-    """Clear the Claude response cache."""
+    """Clear all caches (Claude in-memory + Redis)."""
     claude_service.clear_cache()
+    if redis_service.is_connected:
+        await redis_service.clear_all()
     return {"status": "cleared"}
 
 
-@app.get("/history")
-async def get_decision_history(limit: int = 20):
-    """
-    Get recent decision history for the user.
+class DecisionHistoryItem(BaseModel):
+    """Decision history item for API response."""
 
-    TODO: Implement with user authentication
+    id: str
+    sport: str
+    risk_mode: str
+    decision_type: str
+    query: str
+    player_a_name: str | None
+    player_b_name: str | None
+    decision: str
+    confidence: str
+    rationale: str | None
+    source: str
+    score_a: float | None
+    score_b: float | None
+    margin: float | None
+    created_at: str
+
+
+@app.get("/history", response_model=list[DecisionHistoryItem])
+async def get_decision_history(
+    limit: int = Query(default=20, ge=1, le=100),
+    sport: Sport | None = None,
+):
     """
-    return []
+    Get recent decision history.
+
+    Optionally filter by sport.
+    """
+    if not db_service.is_configured:
+        return []
+
+    try:
+        async with db_service.session() as session:
+            query = select(DecisionModel).order_by(DecisionModel.created_at.desc()).limit(limit)
+
+            if sport:
+                query = query.where(DecisionModel.sport == sport.value)
+
+            result = await session.execute(query)
+            decisions = result.scalars().all()
+
+            return [
+                DecisionHistoryItem(
+                    id=str(d.id),
+                    sport=d.sport,
+                    risk_mode=d.risk_mode,
+                    decision_type=d.decision_type,
+                    query=d.query,
+                    player_a_name=d.player_a_name,
+                    player_b_name=d.player_b_name,
+                    decision=d.decision,
+                    confidence=d.confidence,
+                    rationale=d.rationale,
+                    source=d.source,
+                    score_a=float(d.score_a) if d.score_a else None,
+                    score_b=float(d.score_b) if d.score_b else None,
+                    margin=float(d.margin) if d.margin else None,
+                    created_at=d.created_at.isoformat(),
+                )
+                for d in decisions
+            ]
+    except Exception as e:
+        print(f"Failed to fetch history: {e}")
+        return []
+
+
+# ---------------------------------------------------------------------------
+# ESPN Fantasy Integration Routes
+# ---------------------------------------------------------------------------
+
+
+class ESPNConnectRequest(BaseModel):
+    """Request to connect ESPN Fantasy account."""
+
+    swid: str = Field(..., description="ESPN SWID cookie value")
+    espn_s2: str = Field(..., description="ESPN espn_s2 cookie value")
+
+
+class ESPNConnectResponse(BaseModel):
+    """Response after connecting ESPN account."""
+
+    connected: bool
+    user_id: str | None
+    leagues_found: int
+
+
+class FantasyLeagueResponse(BaseModel):
+    """Fantasy league information."""
+
+    id: str
+    name: str
+    sport: str
+    season: int
+    team_count: int
+    scoring_type: str
+
+
+class RosterPlayerResponse(BaseModel):
+    """Player on a fantasy roster."""
+
+    player_id: str
+    espn_id: str
+    name: str
+    position: str
+    team: str
+    lineup_slot: str
+    projected_points: float | None
+
+
+# In-memory credential storage (per session)
+# TODO: Move to Redis or database with encryption for production
+_espn_credentials: dict[str, ESPNCredentials] = {}
+
+
+@app.post("/integrations/espn/connect", response_model=ESPNConnectResponse)
+async def connect_espn_account(request: ESPNConnectRequest, session_id: str = Query(default="default")):
+    """
+    Connect an ESPN Fantasy account using cookie credentials.
+
+    Users need to provide their SWID and espn_s2 cookies from ESPN.
+    These can be found in browser DevTools after logging into ESPN Fantasy.
+    """
+    creds = ESPNCredentials(swid=request.swid, espn_s2=request.espn_s2)
+
+    # Verify credentials work
+    is_valid = await espn_fantasy_service.verify_credentials(creds)
+
+    if not is_valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid ESPN credentials. Please check your SWID and espn_s2 values.",
+        )
+
+    # Store credentials for this session
+    _espn_credentials[session_id] = creds
+
+    # Get user ID and count leagues
+    user_id = await espn_fantasy_service.get_user_id(creds)
+    leagues = await espn_fantasy_service.get_user_leagues(creds)
+
+    return ESPNConnectResponse(
+        connected=True,
+        user_id=user_id,
+        leagues_found=len(leagues),
+    )
+
+
+@app.get("/integrations/espn/leagues", response_model=list[FantasyLeagueResponse])
+async def get_espn_leagues(
+    session_id: str = Query(default="default"),
+    sport: Sport | None = None,
+):
+    """
+    Get all fantasy leagues for the connected ESPN account.
+
+    Optionally filter by sport.
+    """
+    creds = _espn_credentials.get(session_id)
+
+    if not creds:
+        raise HTTPException(
+            status_code=401,
+            detail="ESPN account not connected. Call /integrations/espn/connect first.",
+        )
+
+    leagues = await espn_fantasy_service.get_user_leagues(
+        creds,
+        sport=sport.value if sport else None,
+    )
+
+    return [
+        FantasyLeagueResponse(
+            id=league.id,
+            name=league.name,
+            sport=league.sport,
+            season=league.season,
+            team_count=league.team_count,
+            scoring_type=league.scoring_type,
+        )
+        for league in leagues
+    ]
+
+
+@app.get("/integrations/espn/leagues/{league_id}/roster", response_model=list[RosterPlayerResponse])
+async def get_espn_roster(
+    league_id: str,
+    sport: Sport,
+    team_id: int = Query(..., description="Team ID within the league"),
+    session_id: str = Query(default="default"),
+):
+    """
+    Get the roster for a specific team in an ESPN Fantasy league.
+    """
+    creds = _espn_credentials.get(session_id)
+
+    if not creds:
+        raise HTTPException(
+            status_code=401,
+            detail="ESPN account not connected. Call /integrations/espn/connect first.",
+        )
+
+    roster = await espn_fantasy_service.get_roster(
+        creds=creds,
+        league_id=league_id,
+        team_id=team_id,
+        sport=sport.value,
+    )
+
+    return [
+        RosterPlayerResponse(
+            player_id=p.player_id,
+            espn_id=p.espn_id,
+            name=p.name,
+            position=p.position,
+            team=p.team,
+            lineup_slot=p.lineup_slot,
+            projected_points=p.projected_points,
+        )
+        for p in roster
+    ]
+
+
+@app.delete("/integrations/espn/disconnect")
+async def disconnect_espn_account(session_id: str = Query(default="default")):
+    """
+    Disconnect ESPN Fantasy account and clear stored credentials.
+    """
+    if session_id in _espn_credentials:
+        del _espn_credentials[session_id]
+
+    return {"status": "disconnected"}
+
+
+@app.get("/integrations/espn/status")
+async def get_espn_status(session_id: str = Query(default="default")):
+    """
+    Check if ESPN Fantasy account is connected.
+    """
+    creds = _espn_credentials.get(session_id)
+    connected = creds is not None
+
+    if connected:
+        user_id = await espn_fantasy_service.get_user_id(creds)
+        return {"connected": True, "user_id": user_id}
+
+    return {"connected": False, "user_id": None}
+
+
+# ---------------------------------------------------------------------------
+# Push Notification Routes
+# ---------------------------------------------------------------------------
+
+
+class PushTokenRequest(BaseModel):
+    """Request to register/unregister push token."""
+
+    token: str = Field(..., description="Expo push token")
+
+
+class SendNotificationRequest(BaseModel):
+    """Request to send a notification."""
+
+    title: str
+    body: str
+    data: dict | None = None
+
+
+@app.post("/notifications/register")
+async def register_push_token(request: PushTokenRequest):
+    """
+    Register a device for push notifications.
+
+    The token should be an Expo push token from expo-notifications.
+    """
+    notification_service.register_token(request.token)
+    return {"status": "registered", "token": request.token}
+
+
+@app.post("/notifications/unregister")
+async def unregister_push_token(request: PushTokenRequest):
+    """
+    Unregister a device from push notifications.
+    """
+    notification_service.unregister_token(request.token)
+    return {"status": "unregistered"}
+
+
+@app.post("/notifications/send")
+async def send_notification_to_token(
+    token: str = Query(..., description="Target push token"),
+    request: SendNotificationRequest = ...,
+):
+    """
+    Send a notification to a specific device (admin/testing endpoint).
+    """
+    notification = PushNotification(
+        to=token,
+        title=request.title,
+        body=request.body,
+        data=request.data,
+    )
+
+    result = await notification_service.send_notification(notification)
+    return result
+
+
+@app.post("/notifications/broadcast")
+async def broadcast_notification(request: SendNotificationRequest):
+    """
+    Send a notification to all registered devices (admin endpoint).
+    """
+    results = await notification_service.send_to_all(
+        title=request.title,
+        body=request.body,
+        data=request.data,
+    )
+
+    return {
+        "sent": len(results),
+        "results": results,
+    }
+
+
+@app.get("/notifications/tokens")
+async def list_registered_tokens():
+    """
+    List all registered push tokens (admin endpoint).
+    """
+    tokens = notification_service.get_all_tokens()
+    return {"count": len(tokens), "tokens": tokens}
 
 
 if __name__ == "__main__":
