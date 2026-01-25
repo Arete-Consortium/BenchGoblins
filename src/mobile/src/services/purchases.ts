@@ -18,7 +18,7 @@ export const PRODUCT_IDS = {
 // Subscription tier limits
 export const FREE_TIER_LIMITS = {
   dailyQueries: 5,
-  sports: ['NBA'] as const,
+  sports: ['nba'] as const,
   features: {
     aiInsights: false,
     tradeAnalysis: false,
@@ -29,7 +29,7 @@ export const FREE_TIER_LIMITS = {
 
 export const PRO_TIER_FEATURES = {
   dailyQueries: Infinity,
-  sports: ['NBA', 'NFL', 'MLB', 'NHL'] as const,
+  sports: ['nba', 'nfl', 'mlb', 'nhl'] as const,
   features: {
     aiInsights: true,
     tradeAnalysis: true,
