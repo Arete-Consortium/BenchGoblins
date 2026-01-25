@@ -97,10 +97,10 @@
 - [x] Map ESPN player IDs to internal IDs
 
 ### Yahoo Integration
-- [ ] OAuth flow for Yahoo Fantasy
-- [ ] Fetch user's leagues
-- [ ] Sync rosters automatically
-- [ ] Map Yahoo player IDs to internal IDs
+- [x] OAuth flow for Yahoo Fantasy
+- [x] Fetch user's leagues
+- [x] Sync rosters automatically
+- [x] Map Yahoo player IDs to internal IDs
 
 ### Sleeper Integration
 - [x] API client (no OAuth needed)
