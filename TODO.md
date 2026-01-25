@@ -103,10 +103,11 @@
 - [ ] Map Yahoo player IDs to internal IDs
 
 ### Sleeper Integration
-- [ ] API client (no OAuth needed)
-- [ ] Fetch user's leagues
-- [ ] Sync rosters
-- [ ] Map Sleeper player IDs
+- [x] API client (no OAuth needed)
+- [x] Fetch user's leagues
+- [x] Sync rosters
+- [x] Map Sleeper player IDs
+- [x] Trending players endpoint
 
 ### Multi-Platform
 - [ ] Unified roster model across platforms
@@ -160,7 +161,7 @@
 - [ ] User engagement metrics
 
 ### Infrastructure
-- [ ] Deploy backend to AWS/GCP/Railway
+- [x] Deploy backend to AWS/GCP/Railway (Railway config + docs)
 - [ ] Set up CI/CD pipeline
 - [ ] Database backups
 - [ ] Error monitoring (Sentry)
