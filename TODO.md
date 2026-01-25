@@ -163,7 +163,7 @@
 ### Infrastructure
 - [x] Deploy backend to AWS/GCP/Railway (Railway config + docs)
 - [x] Set up CI/CD pipeline (GitHub Actions)
-- [ ] Database backups
+- [x] Database backups (scripts + GitHub Actions + docker-compose)
 - [x] Error monitoring (Sentry)
 - [ ] Performance monitoring
 

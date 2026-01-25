@@ -169,6 +169,91 @@ Railway PostgreSQL supports:
 
 ---
 
+## Database Backups
+
+### Automated Backups (GitHub Actions)
+
+The repository includes a GitHub Actions workflow for automated daily backups.
+
+**Setup:**
+
+1. Enable backups by setting repository variable:
+   - Go to Settings → Secrets and variables → Actions → Variables
+   - Add `DATABASE_BACKUP_ENABLED` = `true`
+
+2. Add your database connection string as a secret:
+   - Settings → Secrets and variables → Actions → Secrets
+   - Add `DATABASE_URL` = `postgresql://...` (your Railway PostgreSQL URL)
+
+3. (Optional) For S3 backups:
+   - Add variable `S3_BACKUP_ENABLED` = `true`
+   - Add variable `S3_BACKUP_BUCKET` = `your-bucket-name`
+   - Add secrets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`
+
+**Schedule:** Backups run daily at 3:00 AM UTC.
+
+**Manual trigger:** Go to Actions → Database Backup → Run workflow
+
+### Manual Backups
+
+```bash
+# Set your database URL
+export DATABASE_URL="postgresql://user:pass@host:5432/gamespace"
+
+# Run backup script
+./scripts/backup_db.sh
+
+# Backups are saved to ./backups/ by default
+ls -la ./backups/
+```
+
+### Docker Compose Backups
+
+For self-hosted deployments:
+
+```bash
+# Run backup manually
+docker-compose --profile backup up backup
+
+# Or use the backup script with Docker
+docker-compose exec postgres pg_dump -U gamespace gamespace | gzip > backups/gamespace_backup_$(date +%Y%m%d).sql.gz
+```
+
+For scheduled backups, add a cron job on the host:
+
+```bash
+# Edit crontab
+crontab -e
+
+# Add daily backup at 3 AM
+0 3 * * * cd /path/to/GameSpace && docker-compose --profile backup up backup
+```
+
+### Restore from Backup
+
+```bash
+# Set your database URL
+export DATABASE_URL="postgresql://user:pass@host:5432/gamespace"
+
+# Restore from backup (will prompt for confirmation)
+./scripts/restore_db.sh backups/gamespace_backup_20260125_120000.sql.gz
+```
+
+**Warning:** Restore will replace all existing data!
+
+### Railway Point-in-Time Recovery
+
+Railway Pro plan includes automatic point-in-time recovery:
+
+1. Go to your PostgreSQL service
+2. Click "Backups" tab
+3. Select a restore point
+4. Railway creates a new database from that point
+
+This is the recommended backup strategy for production on Railway.
+
+---
+
 ## Costs
 
 Railway pricing (as of 2024):

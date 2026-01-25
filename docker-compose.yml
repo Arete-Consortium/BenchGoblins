@@ -87,6 +87,30 @@ services:
     networks:
       - gamespace-net
 
+  # Database backup service - runs daily at 3 AM
+  backup:
+    image: postgres:16-alpine
+    container_name: gamespace-backup
+    environment:
+      PGHOST: postgres
+      PGUSER: gamespace
+      PGPASSWORD: ${POSTGRES_PASSWORD:-gamespace}
+      PGDATABASE: gamespace
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # Run backup immediately on start, then can be triggered manually
+    # For scheduled backups, use cron on host or GitHub Actions
+    entrypoint: ["sh", "-c", "pg_dump --no-owner --no-acl --clean --if-exists | gzip > /backups/gamespace_backup_$$(date +%Y%m%d_%H%M%S).sql.gz && echo 'Backup completed' && find /backups -name 'gamespace_backup_*.sql.gz' -mtime +$${BACKUP_RETENTION_DAYS} -delete"]
+    profiles:
+      - backup
+    networks:
+      - gamespace-net
+
 volumes:
   postgres_data:
   redis_data:

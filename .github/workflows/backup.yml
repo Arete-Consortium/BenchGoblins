@@ -1,0 +1,100 @@
+name: Database Backup
+
+on:
+  schedule:
+    # Run daily at 3:00 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Days to keep backups'
+        required: false
+        default: '7'
+
+env:
+  BACKUP_RETENTION_DAYS: ${{ github.event.inputs.retention_days || '7' }}
+
+jobs:
+  backup:
+    name: Backup PostgreSQL
+    runs-on: ubuntu-latest
+
+    # Only run if DATABASE_URL is configured
+    if: ${{ vars.DATABASE_BACKUP_ENABLED == 'true' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client
+
+      - name: Create backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          chmod +x scripts/backup_db.sh
+          ./scripts/backup_db.sh ./backups
+
+          # Extract backup path for artifact upload
+          BACKUP_FILE=$(ls -t ./backups/gamespace_backup_*.sql.gz | head -1)
+          echo "BACKUP_FILE=${BACKUP_FILE}" >> $GITHUB_ENV
+          echo "BACKUP_FILENAME=$(basename ${BACKUP_FILE})" >> $GITHUB_ENV
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: database-backup-${{ github.run_number }}
+          path: ${{ env.BACKUP_FILE }}
+          retention-days: ${{ env.BACKUP_RETENTION_DAYS }}
+
+      - name: Upload to S3 (optional)
+        if: ${{ vars.S3_BACKUP_ENABLED == 'true' }}
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
+          S3_BUCKET: ${{ vars.S3_BACKUP_BUCKET }}
+        run: |
+          aws s3 cp "${{ env.BACKUP_FILE }}" "s3://${S3_BUCKET}/gamespace/${{ env.BACKUP_FILENAME }}"
+          echo "Backup uploaded to s3://${S3_BUCKET}/gamespace/${{ env.BACKUP_FILENAME }}"
+
+      - name: Report backup status
+        run: |
+          echo "## Backup Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Filename:** ${{ env.BACKUP_FILENAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Size:** $(du -h ${{ env.BACKUP_FILE }} | cut -f1)" >> $GITHUB_STEP_SUMMARY
+          echo "- **Retention:** ${{ env.BACKUP_RETENTION_DAYS }} days" >> $GITHUB_STEP_SUMMARY
+          echo "- **Timestamp:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    needs: backup
+    if: failure()
+
+    steps:
+      - name: Create failure issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Database Backup Failed - ${new Date().toISOString().split('T')[0]}`;
+            const body = `
+            ## Backup Failure Alert
+
+            The scheduled database backup failed on ${new Date().toUTCString()}.
+
+            **Workflow Run:** [View Run](${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID})
+
+            Please investigate and ensure backups are working correctly.
+            `;
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: title,
+              body: body,
+              labels: ['bug', 'ops']
+            });
