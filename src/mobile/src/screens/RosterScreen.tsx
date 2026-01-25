@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TextInput,
   ActivityIndicator,
   Alert,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +18,7 @@ import { useAppStore } from '../stores/appStore';
 import { useRosterStore } from '../stores/rosterStore';
 import { searchPlayers } from '../services/api';
 import { Player } from '../types';
+import { hapticSuccess, hapticWarning } from '../utils/haptics';
 
 export function RosterScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
@@ -27,8 +29,17 @@ export function RosterScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Player[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   const sportRoster = roster[sport] || [];
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Simulate refresh - in future this could sync with league API
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 500);
+  }, []);
 
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
@@ -45,6 +56,7 @@ export function RosterScreen() {
   };
 
   const handleAddPlayer = (player: Player) => {
+    hapticSuccess();
     addPlayer(sport, player);
     setSearchResults([]);
     setSearchQuery('');
@@ -57,7 +69,14 @@ export function RosterScreen() {
       'Are you sure you want to remove this player from your roster?',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Remove', style: 'destructive', onPress: () => removePlayer(sport, playerId) },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: () => {
+            hapticWarning();
+            removePlayer(sport, playerId);
+          },
+        },
       ]
     );
   };
@@ -239,6 +258,14 @@ export function RosterScreen() {
         contentContainerStyle={styles.listContent}
         ListEmptyComponent={renderEmptyRoster}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#818cf8"
+            colors={['#818cf8']}
+          />
+        }
       />
     </SafeAreaView>
   );

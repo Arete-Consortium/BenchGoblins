@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { Sport, RiskMode, Message, DecisionResponse } from '../types';
 import { makeDecision } from '../services/api';
+import { hapticSuccess, hapticError, hapticSelection } from '../utils/haptics';
 
 interface AppState {
   // Settings
@@ -21,8 +22,14 @@ export const useAppStore = create<AppState>((set, get) => ({
   sport: 'nba',
   riskMode: 'median',
 
-  setSport: (sport) => set({ sport }),
-  setRiskMode: (riskMode) => set({ riskMode }),
+  setSport: (sport) => {
+    hapticSelection();
+    set({ sport });
+  },
+  setRiskMode: (riskMode) => {
+    hapticSelection();
+    set({ riskMode });
+  },
 
   // Chat state
   messages: [],
@@ -57,11 +64,13 @@ export const useAppStore = create<AppState>((set, get) => ({
         decision: response,
       };
 
+      hapticSuccess();
       set((state) => ({
         messages: [...state.messages, assistantMessage],
         isLoading: false,
       }));
     } catch (error) {
+      hapticError();
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',

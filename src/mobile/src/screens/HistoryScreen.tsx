@@ -1,10 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +13,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAppStore } from '../stores/appStore';
 import { Message, DecisionResponse } from '../types';
+import { hapticWarning } from '../utils/haptics';
 
 interface DecisionHistoryItem {
   id: string;
@@ -37,6 +39,15 @@ function getPlayerDetail(details: Record<string, unknown> | undefined, key: stri
 export function HistoryScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { messages, clearMessages } = useAppStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Simulate refresh - in future this could sync with backend
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 500);
+  }, []);
 
   // Extract decisions from messages
   const decisions = useMemo(() => {
@@ -238,7 +249,7 @@ export function HistoryScreen() {
     if (decisions.length === 0) return null;
 
     return (
-      <TouchableOpacity style={styles.clearButton} onPress={clearMessages}>
+      <TouchableOpacity style={styles.clearButton} onPress={() => { hapticWarning(); clearMessages(); }}>
         <Ionicons name="trash-outline" size={18} color="#ef4444" />
         <Text style={styles.clearButtonText}>Clear History</Text>
       </TouchableOpacity>
@@ -256,6 +267,14 @@ export function HistoryScreen() {
         ListEmptyComponent={renderEmptyState}
         ListFooterComponent={renderFooter}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#818cf8"
+            colors={['#818cf8']}
+          />
+        }
       />
     </SafeAreaView>
   );

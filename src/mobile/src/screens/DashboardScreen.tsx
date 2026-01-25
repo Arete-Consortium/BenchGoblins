@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -58,6 +59,15 @@ export function DashboardScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
   const { messages, sport, riskMode } = useAppStore();
   const { isPro, getRemainingQueries } = useSubscriptionStore();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    // Simulate refresh - in future this could sync with backend
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 500);
+  }, []);
 
   const remainingQueries = getRemainingQueries();
 
@@ -88,7 +98,18 @@ export function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.scrollView}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#818cf8"
+            colors={['#818cf8']}
+          />
+        }
+      >
         {/* Header */}
         <View style={styles.header}>
           <View>
