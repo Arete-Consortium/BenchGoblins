@@ -15,11 +15,14 @@ services:
       - "8000:8000"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - DATABASE_URL=${DATABASE_URL:-}
+      - DATABASE_URL=postgresql://gamespace:${POSTGRES_PASSWORD:-gamespace}@postgres:5432/gamespace
       - REDIS_URL=${REDIS_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     env_file:
       - .env
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
@@ -27,29 +30,62 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s
+    networks:
+      - gamespace-net
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: gamespace-db
+    environment:
+      POSTGRES_USER: gamespace
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gamespace}
+      POSTGRES_DB: gamespace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gamespace -d gamespace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - gamespace-net
+
+  db-init:
+    image: postgres:16-alpine
+    container_name: gamespace-db-init
+    environment:
+      PGHOST: postgres
+      PGUSER: gamespace
+      PGPASSWORD: ${POSTGRES_PASSWORD:-gamespace}
+      PGDATABASE: gamespace
+    volumes:
+      - ./data/schema.sql:/schema.sql:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    entrypoint: ["sh", "-c", "psql -f /schema.sql"]
+    networks:
+      - gamespace-net
 
   # Optional: Redis for caching (uncomment when needed)
   # redis:
   #   image: redis:7-alpine
+  #   container_name: gamespace-redis
   #   ports:
   #     - "6379:6379"
   #   volumes:
   #     - redis_data:/data
   #   restart: unless-stopped
+  #   networks:
+  #     - gamespace-net
 
-  # Optional: PostgreSQL for persistence (uncomment when needed)
-  # postgres:
-  #   image: postgres:16-alpine
-  #   environment:
-  #     POSTGRES_USER: gamespace
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gamespace}
-  #     POSTGRES_DB: gamespace
-  #   ports:
-  #     - "5432:5432"
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #   restart: unless-stopped
+volumes:
+  postgres_data:
+  # redis_data:
 
-# volumes:
-#   redis_data:
-#   postgres_data:
+networks:
+  gamespace-net:
+    driver: bridge

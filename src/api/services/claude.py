@@ -6,7 +6,6 @@ Handles complex queries that require nuanced reasoning beyond local scoring.
 
 import os
 import re
-from typing import Optional
 
 from anthropic import Anthropic
 
@@ -73,7 +72,7 @@ class ClaudeService:
     """Service for making Claude API calls for fantasy decisions."""
 
     def __init__(self):
-        self.client: Optional[Anthropic] = None
+        self.client: Anthropic | None = None
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key:
             self.client = Anthropic(api_key=api_key)
@@ -88,10 +87,10 @@ class ClaudeService:
         sport: str,
         risk_mode: str,
         decision_type: str,
-        player_a: Optional[str] = None,
-        player_b: Optional[str] = None,
-        league_type: Optional[str] = None,
-        player_context: Optional[str] = None,
+        player_a: str | None = None,
+        player_b: str | None = None,
+        league_type: str | None = None,
+        player_context: str | None = None,
     ) -> str:
         """Build the user message with context enrichment."""
         parts = [
@@ -133,10 +132,10 @@ class ClaudeService:
         sport: str,
         risk_mode: str,
         decision_type: str,
-        player_a: Optional[str] = None,
-        player_b: Optional[str] = None,
-        league_type: Optional[str] = None,
-        player_context: Optional[str] = None,
+        player_a: str | None = None,
+        player_b: str | None = None,
+        league_type: str | None = None,
+        player_context: str | None = None,
     ) -> dict:
         """
         Make a fantasy decision using Claude.

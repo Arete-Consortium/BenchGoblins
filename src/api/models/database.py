@@ -1,0 +1,373 @@
+"""
+SQLAlchemy ORM Models for GameSpace.
+
+Maps to the PostgreSQL schema in data/schema.sql.
+"""
+
+import uuid
+from datetime import datetime
+from decimal import Decimal
+from typing import Optional
+
+from sqlalchemy import (
+    JSON,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+
+class Base(DeclarativeBase):
+    """Base class for all models."""
+
+    pass
+
+
+class Player(Base):
+    """ESPN player cache."""
+
+    __tablename__ = "players"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    espn_id: Mapped[str] = mapped_column(String(20), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    team: Mapped[str | None] = mapped_column(String(50))
+    team_abbrev: Mapped[str | None] = mapped_column(String(10))
+    position: Mapped[str | None] = mapped_column(String(20))
+    sport: Mapped[str] = mapped_column(String(10), nullable=False)
+    jersey: Mapped[str | None] = mapped_column(String(10))
+    height: Mapped[str | None] = mapped_column(String(20))
+    weight: Mapped[str | None] = mapped_column(String(20))
+    age: Mapped[int | None] = mapped_column(Integer)
+    experience: Mapped[int | None] = mapped_column(Integer)
+    headshot_url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    stats: Mapped[list["PlayerStats"]] = relationship(
+        back_populates="player", cascade="all, delete-orphan"
+    )
+    game_logs: Mapped[list["GameLog"]] = relationship(
+        back_populates="player", cascade="all, delete-orphan"
+    )
+    indices: Mapped[list["PlayerIndex"]] = relationship(
+        back_populates="player", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint("sport IN ('nba', 'nfl', 'mlb', 'nhl')", name="check_sport"),
+        Index("idx_players_espn_id", "espn_id"),
+        Index("idx_players_sport", "sport"),
+        Index("idx_players_name", "name"),
+        Index("idx_players_team", "team_abbrev"),
+    )
+
+
+class PlayerStats(Base):
+    """Current season averages."""
+
+    __tablename__ = "player_stats"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id", ondelete="CASCADE"), nullable=False
+    )
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+
+    # Common stats
+    games_played: Mapped[int] = mapped_column(Integer, default=0)
+    games_started: Mapped[int] = mapped_column(Integer, default=0)
+
+    # NBA stats
+    minutes_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    points_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    rebounds_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    assists_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    steals_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    blocks_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    turnovers_per_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    usage_rate: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    field_goal_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    three_point_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+    free_throw_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 4))
+
+    # NFL stats
+    pass_yards: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    pass_tds: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    pass_ints: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    rush_yards: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    rush_tds: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    receptions: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    receiving_yards: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    receiving_tds: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    targets: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    snap_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+
+    # MLB stats
+    batting_avg: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    home_runs: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    rbis: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    stolen_bases: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    ops: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    era: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    wins: Mapped[int | None] = mapped_column(Integer)
+    strikeouts: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    whip: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+
+    # NHL stats
+    goals: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    assists_nhl: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    plus_minus: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    shots: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    save_pct: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
+    goals_against_avg: Mapped[Decimal | None] = mapped_column(Numeric(4, 2))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    player: Mapped["Player"] = relationship(back_populates="stats")
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "season", name="uq_player_stats_player_season"),
+        Index("idx_player_stats_player", "player_id"),
+        Index("idx_player_stats_season", "season"),
+    )
+
+
+class GameLog(Base):
+    """Game-by-game stats for trend analysis."""
+
+    __tablename__ = "game_logs"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id", ondelete="CASCADE"), nullable=False
+    )
+    game_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    opponent: Mapped[str | None] = mapped_column(String(10))
+    home_away: Mapped[str | None] = mapped_column(String(1))
+    result: Mapped[str | None] = mapped_column(String(1))
+
+    # NBA game stats
+    minutes: Mapped[int | None] = mapped_column(Integer)
+    points: Mapped[int | None] = mapped_column(Integer)
+    rebounds: Mapped[int | None] = mapped_column(Integer)
+    assists: Mapped[int | None] = mapped_column(Integer)
+    steals: Mapped[int | None] = mapped_column(Integer)
+    blocks: Mapped[int | None] = mapped_column(Integer)
+    turnovers: Mapped[int | None] = mapped_column(Integer)
+    fg_made: Mapped[int | None] = mapped_column(Integer)
+    fg_attempted: Mapped[int | None] = mapped_column(Integer)
+    three_made: Mapped[int | None] = mapped_column(Integer)
+    three_attempted: Mapped[int | None] = mapped_column(Integer)
+    ft_made: Mapped[int | None] = mapped_column(Integer)
+    ft_attempted: Mapped[int | None] = mapped_column(Integer)
+
+    # NFL game stats
+    pass_yards_game: Mapped[int | None] = mapped_column(Integer)
+    pass_tds_game: Mapped[int | None] = mapped_column(Integer)
+    pass_ints_game: Mapped[int | None] = mapped_column(Integer)
+    rush_yards_game: Mapped[int | None] = mapped_column(Integer)
+    rush_tds_game: Mapped[int | None] = mapped_column(Integer)
+    receptions_game: Mapped[int | None] = mapped_column(Integer)
+    receiving_yards_game: Mapped[int | None] = mapped_column(Integer)
+    receiving_tds_game: Mapped[int | None] = mapped_column(Integer)
+    targets_game: Mapped[int | None] = mapped_column(Integer)
+    snaps: Mapped[int | None] = mapped_column(Integer)
+    snap_pct_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+
+    # MLB game stats
+    at_bats: Mapped[int | None] = mapped_column(Integer)
+    hits: Mapped[int | None] = mapped_column(Integer)
+    home_runs_game: Mapped[int | None] = mapped_column(Integer)
+    rbis_game: Mapped[int | None] = mapped_column(Integer)
+    stolen_bases_game: Mapped[int | None] = mapped_column(Integer)
+    walks: Mapped[int | None] = mapped_column(Integer)
+    strikeouts_game: Mapped[int | None] = mapped_column(Integer)
+    innings_pitched: Mapped[Decimal | None] = mapped_column(Numeric(4, 1))
+    earned_runs: Mapped[int | None] = mapped_column(Integer)
+
+    # NHL game stats
+    goals_game: Mapped[int | None] = mapped_column(Integer)
+    assists_game: Mapped[int | None] = mapped_column(Integer)
+    plus_minus_game: Mapped[int | None] = mapped_column(Integer)
+    shots_game: Mapped[int | None] = mapped_column(Integer)
+    time_on_ice: Mapped[int | None] = mapped_column(Integer)  # in seconds
+    saves: Mapped[int | None] = mapped_column(Integer)
+    goals_against: Mapped[int | None] = mapped_column(Integer)
+
+    # Fantasy points (calculated)
+    fantasy_points: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    player: Mapped["Player"] = relationship(back_populates="game_logs")
+
+    __table_args__ = (
+        UniqueConstraint("player_id", "game_date", name="uq_game_logs_player_date"),
+        CheckConstraint("home_away IN ('H', 'A')", name="check_home_away"),
+        CheckConstraint("result IN ('W', 'L')", name="check_result"),
+        Index("idx_game_logs_player", "player_id"),
+        Index("idx_game_logs_date", "game_date"),
+        Index("idx_game_logs_player_date", "player_id", "game_date"),
+    )
+
+
+class PlayerIndex(Base):
+    """Cached SCI/RMI/GIS/OD/MSF calculations."""
+
+    __tablename__ = "player_indices"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    player_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id", ondelete="CASCADE"), nullable=False
+    )
+    calculated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=datetime.utcnow
+    )
+
+    # The five qualitative indices
+    sci: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    rmi: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    gis: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    od: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    msf: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+
+    # Composite scores per risk mode
+    floor_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    median_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+    ceiling_score: Mapped[Decimal] = mapped_column(Numeric(5, 2), nullable=False)
+
+    # Context
+    opponent: Mapped[str | None] = mapped_column(String(10))
+    game_date: Mapped[datetime | None] = mapped_column(DateTime)
+
+    # Metadata
+    calculation_inputs: Mapped[dict | None] = mapped_column(JSON)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Relationships
+    player: Mapped["Player"] = relationship(back_populates="indices")
+
+    __table_args__ = (
+        Index("idx_player_indices_player", "player_id"),
+        Index("idx_player_indices_expires", "expires_at"),
+        Index("idx_player_indices_matchup", "player_id", "opponent", "game_date"),
+    )
+
+
+class TeamDefense(Base):
+    """Team defensive rankings for MSF calculation."""
+
+    __tablename__ = "team_defense"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_abbrev: Mapped[str] = mapped_column(String(10), nullable=False)
+    sport: Mapped[str] = mapped_column(String(10), nullable=False)
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+
+    # General defensive metrics
+    defensive_rating: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    points_allowed: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    pace: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
+    # NBA position-specific
+    vs_pg: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_sg: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_sf: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_pf: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_c: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
+    # NFL position-specific
+    vs_qb: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_rb: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_wr: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_te: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
+    # Additional metrics
+    turnovers_forced: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    sacks: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("team_abbrev", "sport", "season", name="uq_team_defense"),
+        CheckConstraint("sport IN ('nba', 'nfl', 'mlb', 'nhl')", name="check_defense_sport"),
+        Index("idx_team_defense_team", "team_abbrev"),
+        Index("idx_team_defense_sport", "sport"),
+    )
+
+
+class Decision(Base):
+    """Decision history for analytics."""
+
+    __tablename__ = "decisions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Request context
+    user_id: Mapped[str | None] = mapped_column(String(100))
+    session_id: Mapped[str | None] = mapped_column(String(100))
+    sport: Mapped[str] = mapped_column(String(10), nullable=False)
+    risk_mode: Mapped[str] = mapped_column(String(10), nullable=False)
+    decision_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    query: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Players involved
+    player_a_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id")
+    )
+    player_b_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("players.id")
+    )
+    player_a_name: Mapped[str | None] = mapped_column(String(100))
+    player_b_name: Mapped[str | None] = mapped_column(String(100))
+
+    # Decision result
+    decision: Mapped[str] = mapped_column(Text, nullable=False)
+    confidence: Mapped[str] = mapped_column(String(10), nullable=False)
+    rationale: Mapped[str | None] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(10), nullable=False)
+
+    # Scores and indices
+    score_a: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    score_b: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    margin: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    indices_a: Mapped[dict | None] = mapped_column(JSON)
+    indices_b: Mapped[dict | None] = mapped_column(JSON)
+
+    # Context
+    league_type: Mapped[str | None] = mapped_column(String(50))
+    player_context: Mapped[str | None] = mapped_column(Text)
+
+    # Outcome tracking
+    actual_outcome: Mapped[str | None] = mapped_column(String(20))
+    actual_points_a: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    actual_points_b: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
+    feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    # Relationships
+    player_a: Mapped[Optional["Player"]] = relationship(foreign_keys=[player_a_id])
+    player_b: Mapped[Optional["Player"]] = relationship(foreign_keys=[player_b_id])
+
+    __table_args__ = (
+        CheckConstraint("risk_mode IN ('floor', 'median', 'ceiling')", name="check_risk_mode"),
+        CheckConstraint("confidence IN ('low', 'medium', 'high')", name="check_confidence"),
+        CheckConstraint("source IN ('local', 'claude')", name="check_source"),
+        Index("idx_decisions_user", "user_id"),
+        Index("idx_decisions_created", "created_at"),
+        Index("idx_decisions_sport", "sport"),
+    )

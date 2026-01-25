@@ -6,7 +6,6 @@ import os
 import sys
 from contextlib import asynccontextmanager
 from enum import Enum
-from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -21,7 +20,6 @@ load_dotenv()
 from services.claude import claude_service
 from services.espn import espn_service, format_player_context
 from services.router import QueryComplexity, classify_query, extract_players_from_query
-
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -102,15 +100,9 @@ class DecisionRequest(BaseModel):
         ...,
         description="Natural language query, e.g., 'Should I start Jalen Brunson or Tyrese Maxey?'",
     )
-    player_a: Optional[str] = Field(
-        None, description="First player name (optional if in query)"
-    )
-    player_b: Optional[str] = Field(
-        None, description="Second player name (optional if in query)"
-    )
-    league_type: Optional[str] = Field(
-        None, description="e.g., 'points', 'categories', 'half-ppr'"
-    )
+    player_a: str | None = Field(None, description="First player name (optional if in query)")
+    player_b: str | None = Field(None, description="Second player name (optional if in query)")
+    league_type: str | None = Field(None, description="e.g., 'points', 'categories', 'half-ppr'")
 
 
 class DecisionResponse(BaseModel):
@@ -119,7 +111,7 @@ class DecisionResponse(BaseModel):
     decision: str
     confidence: Confidence
     rationale: str
-    details: Optional[dict] = None
+    details: dict | None = None
     source: str = Field(..., description="'local' or 'claude'")
 
 
@@ -139,7 +131,7 @@ class Player(BaseModel):
     team: str
     position: str
     sport: Sport
-    headshot_url: Optional[str] = None
+    headshot_url: str | None = None
 
 
 class PlayerDetail(BaseModel):
@@ -151,8 +143,8 @@ class PlayerDetail(BaseModel):
     team_abbrev: str
     position: str
     sport: Sport
-    headshot_url: Optional[str] = None
-    stats: Optional[dict] = None
+    headshot_url: str | None = None
+    stats: dict | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -245,13 +237,9 @@ async def make_decision(request: DecisionRequest):
     player_context = None
 
     if player_a:
-        player_a_data = await espn_service.find_player_by_name(
-            player_a, request.sport.value
-        )
+        player_a_data = await espn_service.find_player_by_name(player_a, request.sport.value)
     if player_b:
-        player_b_data = await espn_service.find_player_by_name(
-            player_b, request.sport.value
-        )
+        player_b_data = await espn_service.find_player_by_name(player_b, request.sport.value)
 
     # Build context string for Claude
     if player_a_data or player_b_data:
@@ -279,9 +267,7 @@ async def make_decision(request: DecisionRequest):
     # Route based on complexity
     if complexity == QueryComplexity.SIMPLE and player_a_data and player_b_data:
         # Use local scoring engine with real data
-        return await _local_decision(
-            request, player_a, player_b, player_a_data, player_b_data
-        )
+        return await _local_decision(request, player_a, player_b, player_a_data, player_b_data)
     else:
         # Use Claude for complex queries or when we need more reasoning
         return await _claude_decision(request, player_a, player_b, player_context)
@@ -289,10 +275,10 @@ async def make_decision(request: DecisionRequest):
 
 async def _local_decision(
     request: DecisionRequest,
-    player_a_name: Optional[str],
-    player_b_name: Optional[str],
-    player_a_data: Optional[tuple],
-    player_b_data: Optional[tuple],
+    player_a_name: str | None,
+    player_b_name: str | None,
+    player_a_data: tuple | None,
+    player_b_data: tuple | None,
 ) -> DecisionResponse:
     """
     Handle simple A vs B decisions locally using real stats.
@@ -404,12 +390,16 @@ def _calculate_simple_score(stats, sport: str, risk_mode: str) -> float:
             score += (stats.targets or 0) * 0.2
         elif risk_mode == "ceiling":
             # Value TD potential
-            score += ((stats.pass_tds or 0) + (stats.rush_tds or 0) + (stats.receiving_tds or 0)) * 2
+            score += (
+                (stats.pass_tds or 0) + (stats.rush_tds or 0) + (stats.receiving_tds or 0)
+            ) * 2
 
     elif sport == "mlb":
         if stats.batting_avg:
             # Hitter
-            score = (stats.home_runs or 0) * 4 + (stats.rbis or 0) * 1 + (stats.stolen_bases or 0) * 2
+            score = (
+                (stats.home_runs or 0) * 4 + (stats.rbis or 0) * 1 + (stats.stolen_bases or 0) * 2
+            )
             if stats.ops:
                 score += stats.ops * 10
         elif stats.era:
@@ -454,9 +444,9 @@ def _build_rationale(sport: str, risk_mode: str, winner_info, winner_stats) -> s
 
 async def _claude_decision(
     request: DecisionRequest,
-    player_a: Optional[str],
-    player_b: Optional[str],
-    player_context: Optional[str],
+    player_a: str | None,
+    player_b: str | None,
+    player_context: str | None,
 ) -> DecisionResponse:
     """Handle complex decisions using Claude API with real player context."""
     if not claude_service.is_available:
@@ -483,9 +473,7 @@ async def _claude_decision(
             "medium": Confidence.MEDIUM,
             "high": Confidence.HIGH,
         }
-        confidence = confidence_map.get(
-            result.get("confidence", "medium"), Confidence.MEDIUM
-        )
+        confidence = confidence_map.get(result.get("confidence", "medium"), Confidence.MEDIUM)
 
         return DecisionResponse(
             decision=result["decision"],
