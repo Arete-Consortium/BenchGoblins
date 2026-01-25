@@ -48,6 +48,7 @@ from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
 from services.sleeper import sleeper_service
 from services.yahoo import yahoo_service
+from monitoring import MetricsMiddleware, metrics_endpoint
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -114,6 +115,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Performance monitoring middleware
+app.add_middleware(MetricsMiddleware)
+
+# Prometheus metrics endpoint
+app.add_route("/metrics", metrics_endpoint)
 
 
 # ---------------------------------------------------------------------------
