@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from enum import Enum
 from uuid import UUID
 
+import sentry_sdk
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -19,6 +20,23 @@ from sqlalchemy import select
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 load_dotenv()
+
+# ---------------------------------------------------------------------------
+# Sentry Error Monitoring
+# ---------------------------------------------------------------------------
+
+SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+
+if SENTRY_DSN:
+    sentry_sdk.init(
+        dsn=SENTRY_DSN,
+        environment=os.getenv("ENVIRONMENT", "development"),
+        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
+        profiles_sample_rate=0.1,  # 10% of sampled transactions for profiling
+        enable_tracing=True,
+        send_default_pii=False,  # Don't send personally identifiable information
+    )
+    print("Sentry error monitoring enabled")
 
 from models.database import Decision as DecisionModel
 from services.claude import claude_service
@@ -195,11 +213,12 @@ async def health_check():
     redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
     return {
         "status": "healthy",
-        "version": "0.3.0",
+        "version": "0.4.0",
         "claude_available": claude_service.is_available,
         "espn_available": True,
         "postgres_connected": db_service.is_configured,
         "redis_connected": redis_healthy,
+        "sentry_enabled": bool(SENTRY_DSN),
     }
 
 
