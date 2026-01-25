@@ -47,6 +47,7 @@ from services.notifications import notification_service, PushNotification
 from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
 from services.sleeper import sleeper_service
+from services.yahoo import yahoo_service
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -89,6 +90,7 @@ async def lifespan(app: FastAPI):
     await espn_service.close()
     await espn_fantasy_service.close()
     await sleeper_service.close()
+    await yahoo_service.close()
     await notification_service.close()
     await db_service.disconnect()
     await redis_service.disconnect()
@@ -1125,6 +1127,329 @@ async def get_sleeper_trending(
         }
         for t in trending
     ]
+
+
+# ---------------------------------------------------------------------------
+# Yahoo Fantasy Integration Routes (OAuth 2.0)
+# ---------------------------------------------------------------------------
+
+
+class YahooAuthResponse(BaseModel):
+    """Response with OAuth authorization URL."""
+
+    auth_url: str
+    state: str
+
+
+class YahooTokenRequest(BaseModel):
+    """Request to exchange OAuth code for tokens."""
+
+    code: str = Field(..., description="OAuth authorization code")
+    redirect_uri: str = Field(..., description="Same redirect URI used in auth request")
+    state: str | None = Field(None, description="State parameter for verification")
+
+
+class YahooTokenResponse(BaseModel):
+    """Response with OAuth tokens."""
+
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    expires_at: float
+
+
+class YahooLeagueResponse(BaseModel):
+    """Yahoo fantasy league information."""
+
+    league_key: str
+    league_id: str
+    name: str
+    sport: str
+    season: str
+    num_teams: int
+    scoring_type: str
+
+
+class YahooTeamResponse(BaseModel):
+    """Yahoo fantasy team information."""
+
+    team_key: str
+    team_id: str
+    name: str
+    logo_url: str | None
+
+
+class YahooPlayerResponse(BaseModel):
+    """Yahoo player information."""
+
+    player_key: str
+    player_id: str
+    name: str
+    team_abbrev: str | None
+    position: str
+    status: str
+    injury_status: str | None
+
+
+# In-memory token storage (per session)
+# TODO: Move to database with encryption for production
+_yahoo_tokens: dict[str, dict] = {}
+
+
+@app.get("/integrations/yahoo/auth", response_model=YahooAuthResponse)
+async def get_yahoo_auth_url(
+    redirect_uri: str = Query(..., description="OAuth redirect URI"),
+    session_id: str = Query(default="default"),
+):
+    """
+    Get Yahoo OAuth authorization URL.
+
+    User should be redirected to this URL to authorize the app.
+    After authorization, Yahoo will redirect back with an authorization code.
+    """
+    import secrets
+
+    state = secrets.token_urlsafe(16)
+
+    # Store state for verification
+    _yahoo_tokens[f"{session_id}_state"] = state
+
+    auth_url = yahoo_service.get_auth_url(redirect_uri, state)
+
+    return YahooAuthResponse(auth_url=auth_url, state=state)
+
+
+@app.post("/integrations/yahoo/token", response_model=YahooTokenResponse)
+async def exchange_yahoo_code(
+    request: YahooTokenRequest,
+    session_id: str = Query(default="default"),
+):
+    """
+    Exchange OAuth authorization code for access tokens.
+
+    Call this after user authorizes the app and is redirected back
+    with an authorization code.
+    """
+    # Verify state if provided
+    stored_state = _yahoo_tokens.get(f"{session_id}_state")
+    if request.state and stored_state and request.state != stored_state:
+        raise HTTPException(status_code=400, detail="Invalid state parameter")
+
+    tokens = await yahoo_service.exchange_code(request.code, request.redirect_uri)
+
+    if not tokens:
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to exchange code for tokens. Code may be expired or invalid.",
+        )
+
+    # Store tokens for this session
+    _yahoo_tokens[session_id] = {
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "expires_at": tokens.expires_at,
+    }
+
+    return YahooTokenResponse(
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+        expires_in=tokens.expires_in,
+        expires_at=tokens.expires_at,
+    )
+
+
+@app.post("/integrations/yahoo/refresh", response_model=YahooTokenResponse)
+async def refresh_yahoo_token(
+    session_id: str = Query(default="default"),
+):
+    """
+    Refresh an expired Yahoo access token.
+
+    Uses the stored refresh token to get a new access token.
+    """
+    stored = _yahoo_tokens.get(session_id)
+
+    if not stored or "refresh_token" not in stored:
+        raise HTTPException(
+            status_code=401,
+            detail="No Yahoo refresh token found. Complete OAuth flow first.",
+        )
+
+    tokens = await yahoo_service.refresh_token(stored["refresh_token"])
+
+    if not tokens:
+        raise HTTPException(
+            status_code=401,
+            detail="Failed to refresh token. User may need to re-authorize.",
+        )
+
+    # Update stored tokens
+    _yahoo_tokens[session_id] = {
+        "access_token": tokens.access_token,
+        "refresh_token": tokens.refresh_token,
+        "expires_at": tokens.expires_at,
+    }
+
+    return YahooTokenResponse(
+        access_token=tokens.access_token,
+        refresh_token=tokens.refresh_token,
+        expires_in=tokens.expires_in,
+        expires_at=tokens.expires_at,
+    )
+
+
+async def _get_yahoo_token(session_id: str) -> str:
+    """Get valid Yahoo access token, refreshing if needed."""
+    stored = _yahoo_tokens.get(session_id)
+
+    if not stored:
+        raise HTTPException(
+            status_code=401,
+            detail="Yahoo account not connected. Complete OAuth flow first.",
+        )
+
+    import time
+
+    # Refresh if expired (with 60s buffer)
+    if stored.get("expires_at", 0) < time.time() + 60:
+        tokens = await yahoo_service.refresh_token(stored["refresh_token"])
+        if tokens:
+            _yahoo_tokens[session_id] = {
+                "access_token": tokens.access_token,
+                "refresh_token": tokens.refresh_token,
+                "expires_at": tokens.expires_at,
+            }
+            return tokens.access_token
+        else:
+            raise HTTPException(
+                status_code=401,
+                detail="Failed to refresh Yahoo token. Please re-authorize.",
+            )
+
+    return stored["access_token"]
+
+
+@app.get("/integrations/yahoo/leagues", response_model=list[YahooLeagueResponse])
+async def get_yahoo_leagues(
+    session_id: str = Query(default="default"),
+    sport: str | None = Query(default=None, description="Filter by sport"),
+):
+    """
+    Get all Yahoo Fantasy leagues for the connected account.
+    """
+    access_token = await _get_yahoo_token(session_id)
+    leagues = await yahoo_service.get_user_leagues(access_token, sport)
+
+    return [
+        YahooLeagueResponse(
+            league_key=league.league_key,
+            league_id=league.league_id,
+            name=league.name,
+            sport=league.sport,
+            season=league.season,
+            num_teams=league.num_teams,
+            scoring_type=league.scoring_type,
+        )
+        for league in leagues
+    ]
+
+
+@app.get("/integrations/yahoo/teams", response_model=list[YahooTeamResponse])
+async def get_yahoo_teams(
+    session_id: str = Query(default="default"),
+    league_key: str | None = Query(default=None, description="Filter by league key"),
+):
+    """
+    Get all Yahoo Fantasy teams for the connected account.
+    """
+    access_token = await _get_yahoo_token(session_id)
+    teams = await yahoo_service.get_user_teams(access_token, league_key or "")
+
+    return [
+        YahooTeamResponse(
+            team_key=team.team_key,
+            team_id=team.team_id,
+            name=team.name,
+            logo_url=team.logo_url,
+        )
+        for team in teams
+    ]
+
+
+@app.get("/integrations/yahoo/roster/{team_key}", response_model=list[YahooPlayerResponse])
+async def get_yahoo_roster(
+    team_key: str,
+    session_id: str = Query(default="default"),
+    week: int | None = Query(default=None, description="Week number for roster"),
+):
+    """
+    Get roster for a Yahoo Fantasy team.
+    """
+    access_token = await _get_yahoo_token(session_id)
+    players = await yahoo_service.get_team_roster(access_token, team_key, week)
+
+    return [
+        YahooPlayerResponse(
+            player_key=player.player_key,
+            player_id=player.player_id,
+            name=player.name,
+            team_abbrev=player.team_abbrev,
+            position=player.position,
+            status=player.status,
+            injury_status=player.injury_status,
+        )
+        for player in players
+    ]
+
+
+@app.get("/integrations/yahoo/standings/{league_key}")
+async def get_yahoo_standings(
+    league_key: str,
+    session_id: str = Query(default="default"),
+):
+    """
+    Get standings for a Yahoo Fantasy league.
+    """
+    access_token = await _get_yahoo_token(session_id)
+    standings = await yahoo_service.get_league_standings(access_token, league_key)
+
+    return {"standings": standings}
+
+
+@app.delete("/integrations/yahoo/disconnect")
+async def disconnect_yahoo_account(session_id: str = Query(default="default")):
+    """
+    Disconnect Yahoo Fantasy account and clear stored tokens.
+    """
+    if session_id in _yahoo_tokens:
+        del _yahoo_tokens[session_id]
+
+    state_key = f"{session_id}_state"
+    if state_key in _yahoo_tokens:
+        del _yahoo_tokens[state_key]
+
+    return {"status": "disconnected"}
+
+
+@app.get("/integrations/yahoo/status")
+async def get_yahoo_status(session_id: str = Query(default="default")):
+    """
+    Check if Yahoo Fantasy account is connected.
+    """
+    stored = _yahoo_tokens.get(session_id)
+    connected = stored is not None and "access_token" in stored
+
+    import time
+
+    if connected:
+        expires_at = stored.get("expires_at", 0)
+        return {
+            "connected": True,
+            "expires_at": expires_at,
+            "expired": expires_at < time.time(),
+        }
+
+    return {"connected": False}
 
 
 # ---------------------------------------------------------------------------
