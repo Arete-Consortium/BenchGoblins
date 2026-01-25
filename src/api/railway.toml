@@ -1,0 +1,17 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 3
+
+# Environment variables are configured in Railway dashboard
+# Required:
+#   ANTHROPIC_API_KEY - Claude API key
+#   DATABASE_URL - PostgreSQL connection string (Railway provides this)
+#   REDIS_URL - Redis connection string (Railway provides this)
+# Optional:
+#   LOG_LEVEL - Logging level (default: info)

@@ -122,4 +122,88 @@ export async function getESPNStatus(
   return response.data;
 }
 
+// ---------------------------------------------------------------------------
+// Sleeper Integration (No Auth Required)
+// ---------------------------------------------------------------------------
+
+export interface SleeperUser {
+  user_id: string;
+  username: string;
+  display_name: string;
+  avatar: string | null;
+}
+
+export interface SleeperLeague {
+  league_id: string;
+  name: string;
+  sport: string;
+  season: string;
+  status: string;
+  total_rosters: number;
+}
+
+export interface SleeperPlayer {
+  player_id: string;
+  full_name: string;
+  team: string | null;
+  position: string;
+  status: string;
+  injury_status: string | null;
+}
+
+export interface SleeperRoster {
+  roster_id: number;
+  owner_id: string;
+  players: SleeperPlayer[];
+  starters: string[];
+}
+
+export interface TrendingPlayer {
+  player_id: string;
+  count: number;
+  player: {
+    full_name: string;
+    team: string | null;
+    position: string;
+  } | null;
+}
+
+export async function getSleeperUser(username: string): Promise<SleeperUser> {
+  const response = await api.get(`/integrations/sleeper/user/${username}`);
+  return response.data;
+}
+
+export async function getSleeperLeagues(
+  userId: string,
+  sport: string = 'nfl',
+  season: string = '2024',
+): Promise<SleeperLeague[]> {
+  const response = await api.get(`/integrations/sleeper/user/${userId}/leagues`, {
+    params: { sport, season },
+  });
+  return response.data;
+}
+
+export async function getSleeperRoster(
+  leagueId: string,
+  userId: string,
+  sport: string = 'nfl',
+): Promise<SleeperRoster> {
+  const response = await api.get(`/integrations/sleeper/league/${leagueId}/roster/${userId}`, {
+    params: { sport },
+  });
+  return response.data;
+}
+
+export async function getSleeperTrending(
+  sport: string = 'nfl',
+  trendType: 'add' | 'drop' = 'add',
+  limit: number = 25,
+): Promise<TrendingPlayer[]> {
+  const response = await api.get(`/integrations/sleeper/trending/${sport}`, {
+    params: { trend_type: trendType, limit },
+  });
+  return response.data;
+}
+
 export default api;

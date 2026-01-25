@@ -28,6 +28,7 @@ from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notifications import notification_service, PushNotification
 from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
+from services.sleeper import sleeper_service
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -69,6 +70,7 @@ async def lifespan(app: FastAPI):
     # Cleanup
     await espn_service.close()
     await espn_fantasy_service.close()
+    await sleeper_service.close()
     await notification_service.close()
     await db_service.disconnect()
     await redis_service.disconnect()
@@ -944,6 +946,166 @@ async def get_espn_status(session_id: str = Query(default="default")):
         return {"connected": True, "user_id": user_id}
 
     return {"connected": False, "user_id": None}
+
+
+# ---------------------------------------------------------------------------
+# Sleeper Integration Routes (No Auth Required)
+# ---------------------------------------------------------------------------
+
+
+class SleeperUserResponse(BaseModel):
+    """Sleeper user information."""
+
+    user_id: str
+    username: str
+    display_name: str
+    avatar: str | None
+
+
+class SleeperLeagueResponse(BaseModel):
+    """Sleeper fantasy league information."""
+
+    league_id: str
+    name: str
+    sport: str
+    season: str
+    status: str
+    total_rosters: int
+
+
+class SleeperPlayerResponse(BaseModel):
+    """Sleeper player information."""
+
+    player_id: str
+    full_name: str
+    team: str | None
+    position: str
+    status: str
+    injury_status: str | None
+
+
+class SleeperRosterResponse(BaseModel):
+    """Sleeper roster with players."""
+
+    roster_id: int
+    owner_id: str
+    players: list[SleeperPlayerResponse]
+    starters: list[str]
+
+
+@app.get("/integrations/sleeper/user/{username}", response_model=SleeperUserResponse)
+async def get_sleeper_user(username: str):
+    """
+    Look up a Sleeper user by username.
+
+    No authentication required - Sleeper API is public.
+    """
+    user = await sleeper_service.get_user(username)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Sleeper user not found")
+
+    return SleeperUserResponse(
+        user_id=user.user_id,
+        username=user.username,
+        display_name=user.display_name,
+        avatar=user.avatar,
+    )
+
+
+@app.get("/integrations/sleeper/user/{user_id}/leagues", response_model=list[SleeperLeagueResponse])
+async def get_sleeper_leagues(
+    user_id: str,
+    sport: str = Query(default="nfl", description="Sport: nfl, nba, mlb, nhl"),
+    season: str = Query(default="2024", description="Season year"),
+):
+    """
+    Get all Sleeper leagues for a user.
+
+    No authentication required.
+    """
+    leagues = await sleeper_service.get_user_leagues(user_id, sport, season)
+
+    return [
+        SleeperLeagueResponse(
+            league_id=league.league_id,
+            name=league.name,
+            sport=league.sport,
+            season=league.season,
+            status=league.status,
+            total_rosters=league.total_rosters,
+        )
+        for league in leagues
+    ]
+
+
+@app.get("/integrations/sleeper/league/{league_id}/roster/{user_id}", response_model=SleeperRosterResponse)
+async def get_sleeper_roster(
+    league_id: str,
+    user_id: str,
+    sport: str = Query(default="nfl", description="Sport for player lookup"),
+):
+    """
+    Get a user's roster in a Sleeper league with full player details.
+    """
+    roster = await sleeper_service.get_user_roster(league_id, user_id)
+
+    if not roster:
+        raise HTTPException(status_code=404, detail="Roster not found")
+
+    # Get player details
+    players = await sleeper_service.get_players_by_ids(roster.players, sport)
+
+    return SleeperRosterResponse(
+        roster_id=roster.roster_id,
+        owner_id=roster.owner_id,
+        players=[
+            SleeperPlayerResponse(
+                player_id=p.player_id,
+                full_name=p.full_name,
+                team=p.team,
+                position=p.position,
+                status=p.status,
+                injury_status=p.injury_status,
+            )
+            for p in players
+        ],
+        starters=roster.starters,
+    )
+
+
+@app.get("/integrations/sleeper/trending/{sport}")
+async def get_sleeper_trending(
+    sport: str,
+    trend_type: str = Query(default="add", description="'add' or 'drop'"),
+    limit: int = Query(default=25, ge=1, le=50),
+):
+    """
+    Get trending players on Sleeper (most added/dropped in last 24h).
+
+    Useful for waiver wire decisions.
+    """
+    trending = await sleeper_service.get_trending_players(sport, trend_type, limit)
+
+    # Enrich with player names
+    player_ids = [t.get("player_id") for t in trending if t.get("player_id")]
+    players = await sleeper_service.get_players_by_ids(player_ids, sport)
+    player_map = {p.player_id: p for p in players}
+
+    return [
+        {
+            "player_id": t.get("player_id"),
+            "count": t.get("count", 0),
+            "player": {
+                "full_name": player_map[t["player_id"]].full_name,
+                "team": player_map[t["player_id"]].team,
+                "position": player_map[t["player_id"]].position,
+            }
+            if t.get("player_id") in player_map
+            else None,
+        }
+        for t in trending
+    ]
 
 
 # ---------------------------------------------------------------------------
