@@ -115,7 +115,9 @@ class AccuracyTracker:
             # Determine which player was recommended
             decision_text = dec.get("decision", "")
             player_a_name = dec.get("player_a_name", "")
-            recommended_a = player_a_name.lower() in decision_text.lower() if player_a_name else True
+            recommended_a = (
+                player_a_name.lower() in decision_text.lower() if player_a_name else True
+            )
 
             if recommended_a:
                 is_correct = pts_a > pts_b

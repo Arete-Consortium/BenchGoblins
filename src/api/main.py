@@ -1541,6 +1541,7 @@ accuracy_tracker = AccuracyTracker()
 
 class OutcomeRequest(BaseModel):
     """Record the actual outcome of a decision."""
+
     decision_id: str
     actual_points_a: float | None = None
     actual_points_b: float | None = None
@@ -1563,7 +1564,9 @@ async def record_outcome(request: OutcomeRequest):
 
 
 @app.get("/accuracy/metrics")
-async def get_accuracy_metrics(sport: Sport | None = None, limit: int = Query(default=500, ge=1, le=5000)):
+async def get_accuracy_metrics(
+    sport: Sport | None = None, limit: int = Query(default=500, ge=1, le=5000)
+):
     """Get aggregate accuracy metrics across all tracked decisions."""
     decisions = []
     if db_service.is_configured:
@@ -1597,9 +1600,21 @@ async def get_accuracy_metrics(sport: Sport | None = None, limit: int = Query(de
         "accuracy_pct": metrics.accuracy_pct,
         "coverage_pct": metrics.coverage_pct,
         "by_confidence": {
-            "high": {"total": metrics.high_confidence_total, "correct": metrics.high_confidence_correct, "accuracy": metrics.confidence_accuracy("high")},
-            "medium": {"total": metrics.medium_confidence_total, "correct": metrics.medium_confidence_correct, "accuracy": metrics.confidence_accuracy("medium")},
-            "low": {"total": metrics.low_confidence_total, "correct": metrics.low_confidence_correct, "accuracy": metrics.confidence_accuracy("low")},
+            "high": {
+                "total": metrics.high_confidence_total,
+                "correct": metrics.high_confidence_correct,
+                "accuracy": metrics.confidence_accuracy("high"),
+            },
+            "medium": {
+                "total": metrics.medium_confidence_total,
+                "correct": metrics.medium_confidence_correct,
+                "accuracy": metrics.confidence_accuracy("medium"),
+            },
+            "low": {
+                "total": metrics.low_confidence_total,
+                "correct": metrics.low_confidence_correct,
+                "accuracy": metrics.confidence_accuracy("low"),
+            },
         },
         "by_source": {
             "local": {"total": metrics.local_total, "correct": metrics.local_correct},

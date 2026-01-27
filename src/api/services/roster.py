@@ -100,39 +100,64 @@ class UnifiedRosterService:
         self._yahoo = yahoo_svc
 
     async def from_espn(
-        self, creds, league_id: str, team_id: int, sport: str, season: int = 2024,
+        self,
+        creds,
+        league_id: str,
+        team_id: int,
+        sport: str,
+        season: int = 2024,
     ) -> UnifiedRoster:
         """Build unified roster from ESPN Fantasy."""
         roster_players = await self._espn.get_roster(
-            creds=creds, league_id=league_id, team_id=team_id, sport=sport, season=season,
+            creds=creds,
+            league_id=league_id,
+            team_id=team_id,
+            sport=sport,
+            season=season,
         )
         league_details = await self._espn.get_league_details(
-            creds=creds, league_id=league_id, sport=sport, season=season,
+            creds=creds,
+            league_id=league_id,
+            sport=sport,
+            season=season,
         )
-        league_name = league_details.get("name", f"ESPN League {league_id}") if league_details else f"ESPN League {league_id}"
+        league_name = (
+            league_details.get("name", f"ESPN League {league_id}")
+            if league_details
+            else f"ESPN League {league_id}"
+        )
 
         players = []
         for rp in roster_players:
-            players.append(UnifiedPlayer(
-                name=rp.name,
-                team=rp.team,
-                position=rp.position,
-                sport=sport,
-                lineup_slot=_normalize_lineup_slot(rp.lineup_slot),
-                espn_id=rp.espn_id,
-                source_platform=Platform.ESPN,
-                projected_points=rp.projected_points,
-            ))
+            players.append(
+                UnifiedPlayer(
+                    name=rp.name,
+                    team=rp.team,
+                    position=rp.position,
+                    sport=sport,
+                    lineup_slot=_normalize_lineup_slot(rp.lineup_slot),
+                    espn_id=rp.espn_id,
+                    source_platform=Platform.ESPN,
+                    projected_points=rp.projected_points,
+                )
+            )
 
-        return UnifiedRoster(sport=sport, league_name=league_name, platform=Platform.ESPN, players=players)
+        return UnifiedRoster(
+            sport=sport, league_name=league_name, platform=Platform.ESPN, players=players
+        )
 
     async def from_sleeper(
-        self, league_id: str, user_id: str, sport: str,
+        self,
+        league_id: str,
+        user_id: str,
+        sport: str,
     ) -> UnifiedRoster:
         """Build unified roster from Sleeper."""
         roster = await self._sleeper.get_user_roster(league_id, user_id)
         if not roster:
-            return UnifiedRoster(sport=sport, league_name=f"Sleeper {league_id}", platform=Platform.SLEEPER)
+            return UnifiedRoster(
+                sport=sport, league_name=f"Sleeper {league_id}", platform=Platform.SLEEPER
+            )
 
         player_details = await self._sleeper.get_players_by_ids(roster.players, sport)
         starters_set = set(roster.starters)
@@ -140,40 +165,55 @@ class UnifiedRosterService:
         players = []
         for sp in player_details:
             is_starter = sp.player_id in starters_set
-            players.append(UnifiedPlayer(
-                name=sp.full_name,
-                team=sp.team,
-                position=sp.position,
-                sport=sport,
-                lineup_slot=LineupSlot.STARTER if is_starter else LineupSlot.BENCH,
-                injury_status=sp.injury_status,
-                sleeper_id=sp.player_id,
-                source_platform=Platform.SLEEPER,
-            ))
+            players.append(
+                UnifiedPlayer(
+                    name=sp.full_name,
+                    team=sp.team,
+                    position=sp.position,
+                    sport=sport,
+                    lineup_slot=LineupSlot.STARTER if is_starter else LineupSlot.BENCH,
+                    injury_status=sp.injury_status,
+                    sleeper_id=sp.player_id,
+                    source_platform=Platform.SLEEPER,
+                )
+            )
 
-        return UnifiedRoster(sport=sport, league_name=f"Sleeper {league_id}", platform=Platform.SLEEPER, players=players)
+        return UnifiedRoster(
+            sport=sport,
+            league_name=f"Sleeper {league_id}",
+            platform=Platform.SLEEPER,
+            players=players,
+        )
 
     async def from_yahoo(
-        self, access_token: str, team_key: str, sport: str, week: int | None = None,
+        self,
+        access_token: str,
+        team_key: str,
+        sport: str,
+        week: int | None = None,
     ) -> UnifiedRoster:
         """Build unified roster from Yahoo Fantasy."""
         yahoo_players = await self._yahoo.get_team_roster(access_token, team_key, week)
 
         players = []
         for yp in yahoo_players:
-            players.append(UnifiedPlayer(
-                name=yp.name,
-                team=yp.team_abbrev,
-                position=yp.position,
-                sport=sport,
-                lineup_slot=_normalize_lineup_slot(yp.status),
-                injury_status=yp.injury_status,
-                yahoo_id=yp.player_id,
-                headshot_url=getattr(yp, "headshot_url", None),
-                source_platform=Platform.YAHOO,
-            ))
+            players.append(
+                UnifiedPlayer(
+                    name=yp.name,
+                    team=yp.team_abbrev,
+                    position=yp.position,
+                    sport=sport,
+                    lineup_slot=_normalize_lineup_slot(yp.status),
+                    injury_status=yp.injury_status,
+                    yahoo_id=yp.player_id,
+                    headshot_url=getattr(yp, "headshot_url", None),
+                    source_platform=Platform.YAHOO,
+                )
+            )
 
-        return UnifiedRoster(sport=sport, league_name=f"Yahoo {team_key}", platform=Platform.YAHOO, players=players)
+        return UnifiedRoster(
+            sport=sport, league_name=f"Yahoo {team_key}", platform=Platform.YAHOO, players=players
+        )
 
     def merge_rosters(self, rosters: list[UnifiedRoster]) -> UnifiedRoster:
         """
