@@ -42,6 +42,7 @@ logger = logging.getLogger(__name__)
 # Import after path setup
 from services.database import db_service
 from services.espn import espn_service
+from services.redis import redis_service
 
 # Sports to sync
 SPORTS = ["nba", "nfl", "mlb", "nhl"]
@@ -178,6 +179,14 @@ async def sync_sport_stats(
         # Rate limiting - don't hammer ESPN
         await asyncio.sleep(0.1)
 
+    # Invalidate cached data for this sport
+    if redis_service.is_connected:
+        total_invalidated = 0
+        for pattern in [f"decision:{sport}:*", f"player:{sport}:*", f"search:{sport}:*"]:
+            total_invalidated += await redis_service.clear_pattern(pattern)
+        new_version = await redis_service.bump_stats_version(sport)
+        logger.info(f"  Cache invalidated: {total_invalidated} keys deleted, stats version bumped to {new_version}")
+
     logger.info(f"\n{sport.upper()} sync complete:")
     logger.info(f"  Total: {results['total']}")
     logger.info(f"  Synced: {results['synced']}")
@@ -208,6 +217,15 @@ async def run_sync(
             logger.error(f"Database connection failed: {e}")
             logger.info("Continuing without database persistence")
 
+    # Connect to Redis for cache invalidation
+    if redis_service.is_configured:
+        try:
+            await redis_service.connect()
+            logger.info("Redis connected for cache invalidation")
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}")
+            logger.info("Continuing without cache invalidation")
+
     # Sync each sport
     sports_to_sync = sports or SPORTS
     all_results = {}
@@ -223,6 +241,8 @@ async def run_sync(
     # Cleanup
     if db_service.is_configured:
         await db_service.disconnect()
+    if redis_service.is_connected:
+        await redis_service.disconnect()
     await espn_service.close()
 
     # Summary
