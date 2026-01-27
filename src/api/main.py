@@ -50,6 +50,7 @@ from services.sleeper import sleeper_service
 from services.yahoo import yahoo_service
 from services.websocket import connection_manager, MessageType
 from monitoring import MetricsMiddleware, metrics_endpoint
+from routes.sessions import router as sessions_router
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -122,6 +123,9 @@ app.add_middleware(MetricsMiddleware)
 
 # Prometheus metrics endpoint
 app.add_route("/metrics", metrics_endpoint)
+
+# Session management routes
+app.include_router(sessions_router)
 
 
 # ---------------------------------------------------------------------------
