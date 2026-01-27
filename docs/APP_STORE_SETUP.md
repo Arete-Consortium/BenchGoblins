@@ -183,6 +183,46 @@ npx eas-cli submit --platform ios
 
 ---
 
+## App Store Review Preparation
+
+### Required Before Submission
+
+1. **Screenshots** — 6.7" (iPhone 15 Pro Max) and 6.5" (iPhone 14 Plus) at minimum
+   - Dashboard screen
+   - Decision comparison screen
+   - Roster view
+   - Settings/subscription screen
+2. **App Description** — 4000 chars max, focus on fantasy sports decision-making
+3. **Keywords** — 100 chars: "fantasy,sports,nba,nfl,mlb,nhl,start,sit,roster,decision"
+4. **Privacy URL** — `https://aretedriver.github.io/GameSpace/legal/privacy-policy.html`
+5. **Support URL** — `https://github.com/AreteDriver/GameSpace/issues`
+6. **App Category** — Sports
+7. **Age Rating** — 4+ (no objectionable content)
+
+### Common Rejection Reasons to Avoid
+
+- **Guideline 2.1** — App must be complete (no placeholder text, broken links, or lorem ipsum)
+- **Guideline 3.1.1** — In-app purchases must use Apple's payment system (RevenueCat handles this)
+- **Guideline 5.1.1** — Must have valid privacy policy URL
+- **Guideline 4.0** — App must provide enough value beyond a website
+
+### Submission Commands
+
+```bash
+cd src/mobile
+
+# Build for production
+npx eas-cli build --profile production --platform ios
+
+# Submit to App Store Connect
+npx eas-cli submit --platform ios
+
+# Or build + submit in one step
+npx eas-cli build --profile production --platform ios --auto-submit
+```
+
+---
+
 ## Environment Variables
 
 For CI/CD, set these in your build environment:

@@ -12,22 +12,25 @@
 - [ ] Add Pro Football Reference scraper (NFL)
 
 ### Core Scoring Engine
-- [ ] Implement `Player` data model with all required fields
-- [ ] Build Space Creation Index (SCI) calculator
-- [ ] Build Role Motion Index (RMI) calculator
-- [ ] Build Gravity Impact Score (GIS) calculator
-- [ ] Build Opportunity Delta (OD) calculator
-- [ ] Build Matchup Space Fit (MSF) calculator
-- [ ] Create composite scoring function with risk mode weights
-- [ ] Write unit tests for each index calculation
+- [x] Implement `Player` data model with all required fields
+- [x] Build Space Creation Index (SCI) calculator
+- [x] Build Role Motion Index (RMI) calculator
+- [x] Build Gravity Impact Score (GIS) calculator
+- [x] Build Opportunity Delta (OD) calculator
+- [x] Build Matchup Space Fit (MSF) calculator
+- [x] Create composite scoring function with risk mode weights
+- [x] Write unit tests for each index calculation
+- [x] Add MLB/NHL sport-specific scoring (SCI, RMI, GIS for all 4 sports)
+- [x] Wire ESPN game log trends into OD calculation
+- [x] Wire opponent defensive stats into MSF calculation
 
 ### Basic API
-- [ ] FastAPI project setup with proper structure
-- [ ] `/health` endpoint
-- [ ] `/players/search` endpoint
-- [ ] `/decide` endpoint (local scoring only)
-- [ ] Request/response Pydantic models
-- [ ] Basic error handling middleware
+- [x] FastAPI project setup with proper structure
+- [x] `/health` endpoint
+- [x] `/players/search` endpoint
+- [x] `/decide` endpoint (local scoring only)
+- [x] Request/response Pydantic models
+- [x] Basic error handling middleware
 
 ---
 
@@ -35,22 +38,22 @@
 *Goal: Complex queries route to Claude with proper context*
 
 ### Decision Router
-- [ ] Implement query complexity classifier
-- [ ] Route simple queries to local engine
-- [ ] Route complex queries to Claude
-- [ ] Add query type detection (start/sit, trade, waiver, explain)
+- [x] Implement query complexity classifier
+- [x] Route simple queries to local engine
+- [x] Route complex queries to Claude
+- [x] Add query type detection (start/sit, trade, waiver, explain)
 
 ### Claude Integration
-- [ ] Create system prompt from SYSTEM_PROMPT.md
-- [ ] Build Claude API client with retry logic
-- [ ] Context enrichment: inject relevant player stats before calling Claude
-- [ ] Response parser: extract structured decision from Claude output
-- [ ] Streaming support for faster perceived response
+- [x] Create system prompt from SYSTEM_PROMPT.md
+- [x] Build Claude API client with retry logic
+- [x] Context enrichment: inject relevant player stats before calling Claude
+- [x] Response parser: extract structured decision from Claude output
+- [x] Streaming support for faster perceived response
 - [ ] Token usage tracking and cost monitoring
 
 ### Caching
-- [ ] Cache Claude responses for identical queries (TTL: 1 hour)
-- [ ] Cache common player comparisons
+- [x] Cache Claude responses for identical queries (TTL: 1 hour)
+- [x] Cache common player comparisons
 - [ ] Implement cache invalidation on stat updates
 
 ---
@@ -186,14 +189,21 @@
 ## Current Sprint Focus
 
 **Active:**
+- [ ] Unified roster model across ESPN/Yahoo/Sleeper
+- [ ] Decision accuracy tracking (outcomes + feedback loop)
+- [ ] Basketball Reference / Pro Football Reference scrapers
 - [ ] Set up RevenueCat account and configure products
 - [ ] Create App Store Connect app listing
-- [ ] Test subscription flow in sandbox environment
 
 **Blocked:**
 - *Nothing yet*
 
 **Completed This Sprint:**
+- [x] Wire trends + matchup data into scoring engine (OD/MSF now live)
+- [x] MLB/NHL scoring functions (SCI, RMI, GIS for all 4 sports)
+- [x] Fix missing deps in pyproject.toml (cryptography, cachetools, sentry-sdk, prometheus-client)
+- [x] Fix hatch build config for editable installs
+- [x] 116 tests passing (54 new)
 - [x] iOS App Store configuration (bundle ID, entitlements, privacy manifests)
 - [x] RevenueCat SDK integration for subscriptions
 - [x] Subscription tiers and paywall UI
