@@ -400,3 +400,67 @@ CREATE TRIGGER player_stats_updated_at
 CREATE TRIGGER team_defense_updated_at
     BEFORE UPDATE ON team_defense
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================================================
+-- SESSIONS: Client session management
+-- ============================================================================
+CREATE TABLE sessions (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+
+    -- Session identification
+    session_token VARCHAR(64) UNIQUE NOT NULL,
+    device_id VARCHAR(100),
+    device_name VARCHAR(100),
+    platform VARCHAR(20) NOT NULL CHECK (platform IN ('ios', 'android', 'web')),
+
+    -- Lifecycle
+    status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'expired', 'revoked')),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    last_active_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ NOT NULL,
+
+    -- Security
+    ip_address INET,
+    user_agent TEXT,
+
+    -- Future: User association
+    user_id VARCHAR(100)
+);
+
+CREATE INDEX idx_sessions_token ON sessions(session_token);
+CREATE INDEX idx_sessions_status ON sessions(status);
+CREATE INDEX idx_sessions_expires ON sessions(expires_at);
+CREATE INDEX idx_sessions_user ON sessions(user_id) WHERE user_id IS NOT NULL;
+
+-- ============================================================================
+-- SESSION_CREDENTIALS: Encrypted credential storage per session
+-- ============================================================================
+CREATE TABLE session_credentials (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    session_id UUID NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
+
+    -- Credential identification
+    provider VARCHAR(20) NOT NULL CHECK (provider IN ('espn', 'yahoo', 'sleeper')),
+
+    -- Encrypted data (AES-256-GCM)
+    encrypted_data BYTEA NOT NULL,
+    encryption_iv BYTEA NOT NULL,
+
+    -- Metadata
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    expires_at TIMESTAMPTZ,
+
+    UNIQUE (session_id, provider)
+);
+
+CREATE INDEX idx_session_credentials_session ON session_credentials(session_id);
+CREATE INDEX idx_session_credentials_provider ON session_credentials(provider);
+
+CREATE TRIGGER sessions_updated_at
+    BEFORE UPDATE ON sessions
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER session_credentials_updated_at
+    BEFORE UPDATE ON session_credentials
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
