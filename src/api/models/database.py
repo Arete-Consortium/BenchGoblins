@@ -16,12 +16,13 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     Numeric,
     String,
     Text,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -370,4 +371,77 @@ class Decision(Base):
         Index("idx_decisions_user", "user_id"),
         Index("idx_decisions_created", "created_at"),
         Index("idx_decisions_sport", "sport"),
+    )
+
+
+class Session(Base):
+    """Client session for credential and state management."""
+
+    __tablename__ = "sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+
+    # Session identification
+    session_token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    device_id: Mapped[str | None] = mapped_column(String(100))
+    device_name: Mapped[str | None] = mapped_column(String(100))
+    platform: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    # Lifecycle
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    last_active_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+    # Security
+    ip_address: Mapped[str | None] = mapped_column(INET)
+    user_agent: Mapped[str | None] = mapped_column(Text)
+
+    # Future: User association
+    user_id: Mapped[str | None] = mapped_column(String(100))
+
+    # Relationships
+    credentials: Mapped[list["SessionCredential"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        CheckConstraint("platform IN ('ios', 'android', 'web')", name="check_platform"),
+        CheckConstraint("status IN ('active', 'expired', 'revoked')", name="check_session_status"),
+        Index("idx_sessions_token", "session_token"),
+        Index("idx_sessions_status", "status"),
+        Index("idx_sessions_expires", "expires_at"),
+    )
+
+
+class SessionCredential(Base):
+    """Encrypted credential storage per session."""
+
+    __tablename__ = "session_credentials"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False
+    )
+
+    # Credential identification
+    provider: Mapped[str] = mapped_column(String(20), nullable=False)
+
+    # Encrypted data (AES-256-GCM)
+    encrypted_data: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    encryption_iv: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+    # Metadata
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # Relationships
+    session: Mapped["Session"] = relationship(back_populates="credentials")
+
+    __table_args__ = (
+        CheckConstraint("provider IN ('espn', 'yahoo', 'sleeper')", name="check_provider"),
+        UniqueConstraint("session_id", "provider", name="uq_session_credentials"),
+        Index("idx_session_credentials_session", "session_id"),
+        Index("idx_session_credentials_provider", "provider"),
     )
