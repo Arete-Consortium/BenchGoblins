@@ -81,7 +81,7 @@ DECISION_LATENCY = Histogram(
 CLAUDE_REQUESTS = Counter(
     "gamespace_claude_requests_total",
     "Total requests to Claude API",
-    ["status"],  # success, error, rate_limited
+    ["status", "prompt_variant"],  # status: success, error, rate_limited
 )
 
 CLAUDE_TOKENS = Counter(
@@ -290,10 +290,10 @@ async def track_database_operation(operation: str, table: str = "unknown"):
         DATABASE_LATENCY.labels(operation=operation).observe(duration)
 
 
-def track_claude_request(input_tokens: int, output_tokens: int, success: bool):
+def track_claude_request(input_tokens: int, output_tokens: int, success: bool, variant: str = "control"):
     """Track Claude API request metrics."""
     status = "success" if success else "error"
-    CLAUDE_REQUESTS.labels(status=status).inc()
+    CLAUDE_REQUESTS.labels(status=status, prompt_variant=variant).inc()
     CLAUDE_TOKENS.labels(type="input").inc(input_tokens)
     CLAUDE_TOKENS.labels(type="output").inc(output_tokens)
 

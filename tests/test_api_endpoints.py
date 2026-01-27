@@ -292,3 +292,141 @@ class TestRequestValidation:
         )
 
         assert response.status_code == 422
+
+
+class TestUsageEndpoint:
+    """Tests for /usage endpoint."""
+
+    def test_usage_returns_response(self, test_client):
+        """Usage endpoint returns a response."""
+        response = test_client.get("/usage")
+
+        assert response.status_code == 200
+        data = response.json()
+        # Either returns usage data or error (no DB in test)
+        assert isinstance(data, dict)
+
+    def test_usage_with_sport_filter(self, test_client):
+        """Usage endpoint accepts sport filter."""
+        response = test_client.get("/usage?sport=nba")
+
+        assert response.status_code == 200
+
+    def test_usage_invalid_sport(self, test_client):
+        """Usage endpoint rejects invalid sport."""
+        response = test_client.get("/usage?sport=invalid")
+
+        assert response.status_code == 422
+
+
+class TestExperimentEndpoints:
+    """Tests for /experiments/* endpoints."""
+
+    def test_active_experiment(self, test_client):
+        """Active experiment returns config structure."""
+        response = test_client.get("/experiments/active")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "variants" in data
+        assert "weights" in data
+        assert "total_variants" in data
+        assert isinstance(data["variants"], list)
+        assert "experiment" in data
+        assert "name" in data["experiment"]
+
+    def test_experiment_results(self, test_client):
+        """Results endpoint returns response (empty or structured)."""
+        response = test_client.get("/experiments/results")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, dict)
+
+    def test_experiment_history(self, test_client):
+        """History endpoint returns list."""
+        response = test_client.get("/experiments/history")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "experiments" in data
+        assert isinstance(data["experiments"], list)
+
+    def test_start_experiment(self, test_client):
+        """Can start a new experiment via API."""
+        response = test_client.post(
+            "/experiments/start",
+            json={
+                "name": "api_test_exp",
+                "variants": {"control": 70, "concise_v1": 30},
+                "description": "Test from API",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "started"
+        assert data["experiment"]["name"] == "api_test_exp"
+
+        # Restore default experiment
+        test_client.post(
+            "/experiments/start",
+            json={
+                "name": "concise_prompt_v1",
+                "variants": {"control": 50, "concise_v1": 50},
+            },
+        )
+
+    def test_start_experiment_invalid_variant(self, test_client):
+        """Starting with unknown variant returns 400."""
+        response = test_client.post(
+            "/experiments/start",
+            json={
+                "name": "bad_exp",
+                "variants": {"control": 50, "nonexistent": 50},
+            },
+        )
+
+        assert response.status_code == 400
+
+    def test_end_experiment(self, test_client):
+        """Can end the active experiment."""
+        # Start one first
+        test_client.post(
+            "/experiments/start",
+            json={"name": "to_end", "variants": {"control": 100}},
+        )
+
+        response = test_client.post("/experiments/end")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "ended"
+        assert data["experiment"]["name"] == "to_end"
+        assert data["experiment"]["ended_at"] is not None
+
+        # Restore default
+        test_client.post(
+            "/experiments/start",
+            json={
+                "name": "concise_prompt_v1",
+                "variants": {"control": 50, "concise_v1": 50},
+            },
+        )
+
+
+class TestCacheInvalidateEndpoint:
+    """Tests for /cache/invalidate/{sport} endpoint."""
+
+    def test_invalidate_sport(self, test_client):
+        """Invalidate endpoint returns response."""
+        response = test_client.post("/cache/invalidate/nba")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert "status" in data
+
+    def test_invalidate_invalid_sport(self, test_client):
+        """Invalidate endpoint rejects invalid sport."""
+        response = test_client.post("/cache/invalidate/invalid")
+
+        assert response.status_code == 422

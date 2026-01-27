@@ -12,63 +12,8 @@ from collections.abc import AsyncGenerator
 from anthropic import Anthropic
 from cachetools import TTLCache
 
-SYSTEM_PROMPT = """You are GameSpace, a fantasy sports decision engine.
-
-<core_function>
-You evaluate start/sit, waiver, and trade decisions under uncertainty. You are NOT a prediction model — you produce probabilistic decisions, never guarantees.
-
-You use role stability, spatial opportunity, and matchup context to compare options relatively. You never evaluate players in isolation.
-</core_function>
-
-<supported_sports>
-- NBA (primary)
-- NFL
-- MLB (beta)
-- NHL (beta)
-
-You do NOT provide: betting picks, gambling odds, or deterministic predictions.
-</supported_sports>
-
-<qualitative_indices>
-You assess players using five qualitative proxies:
-
-1. SPACE CREATION INDEX (SCI) - How a player generates usable space independent of volume.
-2. ROLE MOTION INDEX (RMI) - Dependence on motion, scheme, or teammates. High = fragile.
-3. GRAVITY IMPACT SCORE (GIS) - Defensive attention drawn, not box-score output.
-4. OPPORTUNITY DELTA (OD) - Change in role, not raw role size. Positive = expanding.
-5. MATCHUP SPACE FIT (MSF) - Whether the opponent allows the space this player exploits.
-</qualitative_indices>
-
-<risk_modes>
-FLOOR: Minimize downside. Prioritize role stability and guaranteed volume.
-MEDIAN: Maximize expected value. Balance all factors. (Default)
-CEILING: Maximize upside. Emphasize spike-week potential. Accept volatility.
-
-The same inputs produce different recommendations depending on mode.
-</risk_modes>
-
-<output_format>
-Always respond with this exact JSON structure:
-{
-  "decision": "Start [Player Name]" or "Sit [Player Name]" or "Add [Player Name]" or "Drop [Player Name]",
-  "confidence": "low" or "medium" or "high",
-  "rationale": "One sentence summary of why",
-  "details": {
-    "why": ["Bullet 1", "Bullet 2", "Bullet 3"],
-    "risk_note": "One sentence about the main risk"
-  }
-}
-
-Confidence reflects role clarity and data agreement — NOT likelihood of success.
-</output_format>
-
-<philosophy>
-- Fantasy is a decision problem, not a prediction problem
-- Volume ≠ safety
-- Matchups are skill-specific, not opponent-wide
-- Upside and downside must be explicitly separated
-- Transparency > false precision
-</philosophy>"""
+from monitoring import track_claude_request
+from services.variants import get_prompt
 
 
 class ClaudeService:
@@ -93,6 +38,7 @@ class ClaudeService:
         decision_type: str,
         player_a: str | None,
         player_b: str | None,
+        prompt_variant: str = "control",
     ) -> str:
         """Generate cache key from request parameters."""
         key_parts = [
@@ -102,6 +48,7 @@ class ClaudeService:
             decision_type.lower(),
             (player_a or "").lower().strip(),
             (player_b or "").lower().strip(),
+            prompt_variant,
         ]
         key_str = "|".join(key_parts)
         return hashlib.md5(key_str.encode()).hexdigest()
@@ -185,6 +132,7 @@ class ClaudeService:
         league_type: str | None = None,
         player_context: str | None = None,
         use_cache: bool = True,
+        prompt_variant: str = "control",
     ) -> dict:
         """
         Make a fantasy decision using Claude.
@@ -199,7 +147,7 @@ class ClaudeService:
             raise RuntimeError("Claude API not configured - set ANTHROPIC_API_KEY")
 
         # Check cache
-        cache_key = self._cache_key(query, sport, risk_mode, decision_type, player_a, player_b)
+        cache_key = self._cache_key(query, sport, risk_mode, decision_type, player_a, player_b, prompt_variant)
         if use_cache and cache_key in self._response_cache:
             ClaudeService._cache_hits += 1
             cached_result = self._response_cache[cache_key].copy()
@@ -222,12 +170,19 @@ class ClaudeService:
         response = self.client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=500,
-            system=SYSTEM_PROMPT,
+            system=get_prompt(prompt_variant),
             messages=[{"role": "user", "content": user_message}],
         )
 
+        # Extract token usage
+        input_tokens = response.usage.input_tokens
+        output_tokens = response.usage.output_tokens
+        track_claude_request(input_tokens, output_tokens, success=True, variant=prompt_variant)
+
         result = self._parse_response(response.content[0].text)
         result["cached"] = False
+        result["input_tokens"] = input_tokens
+        result["output_tokens"] = output_tokens
 
         # Store in cache
         if use_cache:
@@ -245,6 +200,7 @@ class ClaudeService:
         player_b: str | None = None,
         league_type: str | None = None,
         player_context: str | None = None,
+        prompt_variant: str = "control",
     ) -> AsyncGenerator[str, None]:
         """
         Stream a fantasy decision from Claude.
@@ -269,7 +225,7 @@ class ClaudeService:
         with self.client.messages.stream(
             model="claude-sonnet-4-20250514",
             max_tokens=500,
-            system=SYSTEM_PROMPT,
+            system=get_prompt(prompt_variant),
             messages=[{"role": "user", "content": user_message}],
         ) as stream:
             for text in stream.text_stream:

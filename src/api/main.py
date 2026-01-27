@@ -7,6 +7,7 @@ import secrets
 import sys
 import time
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 
 # Add parent directory to path for imports
@@ -20,7 +21,8 @@ from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnec
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import Integer as SAInteger
+from sqlalchemy import func, select
 
 from models.database import Decision as DecisionModel
 from monitoring import MetricsMiddleware, metrics_endpoint
@@ -35,6 +37,12 @@ from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
 from services.scoring_adapter import adapt_espn_to_core
 from services.sleeper import sleeper_service
+from services.variants import (
+    assign_variant,
+    experiment_registry,
+    get_experiment_config,
+    get_experiment_history,
+)
 from services.websocket import connection_manager
 from services.yahoo import yahoo_service
 
@@ -301,6 +309,10 @@ async def _store_decision(
     player_a_name: str | None = None,
     player_b_name: str | None = None,
     player_context: str | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    cache_hit: bool = False,
+    prompt_variant: str | None = None,
 ) -> None:
     """Store decision in database for history and analytics."""
     if not db_service.is_configured:
@@ -328,6 +340,10 @@ async def _store_decision(
                 margin=response.details.get("margin") if response.details else None,
                 league_type=request.league_type,
                 player_context=player_context,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                cache_hit=cache_hit,
+                prompt_variant=prompt_variant,
             )
             session.add(decision)
     except Exception as e:
@@ -336,13 +352,19 @@ async def _store_decision(
 
 
 @app.post("/decide", response_model=DecisionResponse)
-async def make_decision(request: DecisionRequest):
+async def make_decision(
+    request: DecisionRequest,
+    session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
+):
     """
     Make a fantasy sports decision.
 
     Routes to local scoring engine for simple queries,
     Claude API for complex queries.
     """
+    # Assign A/B prompt variant
+    variant = assign_variant(session_id)
+
     # Extract players from query if not provided
     player_a = request.player_a
     player_b = request.player_b
@@ -396,7 +418,7 @@ async def make_decision(request: DecisionRequest):
                 "medium": Confidence.MEDIUM,
                 "high": Confidence.HIGH,
             }
-            return DecisionResponse(
+            response = DecisionResponse(
                 decision=cached["decision"],
                 confidence=confidence_map.get(
                     cached.get("confidence", "medium"), Confidence.MEDIUM
@@ -405,17 +427,41 @@ async def make_decision(request: DecisionRequest):
                 details=cached.get("details"),
                 source=cached.get("source", "claude") + "_cached",
             )
+            await _store_decision(
+                request,
+                response,
+                player_a,
+                player_b,
+                player_context,
+                cache_hit=True,
+                prompt_variant=variant,
+            )
+            return response
 
     # Route based on complexity
+    input_tokens = None
+    output_tokens = None
+
     if complexity == QueryComplexity.SIMPLE and player_a_data and player_b_data:
         # Use local scoring engine with real data
         response = await _local_decision(request, player_a, player_b, player_a_data, player_b_data)
     else:
         # Use Claude for complex queries or when we need more reasoning
-        response = await _claude_decision(request, player_a, player_b, player_context)
+        response, input_tokens, output_tokens = await _claude_decision(
+            request, player_a, player_b, player_context, prompt_variant=variant
+        )
 
     # Store decision in database (async, non-blocking)
-    await _store_decision(request, response, player_a, player_b, player_context)
+    await _store_decision(
+        request,
+        response,
+        player_a,
+        player_b,
+        player_context,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        prompt_variant=variant,
+    )
 
     # Cache Claude decisions in Redis
     if response.source == "claude" and redis_service.is_connected:
@@ -541,8 +587,13 @@ async def _claude_decision(
     player_a: str | None,
     player_b: str | None,
     player_context: str | None,
-) -> DecisionResponse:
-    """Handle complex decisions using Claude API with real player context."""
+    prompt_variant: str = "control",
+) -> tuple[DecisionResponse, int | None, int | None]:
+    """Handle complex decisions using Claude API with real player context.
+
+    Returns:
+        Tuple of (response, input_tokens, output_tokens).
+    """
     if not claude_service.is_available:
         raise HTTPException(
             status_code=503,
@@ -559,6 +610,7 @@ async def _claude_decision(
             player_b=player_b,
             league_type=request.league_type,
             player_context=player_context,  # Real stats injected here
+            prompt_variant=prompt_variant,
         )
 
         # Map confidence string to enum
@@ -569,13 +621,15 @@ async def _claude_decision(
         }
         confidence = confidence_map.get(result.get("confidence", "medium"), Confidence.MEDIUM)
 
-        return DecisionResponse(
+        response = DecisionResponse(
             decision=result["decision"],
             confidence=confidence,
             rationale=result["rationale"],
             details=result.get("details"),
             source="claude",
         )
+
+        return response, result.get("input_tokens"), result.get("output_tokens")
 
     except Exception as e:
         raise HTTPException(
@@ -585,7 +639,10 @@ async def _claude_decision(
 
 
 @app.post("/decide/stream")
-async def make_decision_stream(request: DecisionRequest):
+async def make_decision_stream(
+    request: DecisionRequest,
+    session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
+):
     """
     Stream a fantasy sports decision (Server-Sent Events).
 
@@ -597,6 +654,9 @@ async def make_decision_stream(request: DecisionRequest):
             status_code=503,
             detail="Claude API not configured. Set ANTHROPIC_API_KEY environment variable.",
         )
+
+    # Assign A/B prompt variant
+    variant = assign_variant(session_id)
 
     # Extract players from query if not provided
     player_a = request.player_a
@@ -640,6 +700,7 @@ async def make_decision_stream(request: DecisionRequest):
                 player_b=player_b,
                 league_type=request.league_type,
                 player_context=player_context,
+                prompt_variant=variant,
             ):
                 # Format as SSE
                 yield f"data: {chunk}\n\n"
@@ -675,6 +736,120 @@ async def clear_cache():
     if redis_service.is_connected:
         await redis_service.clear_all()
     return {"status": "cleared"}
+
+
+@app.post("/cache/invalidate/{sport}")
+async def invalidate_sport_cache(sport: Sport):
+    """Invalidate all cached data for a specific sport.
+
+    Useful after stat updates or breaking news (e.g., injuries).
+    """
+    if not redis_service.is_connected:
+        return {"status": "skipped", "reason": "redis not connected", "keys_deleted": 0}
+
+    total_deleted = 0
+    for pattern in [
+        f"decision:{sport.value}:*",
+        f"player:{sport.value}:*",
+        f"search:{sport.value}:*",
+    ]:
+        total_deleted += await redis_service.clear_pattern(pattern)
+
+    # Bump stats version so old cache keys auto-miss
+    new_version = await redis_service.bump_stats_version(sport.value)
+
+    return {
+        "status": "invalidated",
+        "sport": sport.value,
+        "keys_deleted": total_deleted,
+        "stats_version": new_version,
+    }
+
+
+@app.get("/usage")
+async def get_token_usage(
+    sport: Sport | None = None,
+):
+    """Get Claude API token usage and estimated costs.
+
+    Returns usage for today, this week, and this month with per-sport breakdown.
+    """
+    if not db_service.is_configured:
+        return {"error": "Database not configured"}
+
+    now = datetime.now(UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start = today_start - timedelta(days=now.weekday())
+    month_start = today_start.replace(day=1)
+
+    # Cost per million tokens (Sonnet pricing)
+    input_cost_per_mtok = 3.0
+    output_cost_per_mtok = 15.0
+
+    try:
+        async with db_service.session() as session:
+
+            async def _usage_for_period(start: datetime, sport_filter: Sport | None = None) -> dict:
+                q = select(
+                    func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
+                    func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
+                    func.count().label("total"),
+                    func.sum(func.cast(DecisionModel.cache_hit, SAInteger)).label("cache_hits"),
+                ).where(DecisionModel.created_at >= start)
+                if sport_filter:
+                    q = q.where(DecisionModel.sport == sport_filter.value)
+                row = (await session.execute(q)).one()
+                inp, out, total, hits = (
+                    int(row.input),
+                    int(row.output),
+                    int(row.total),
+                    int(hits) if (hits := row.cache_hits) else 0,
+                )
+                return {
+                    "input_tokens": inp,
+                    "output_tokens": out,
+                    "total_decisions": total,
+                    "cache_hits": hits,
+                    "cache_hit_rate": round(hits / total, 3) if total else 0,
+                    "estimated_cost_usd": round(
+                        inp / 1_000_000 * input_cost_per_mtok
+                        + out / 1_000_000 * output_cost_per_mtok,
+                        4,
+                    ),
+                }
+
+            result = {
+                "today": await _usage_for_period(today_start, sport),
+                "this_week": await _usage_for_period(week_start, sport),
+                "this_month": await _usage_for_period(month_start, sport),
+            }
+
+            # Per-sport breakdown (this month)
+            if not sport:
+                sport_q = (
+                    select(
+                        DecisionModel.sport,
+                        func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
+                        func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
+                        func.count().label("total"),
+                    )
+                    .where(DecisionModel.created_at >= month_start)
+                    .group_by(DecisionModel.sport)
+                )
+                rows = (await session.execute(sport_q)).all()
+                result["by_sport"] = {
+                    row.sport: {
+                        "input_tokens": int(row.input),
+                        "output_tokens": int(row.output),
+                        "total_decisions": int(row.total),
+                    }
+                    for row in rows
+                }
+
+            return result
+    except Exception as e:
+        print(f"Failed to fetch usage: {e}")
+        return {"error": str(e)}
 
 
 class DecisionHistoryItem(BaseModel):
@@ -1585,6 +1760,7 @@ async def get_accuracy_metrics(
                         "source": d.source,
                         "decision": d.decision,
                         "player_a_name": d.player_a_name,
+                        "prompt_variant": d.prompt_variant,
                     }
                     for d in rows
                 ]
@@ -1621,6 +1797,7 @@ async def get_accuracy_metrics(
             "claude": {"total": metrics.claude_total, "correct": metrics.claude_correct},
         },
         "by_sport": metrics.by_sport,
+        "by_variant": metrics.by_variant,
     }
 
 
@@ -1636,6 +1813,131 @@ async def get_outcome(decision_id: str):
         "actual_points_b": outcome.actual_points_b,
         "user_followed": outcome.user_followed,
         "feedback_note": outcome.feedback_note,
+    }
+
+
+# ---------------------------------------------------------------------------
+# A/B Experiment Endpoints
+# ---------------------------------------------------------------------------
+
+
+@app.get("/experiments/active")
+async def get_active_experiment():
+    """Get current A/B experiment configuration."""
+    return get_experiment_config()
+
+
+@app.get("/experiments/results")
+async def get_experiment_results():
+    """Get A/B experiment results: per-variant decision count, token usage, confidence distribution."""
+    if not db_service.is_configured:
+        return {"error": "Database not configured"}
+
+    try:
+        async with db_service.session() as session:
+            q = (
+                select(
+                    DecisionModel.prompt_variant,
+                    func.count().label("total"),
+                    func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input_tokens"),
+                    func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output_tokens"),
+                    func.sum(func.cast(DecisionModel.cache_hit, SAInteger)).label("cache_hits"),
+                )
+                .where(DecisionModel.prompt_variant.isnot(None))
+                .group_by(DecisionModel.prompt_variant)
+            )
+            rows = (await session.execute(q)).all()
+
+            # Confidence distribution per variant
+            conf_q = (
+                select(
+                    DecisionModel.prompt_variant,
+                    DecisionModel.confidence,
+                    func.count().label("count"),
+                )
+                .where(DecisionModel.prompt_variant.isnot(None))
+                .group_by(DecisionModel.prompt_variant, DecisionModel.confidence)
+            )
+            conf_rows = (await session.execute(conf_q)).all()
+
+            conf_dist: dict[str, dict[str, int]] = {}
+            for row in conf_rows:
+                conf_dist.setdefault(row.prompt_variant, {})[row.confidence] = int(row.count)
+
+            results = {}
+            for row in rows:
+                variant = row.prompt_variant
+                total = int(row.total)
+                hits = int(row.cache_hits) if row.cache_hits else 0
+                results[variant] = {
+                    "total_decisions": total,
+                    "input_tokens": int(row.input_tokens),
+                    "output_tokens": int(row.output_tokens),
+                    "cache_hits": hits,
+                    "cache_hit_rate": round(hits / total, 3) if total else 0,
+                    "confidence_distribution": conf_dist.get(variant, {}),
+                }
+
+            return {"variants": results}
+    except Exception as e:
+        print(f"Failed to fetch experiment results: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/experiments/history")
+async def get_experiments_history():
+    """Get all past (ended) experiments."""
+    return {"experiments": get_experiment_history()}
+
+
+class StartExperimentRequest(BaseModel):
+    """Request to start a new A/B experiment."""
+
+    name: str = Field(..., description="Experiment name, e.g. 'concise_prompt_v2'")
+    variants: dict[str, int] = Field(
+        ..., description="Variant name -> weight mapping, e.g. {'control': 50, 'concise_v1': 50}"
+    )
+    description: str = Field(default="", description="What this experiment tests")
+
+
+@app.post("/experiments/start")
+async def start_experiment(request: StartExperimentRequest):
+    """Start a new A/B experiment. Ends the current one if active."""
+    try:
+        experiment = experiment_registry.start_experiment(
+            name=request.name,
+            variants=request.variants,
+            description=request.description,
+        )
+        return {
+            "status": "started",
+            "experiment": {
+                "name": experiment.name,
+                "variants": experiment.variants,
+                "started_at": experiment.started_at.isoformat(),
+                "description": experiment.description,
+            },
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/experiments/end")
+async def end_experiment():
+    """End the active experiment and archive it."""
+    ended = experiment_registry.end_experiment()
+    if ended is None:
+        raise HTTPException(status_code=404, detail="No active experiment to end")
+
+    return {
+        "status": "ended",
+        "experiment": {
+            "name": ended.name,
+            "variants": ended.variants,
+            "started_at": ended.started_at.isoformat(),
+            "ended_at": ended.ended_at.isoformat() if ended.ended_at else None,
+            "duration_hours": ended.duration_hours,
+        },
     }
 
 

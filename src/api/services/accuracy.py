@@ -41,6 +41,9 @@ class AccuracyMetrics:
     # By sport
     by_sport: dict[str, dict] = field(default_factory=dict)
 
+    # By prompt variant
+    by_variant: dict[str, dict] = field(default_factory=dict)
+
     # By source (local vs claude)
     local_total: int = 0
     local_correct: int = 0
@@ -166,5 +169,14 @@ class AccuracyTracker:
             metrics.by_sport[sport]["total"] += 1
             if is_correct:
                 metrics.by_sport[sport]["correct"] += 1
+
+            # By prompt variant
+            variant = dec.get("prompt_variant")
+            if variant:
+                if variant not in metrics.by_variant:
+                    metrics.by_variant[variant] = {"total": 0, "correct": 0}
+                metrics.by_variant[variant]["total"] += 1
+                if is_correct:
+                    metrics.by_variant[variant]["correct"] += 1
 
         return metrics
