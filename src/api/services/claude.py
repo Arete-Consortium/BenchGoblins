@@ -147,7 +147,9 @@ class ClaudeService:
             raise RuntimeError("Claude API not configured - set ANTHROPIC_API_KEY")
 
         # Check cache
-        cache_key = self._cache_key(query, sport, risk_mode, decision_type, player_a, player_b, prompt_variant)
+        cache_key = self._cache_key(
+            query, sport, risk_mode, decision_type, player_a, player_b, prompt_variant
+        )
         if use_cache and cache_key in self._response_cache:
             ClaudeService._cache_hits += 1
             cached_result = self._response_cache[cache_key].copy()

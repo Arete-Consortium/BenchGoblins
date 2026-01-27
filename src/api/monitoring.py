@@ -290,7 +290,9 @@ async def track_database_operation(operation: str, table: str = "unknown"):
         DATABASE_LATENCY.labels(operation=operation).observe(duration)
 
 
-def track_claude_request(input_tokens: int, output_tokens: int, success: bool, variant: str = "control"):
+def track_claude_request(
+    input_tokens: int, output_tokens: int, success: bool, variant: str = "control"
+):
     """Track Claude API request metrics."""
     status = "success" if success else "error"
     CLAUDE_REQUESTS.labels(status=status, prompt_variant=variant).inc()

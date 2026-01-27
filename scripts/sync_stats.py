@@ -19,7 +19,7 @@ import asyncio
 import logging
 import os
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from typing import Any
 
 # Add parent directory to path for imports
@@ -40,9 +40,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import after path setup
-from services.database import db_service
-from services.espn import espn_service
-from services.redis import redis_service
+from services.database import db_service  # noqa: E402
+from services.espn import espn_service  # noqa: E402
+from services.redis import redis_service  # noqa: E402
 
 # Sports to sync
 SPORTS = ["nba", "nfl", "mlb", "nhl"]
@@ -59,8 +59,34 @@ async def get_active_players(sport: str) -> list[dict[str, Any]]:
     try:
         # Search for top players by common patterns
         # ESPN doesn't have a great "all players" endpoint, so we iterate
-        search_terms = ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m",
-                       "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z"]
+        search_terms = [
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+            "g",
+            "h",
+            "i",
+            "j",
+            "k",
+            "l",
+            "m",
+            "n",
+            "o",
+            "p",
+            "q",
+            "r",
+            "s",
+            "t",
+            "u",
+            "v",
+            "w",
+            "x",
+            "y",
+            "z",
+        ]
 
         seen_ids = set()
         for term in search_terms:
@@ -102,13 +128,15 @@ async def sync_player_stats(
         stats = player_data.get("stats", {})
 
         if dry_run:
-            logger.info(f"[DRY-RUN] Would sync: {name} ({team}) - {len(stats)} stat categories")
+            logger.info(
+                f"[DRY-RUN] Would sync: {name} ({team}) - {len(stats)} stat categories"
+            )
             return True
 
         # Upsert player to database
         if db_service.is_configured:
             # Build player record
-            player_record = {
+            _player_record = {  # noqa: F841 (TODO: pass to db_service.upsert_player)
                 "espn_id": player_id,
                 "name": name,
                 "team": player_data.get("team_name"),
@@ -141,9 +169,9 @@ async def sync_sport_stats(
     dry_run: bool = False,
 ) -> dict[str, int]:
     """Sync all player stats for a sport."""
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info(f"Starting {sport.upper()} stats sync")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
 
     results = {
         "total": 0,
@@ -182,10 +210,16 @@ async def sync_sport_stats(
     # Invalidate cached data for this sport
     if redis_service.is_connected:
         total_invalidated = 0
-        for pattern in [f"decision:{sport}:*", f"player:{sport}:*", f"search:{sport}:*"]:
+        for pattern in [
+            f"decision:{sport}:*",
+            f"player:{sport}:*",
+            f"search:{sport}:*",
+        ]:
             total_invalidated += await redis_service.clear_pattern(pattern)
         new_version = await redis_service.bump_stats_version(sport)
-        logger.info(f"  Cache invalidated: {total_invalidated} keys deleted, stats version bumped to {new_version}")
+        logger.info(
+            f"  Cache invalidated: {total_invalidated} keys deleted, stats version bumped to {new_version}"
+        )
 
     logger.info(f"\n{sport.upper()} sync complete:")
     logger.info(f"  Total: {results['total']}")
@@ -252,9 +286,9 @@ async def run_sync(
     total_synced = sum(r["synced"] for r in all_results.values())
     total_failed = sum(r["failed"] for r in all_results.values())
 
-    logger.info(f"\n{'='*60}")
+    logger.info(f"\n{'=' * 60}")
     logger.info("SYNC COMPLETE")
-    logger.info(f"{'='*60}")
+    logger.info(f"{'=' * 60}")
     logger.info(f"Duration: {duration:.1f} seconds")
     logger.info(f"Total synced: {total_synced}")
     logger.info(f"Total failed: {total_failed}")

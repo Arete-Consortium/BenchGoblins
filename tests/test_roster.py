@@ -36,15 +36,24 @@ class TestNormalizeLineupSlot:
 class TestUnifiedPlayer:
     def test_canonical_id_espn_preferred(self):
         p = UnifiedPlayer(
-            name="Test", team="LAL", position="PG", sport="nba",
-            espn_id="E123", sleeper_id="S456", yahoo_id="Y789",
+            name="Test",
+            team="LAL",
+            position="PG",
+            sport="nba",
+            espn_id="E123",
+            sleeper_id="S456",
+            yahoo_id="Y789",
         )
         assert p.canonical_id == "E123"
 
     def test_canonical_id_sleeper_fallback(self):
         p = UnifiedPlayer(
-            name="Test", team="LAL", position="PG", sport="nba",
-            sleeper_id="S456", yahoo_id="Y789",
+            name="Test",
+            team="LAL",
+            position="PG",
+            sport="nba",
+            sleeper_id="S456",
+            yahoo_id="Y789",
         )
         assert p.canonical_id == "S456"
 
@@ -56,11 +65,31 @@ class TestUnifiedPlayer:
 class TestUnifiedRoster:
     def test_starters_and_bench(self):
         roster = UnifiedRoster(
-            sport="nba", league_name="Test", platform=Platform.ESPN,
+            sport="nba",
+            league_name="Test",
+            platform=Platform.ESPN,
             players=[
-                UnifiedPlayer(name="A", team="T", position="PG", sport="nba", lineup_slot=LineupSlot.STARTER),
-                UnifiedPlayer(name="B", team="T", position="SG", sport="nba", lineup_slot=LineupSlot.BENCH),
-                UnifiedPlayer(name="C", team="T", position="SF", sport="nba", lineup_slot=LineupSlot.STARTER),
+                UnifiedPlayer(
+                    name="A",
+                    team="T",
+                    position="PG",
+                    sport="nba",
+                    lineup_slot=LineupSlot.STARTER,
+                ),
+                UnifiedPlayer(
+                    name="B",
+                    team="T",
+                    position="SG",
+                    sport="nba",
+                    lineup_slot=LineupSlot.BENCH,
+                ),
+                UnifiedPlayer(
+                    name="C",
+                    team="T",
+                    position="SF",
+                    sport="nba",
+                    lineup_slot=LineupSlot.STARTER,
+                ),
             ],
         )
         assert len(roster.starters) == 2
@@ -68,9 +97,13 @@ class TestUnifiedRoster:
 
     def test_get_player(self):
         roster = UnifiedRoster(
-            sport="nba", league_name="Test", platform=Platform.ESPN,
+            sport="nba",
+            league_name="Test",
+            platform=Platform.ESPN,
             players=[
-                UnifiedPlayer(name="LeBron James", team="LAL", position="SF", sport="nba"),
+                UnifiedPlayer(
+                    name="LeBron James", team="LAL", position="SF", sport="nba"
+                ),
             ],
         )
         assert roster.get_player("lebron james") is not None
@@ -89,8 +122,14 @@ class TestMergeRosters:
     def test_merge_single_roster(self):
         svc = self._make_service()
         roster = UnifiedRoster(
-            sport="nba", league_name="ESPN", platform=Platform.ESPN,
-            players=[UnifiedPlayer(name="A", team="T", position="PG", sport="nba", espn_id="E1")],
+            sport="nba",
+            league_name="ESPN",
+            platform=Platform.ESPN,
+            players=[
+                UnifiedPlayer(
+                    name="A", team="T", position="PG", sport="nba", espn_id="E1"
+                )
+            ],
         )
         result = svc.merge_rosters([roster])
         assert len(result.players) == 1
@@ -99,12 +138,32 @@ class TestMergeRosters:
     def test_merge_deduplicates_by_name(self):
         svc = self._make_service()
         espn_roster = UnifiedRoster(
-            sport="nba", league_name="ESPN", platform=Platform.ESPN,
-            players=[UnifiedPlayer(name="LeBron James", team="LAL", position="SF", sport="nba", espn_id="E1")],
+            sport="nba",
+            league_name="ESPN",
+            platform=Platform.ESPN,
+            players=[
+                UnifiedPlayer(
+                    name="LeBron James",
+                    team="LAL",
+                    position="SF",
+                    sport="nba",
+                    espn_id="E1",
+                )
+            ],
         )
         sleeper_roster = UnifiedRoster(
-            sport="nba", league_name="Sleeper", platform=Platform.SLEEPER,
-            players=[UnifiedPlayer(name="LeBron James", team="LAL", position="SF", sport="nba", sleeper_id="S1")],
+            sport="nba",
+            league_name="Sleeper",
+            platform=Platform.SLEEPER,
+            players=[
+                UnifiedPlayer(
+                    name="LeBron James",
+                    team="LAL",
+                    position="SF",
+                    sport="nba",
+                    sleeper_id="S1",
+                )
+            ],
         )
         result = svc.merge_rosters([espn_roster, sleeper_roster])
         assert len(result.players) == 1
@@ -115,12 +174,34 @@ class TestMergeRosters:
     def test_merge_espn_wins_priority(self):
         svc = self._make_service()
         espn_roster = UnifiedRoster(
-            sport="nba", league_name="ESPN", platform=Platform.ESPN,
-            players=[UnifiedPlayer(name="Test", team="LAL", position="PG", sport="nba", espn_id="E1", projected_points=25.0)],
+            sport="nba",
+            league_name="ESPN",
+            platform=Platform.ESPN,
+            players=[
+                UnifiedPlayer(
+                    name="Test",
+                    team="LAL",
+                    position="PG",
+                    sport="nba",
+                    espn_id="E1",
+                    projected_points=25.0,
+                )
+            ],
         )
         yahoo_roster = UnifiedRoster(
-            sport="nba", league_name="Yahoo", platform=Platform.YAHOO,
-            players=[UnifiedPlayer(name="Test", team="LAL", position="PG", sport="nba", yahoo_id="Y1", projected_points=22.0)],
+            sport="nba",
+            league_name="Yahoo",
+            platform=Platform.YAHOO,
+            players=[
+                UnifiedPlayer(
+                    name="Test",
+                    team="LAL",
+                    position="PG",
+                    sport="nba",
+                    yahoo_id="Y1",
+                    projected_points=22.0,
+                )
+            ],
         )
         result = svc.merge_rosters([espn_roster, yahoo_roster])
         # ESPN projected_points should win (higher priority)
@@ -130,11 +211,15 @@ class TestMergeRosters:
     def test_merge_unique_players_kept(self):
         svc = self._make_service()
         r1 = UnifiedRoster(
-            sport="nba", league_name="ESPN", platform=Platform.ESPN,
+            sport="nba",
+            league_name="ESPN",
+            platform=Platform.ESPN,
             players=[UnifiedPlayer(name="A", team="T", position="PG", sport="nba")],
         )
         r2 = UnifiedRoster(
-            sport="nba", league_name="Sleeper", platform=Platform.SLEEPER,
+            sport="nba",
+            league_name="Sleeper",
+            platform=Platform.SLEEPER,
             players=[UnifiedPlayer(name="B", team="T", position="SG", sport="nba")],
         )
         result = svc.merge_rosters([r1, r2])
@@ -145,8 +230,19 @@ class TestApplyOverrides:
     def test_override_lineup_slot(self):
         svc = UnifiedRosterService(None, None, None)
         roster = UnifiedRoster(
-            sport="nba", league_name="Test", platform=Platform.ESPN,
-            players=[UnifiedPlayer(name="A", team="T", position="PG", sport="nba", espn_id="E1", lineup_slot=LineupSlot.BENCH)],
+            sport="nba",
+            league_name="Test",
+            platform=Platform.ESPN,
+            players=[
+                UnifiedPlayer(
+                    name="A",
+                    team="T",
+                    position="PG",
+                    sport="nba",
+                    espn_id="E1",
+                    lineup_slot=LineupSlot.BENCH,
+                )
+            ],
         )
         result = svc.apply_overrides(roster, {"E1": {"lineup_slot": "STARTER"}})
         assert result.players[0].lineup_slot == LineupSlot.STARTER
@@ -154,8 +250,14 @@ class TestApplyOverrides:
     def test_override_injury_status(self):
         svc = UnifiedRosterService(None, None, None)
         roster = UnifiedRoster(
-            sport="nba", league_name="Test", platform=Platform.ESPN,
-            players=[UnifiedPlayer(name="A", team="T", position="PG", sport="nba", espn_id="E1")],
+            sport="nba",
+            league_name="Test",
+            platform=Platform.ESPN,
+            players=[
+                UnifiedPlayer(
+                    name="A", team="T", position="PG", sport="nba", espn_id="E1"
+                )
+            ],
         )
         result = svc.apply_overrides(roster, {"E1": {"injury_status": "GTD"}})
         assert result.players[0].injury_status == "GTD"
@@ -163,8 +265,14 @@ class TestApplyOverrides:
     def test_override_no_match(self):
         svc = UnifiedRosterService(None, None, None)
         roster = UnifiedRoster(
-            sport="nba", league_name="Test", platform=Platform.ESPN,
-            players=[UnifiedPlayer(name="A", team="T", position="PG", sport="nba", espn_id="E1")],
+            sport="nba",
+            league_name="Test",
+            platform=Platform.ESPN,
+            players=[
+                UnifiedPlayer(
+                    name="A", team="T", position="PG", sport="nba", espn_id="E1"
+                )
+            ],
         )
         result = svc.apply_overrides(roster, {"E999": {"lineup_slot": "IR"}})
         assert result.players[0].lineup_slot == LineupSlot.UNKNOWN  # Unchanged

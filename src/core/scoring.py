@@ -343,7 +343,9 @@ def calculate_sci_mlb(stats: PlayerStats) -> float:
     Pitchers: K rate + ERA dominance.
     """
     # Detect pitcher by ERA > 0 or position
-    is_pitcher = stats.era > 0 or (stats.position and stats.position.upper() in ("P", "SP", "RP"))
+    is_pitcher = stats.era > 0 or (
+        stats.position and stats.position.upper() in ("P", "SP", "RP")
+    )
 
     if is_pitcher:
         # K rate contribution (0-40)
@@ -401,7 +403,9 @@ def calculate_gis_mlb(stats: PlayerStats) -> float:
     Hitters: HR power + RBI gravity.
     Pitchers: K dominance + win gravity.
     """
-    is_pitcher = stats.era > 0 or (stats.position and stats.position.upper() in ("P", "SP", "RP"))
+    is_pitcher = stats.era > 0 or (
+        stats.position and stats.position.upper() in ("P", "SP", "RP")
+    )
 
     if is_pitcher:
         k_gravity = min(45, stats.strikeouts * 0.25)
@@ -429,7 +433,9 @@ def calculate_sci_nhl(stats: PlayerStats) -> float:
     Skaters: Goals + shots + assists creation.
     Goalies: Save pct based.
     """
-    is_goalie = stats.save_pct > 0 or (stats.position and stats.position.upper() in ("G",))
+    is_goalie = stats.save_pct > 0 or (
+        stats.position and stats.position.upper() in ("G",)
+    )
 
     if is_goalie:
         # Goalie SCI based on save pct
@@ -479,7 +485,9 @@ def calculate_gis_nhl(stats: PlayerStats) -> float:
 
     Shot volume + goal threat + assist playmaking.
     """
-    is_goalie = stats.save_pct > 0 or (stats.position and stats.position.upper() in ("G",))
+    is_goalie = stats.save_pct > 0 or (
+        stats.position and stats.position.upper() in ("G",)
+    )
 
     if is_goalie:
         sv_gravity = min(70, stats.save_pct * 80) if stats.save_pct > 0 else 35

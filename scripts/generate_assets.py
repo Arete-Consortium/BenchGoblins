@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 """Generate app icon and splash screen assets for GameSpace."""
 
-from PIL import Image, ImageDraw, ImageFont
-import math
+from PIL import Image, ImageDraw
 import os
 
 # Brand colors
 BACKGROUND = "#0f0f1a"
 PRIMARY = "#4f46e5"  # Indigo
-ACCENT = "#818cf8"   # Light indigo
-GOLD = "#fbbf24"     # For pro/premium feel
+ACCENT = "#818cf8"  # Light indigo
+GOLD = "#fbbf24"  # For pro/premium feel
 
 
 def hex_to_rgb(hex_color: str) -> tuple:
     """Convert hex color to RGB tuple."""
     hex_color = hex_color.lstrip("#")
-    return tuple(int(hex_color[i:i+2], 16) for i in (0, 2, 4))
+    return tuple(int(hex_color[i : i + 2], 16) for i in (0, 2, 4))
 
 
 def create_app_icon(size: int = 1024, output_path: str = "icon.png"):
@@ -29,10 +28,14 @@ def create_app_icon(size: int = 1024, output_path: str = "icon.png"):
     ring_radius = int(size * 0.38)
     ring_width = int(size * 0.04)
     draw.ellipse(
-        [center - ring_radius, center - ring_radius,
-         center + ring_radius, center + ring_radius],
+        [
+            center - ring_radius,
+            center - ring_radius,
+            center + ring_radius,
+            center + ring_radius,
+        ],
         outline=hex_to_rgb(PRIMARY),
-        width=ring_width
+        width=ring_width,
     )
 
     # Draw stylized "G" using geometric shapes
@@ -41,8 +44,7 @@ def create_app_icon(size: int = 1024, output_path: str = "icon.png"):
     g_width = int(size * 0.08)
 
     # Draw the G as an arc (270 degrees, open on the right)
-    bbox = [center - g_radius, center - g_radius,
-            center + g_radius, center + g_radius]
+    bbox = [center - g_radius, center - g_radius, center + g_radius, center + g_radius]
     draw.arc(bbox, start=45, end=315, fill=hex_to_rgb(ACCENT), width=g_width)
 
     # Draw the horizontal bar of G
@@ -51,8 +53,7 @@ def create_app_icon(size: int = 1024, output_path: str = "icon.png"):
     bar_x = center - int(size * 0.02)
     bar_y = center - bar_height // 2
     draw.rectangle(
-        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height],
-        fill=hex_to_rgb(ACCENT)
+        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height], fill=hex_to_rgb(ACCENT)
     )
 
     # Add three small dots representing decision points / stats
@@ -66,9 +67,8 @@ def create_app_icon(size: int = 1024, output_path: str = "icon.png"):
     for i, (dx, dy) in enumerate(dot_positions):
         color = hex_to_rgb(GOLD) if i == 0 else hex_to_rgb(PRIMARY)
         draw.ellipse(
-            [dx - dot_radius, dy - dot_radius,
-             dx + dot_radius, dy + dot_radius],
-            fill=color
+            [dx - dot_radius, dy - dot_radius, dx + dot_radius, dy + dot_radius],
+            fill=color,
         )
 
     img.save(output_path, "PNG")
@@ -105,18 +105,21 @@ def create_icon_content(size: int) -> Image.Image:
     ring_radius = int(size * 0.42)
     ring_width = int(size * 0.05)
     draw.ellipse(
-        [center - ring_radius, center - ring_radius,
-         center + ring_radius, center + ring_radius],
+        [
+            center - ring_radius,
+            center - ring_radius,
+            center + ring_radius,
+            center + ring_radius,
+        ],
         outline=hex_to_rgb(PRIMARY),
-        width=ring_width
+        width=ring_width,
     )
 
     # Draw stylized "G"
     g_radius = int(size * 0.30)
     g_width = int(size * 0.09)
 
-    bbox = [center - g_radius, center - g_radius,
-            center + g_radius, center + g_radius]
+    bbox = [center - g_radius, center - g_radius, center + g_radius, center + g_radius]
     draw.arc(bbox, start=45, end=315, fill=hex_to_rgb(ACCENT), width=g_width)
 
     # Horizontal bar
@@ -125,8 +128,7 @@ def create_icon_content(size: int) -> Image.Image:
     bar_x = center - int(size * 0.02)
     bar_y = center - bar_height // 2
     draw.rectangle(
-        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height],
-        fill=hex_to_rgb(ACCENT)
+        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height], fill=hex_to_rgb(ACCENT)
     )
 
     # Decision dots
@@ -140,9 +142,8 @@ def create_icon_content(size: int) -> Image.Image:
     for i, (dx, dy) in enumerate(dot_positions):
         color = hex_to_rgb(GOLD) if i == 0 else hex_to_rgb(PRIMARY)
         draw.ellipse(
-            [dx - dot_radius, dy - dot_radius,
-             dx + dot_radius, dy + dot_radius],
-            fill=color
+            [dx - dot_radius, dy - dot_radius, dx + dot_radius, dy + dot_radius],
+            fill=color,
         )
 
     return img
@@ -160,8 +161,7 @@ def create_splash_icon(size: int = 200, output_path: str = "splash-icon.png"):
     g_radius = int(size * 0.35)
     g_width = int(size * 0.12)
 
-    bbox = [center - g_radius, center - g_radius,
-            center + g_radius, center + g_radius]
+    bbox = [center - g_radius, center - g_radius, center + g_radius, center + g_radius]
     draw.arc(bbox, start=45, end=315, fill=hex_to_rgb(ACCENT), width=g_width)
 
     # Horizontal bar
@@ -170,8 +170,7 @@ def create_splash_icon(size: int = 200, output_path: str = "splash-icon.png"):
     bar_x = center - int(size * 0.02)
     bar_y = center - bar_height // 2
     draw.rectangle(
-        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height],
-        fill=hex_to_rgb(ACCENT)
+        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height], fill=hex_to_rgb(ACCENT)
     )
 
     img.save(output_path, "PNG")
@@ -190,8 +189,7 @@ def create_favicon(size: int = 48, output_path: str = "favicon.png"):
     g_radius = int(size * 0.32)
     g_width = max(3, int(size * 0.12))
 
-    bbox = [center - g_radius, center - g_radius,
-            center + g_radius, center + g_radius]
+    bbox = [center - g_radius, center - g_radius, center + g_radius, center + g_radius]
     draw.arc(bbox, start=45, end=315, fill=hex_to_rgb(ACCENT), width=g_width)
 
     # Bar
@@ -200,8 +198,7 @@ def create_favicon(size: int = 48, output_path: str = "favicon.png"):
     bar_x = center - int(size * 0.02)
     bar_y = center - bar_height // 2
     draw.rectangle(
-        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height],
-        fill=hex_to_rgb(ACCENT)
+        [bar_x, bar_y, bar_x + bar_length, bar_y + bar_height], fill=hex_to_rgb(ACCENT)
     )
 
     img.save(output_path, "PNG")
@@ -212,8 +209,7 @@ def create_favicon(size: int = 48, output_path: str = "favicon.png"):
 def main():
     # Output directory
     output_dir = os.path.join(
-        os.path.dirname(os.path.dirname(__file__)),
-        "src", "mobile", "assets"
+        os.path.dirname(os.path.dirname(__file__)), "src", "mobile", "assets"
     )
     os.makedirs(output_dir, exist_ok=True)
 

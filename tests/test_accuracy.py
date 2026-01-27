@@ -50,8 +50,15 @@ class TestAccuracyMetrics:
 
 
 class TestComputeMetrics:
-    def _make_decision(self, id, sport="nba", confidence="medium", source="local",
-                       decision="Start Player A", player_a_name="Player A"):
+    def _make_decision(
+        self,
+        id,
+        sport="nba",
+        confidence="medium",
+        source="local",
+        decision="Start Player A",
+        player_a_name="Player A",
+    ):
         return {
             "id": id,
             "sport": sport,
@@ -76,9 +83,13 @@ class TestComputeMetrics:
 
     def test_correct_decision(self):
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(
-            decision_id="d1", actual_points_a=30.0, actual_points_b=15.0,
-        ))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1",
+                actual_points_a=30.0,
+                actual_points_b=15.0,
+            )
+        )
         decisions = [self._make_decision("d1")]
         metrics = tracker.compute_metrics(decisions)
         assert metrics.correct_decisions == 1
@@ -87,9 +98,13 @@ class TestComputeMetrics:
 
     def test_incorrect_decision(self):
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(
-            decision_id="d1", actual_points_a=10.0, actual_points_b=25.0,
-        ))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1",
+                actual_points_a=10.0,
+                actual_points_b=25.0,
+            )
+        )
         decisions = [self._make_decision("d1")]
         metrics = tracker.compute_metrics(decisions)
         assert metrics.correct_decisions == 0
@@ -97,9 +112,13 @@ class TestComputeMetrics:
 
     def test_push_within_one_point(self):
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(
-            decision_id="d1", actual_points_a=20.0, actual_points_b=20.5,
-        ))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1",
+                actual_points_a=20.0,
+                actual_points_b=20.5,
+            )
+        )
         decisions = [self._make_decision("d1")]
         metrics = tracker.compute_metrics(decisions)
         assert metrics.pushes == 1
@@ -108,8 +127,14 @@ class TestComputeMetrics:
 
     def test_by_confidence(self):
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(decision_id="d1", actual_points_a=30.0, actual_points_b=10.0))
-        tracker.record_outcome(DecisionOutcome(decision_id="d2", actual_points_a=5.0, actual_points_b=25.0))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1", actual_points_a=30.0, actual_points_b=10.0
+            )
+        )
+        tracker.record_outcome(
+            DecisionOutcome(decision_id="d2", actual_points_a=5.0, actual_points_b=25.0)
+        )
         decisions = [
             self._make_decision("d1", confidence="high"),
             self._make_decision("d2", confidence="low"),
@@ -122,8 +147,16 @@ class TestComputeMetrics:
 
     def test_by_source(self):
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(decision_id="d1", actual_points_a=30.0, actual_points_b=10.0))
-        tracker.record_outcome(DecisionOutcome(decision_id="d2", actual_points_a=30.0, actual_points_b=10.0))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1", actual_points_a=30.0, actual_points_b=10.0
+            )
+        )
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d2", actual_points_a=30.0, actual_points_b=10.0
+            )
+        )
         decisions = [
             self._make_decision("d1", source="local"),
             self._make_decision("d2", source="claude"),
@@ -136,8 +169,16 @@ class TestComputeMetrics:
 
     def test_by_sport(self):
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(decision_id="d1", actual_points_a=30.0, actual_points_b=10.0))
-        tracker.record_outcome(DecisionOutcome(decision_id="d2", actual_points_a=30.0, actual_points_b=10.0))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1", actual_points_a=30.0, actual_points_b=10.0
+            )
+        )
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d2", actual_points_a=30.0, actual_points_b=10.0
+            )
+        )
         decisions = [
             self._make_decision("d1", sport="nba"),
             self._make_decision("d2", sport="nfl"),
@@ -151,9 +192,21 @@ class TestComputeMetrics:
     def test_mixed_outcomes(self):
         """Integration test: mix of correct, incorrect, pushes, and missing."""
         tracker = AccuracyTracker()
-        tracker.record_outcome(DecisionOutcome(decision_id="d1", actual_points_a=30.0, actual_points_b=10.0))
-        tracker.record_outcome(DecisionOutcome(decision_id="d2", actual_points_a=10.0, actual_points_b=30.0))
-        tracker.record_outcome(DecisionOutcome(decision_id="d3", actual_points_a=20.0, actual_points_b=20.3))
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d1", actual_points_a=30.0, actual_points_b=10.0
+            )
+        )
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d2", actual_points_a=10.0, actual_points_b=30.0
+            )
+        )
+        tracker.record_outcome(
+            DecisionOutcome(
+                decision_id="d3", actual_points_a=20.0, actual_points_b=20.3
+            )
+        )
         # d4 has no outcome
         decisions = [
             self._make_decision("d1"),

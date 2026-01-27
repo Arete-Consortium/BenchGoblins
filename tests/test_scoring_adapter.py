@@ -2,7 +2,11 @@
 
 import pytest
 
-from core.scoring import PlayerStats as CorePlayerStats, calculate_indices, compare_players, RiskMode
+from core.scoring import (
+    calculate_indices,
+    compare_players,
+    RiskMode,
+)
 from services.espn import PlayerInfo, PlayerStats as ESPNPlayerStats
 from services.scoring_adapter import adapt_espn_to_core
 
@@ -38,12 +42,23 @@ class TestAdaptESPNToCore:
     def test_is_starter_boundary(self):
         """Exactly 80% → starter."""
         info = PlayerInfo(
-            id="x", name="X", team="T", team_abbrev="T",
-            position="G", jersey="0", height="", weight="",
-            age=None, experience=None, headshot_url=None,
+            id="x",
+            name="X",
+            team="T",
+            team_abbrev="T",
+            position="G",
+            jersey="0",
+            height="",
+            weight="",
+            age=None,
+            experience=None,
+            headshot_url=None,
         )
         stats = ESPNPlayerStats(
-            player_id="x", sport="nba", games_played=10, games_started=8,
+            player_id="x",
+            sport="nba",
+            games_played=10,
+            games_started=8,
         )
         core = adapt_espn_to_core(info, stats)
         assert core.is_starter is True
@@ -51,12 +66,23 @@ class TestAdaptESPNToCore:
     def test_zero_games_played(self):
         """Zero games → not starter, 0% started."""
         info = PlayerInfo(
-            id="x", name="X", team="T", team_abbrev="T",
-            position="G", jersey="0", height="", weight="",
-            age=None, experience=None, headshot_url=None,
+            id="x",
+            name="X",
+            team="T",
+            team_abbrev="T",
+            position="G",
+            jersey="0",
+            height="",
+            weight="",
+            age=None,
+            experience=None,
+            headshot_url=None,
         )
         stats = ESPNPlayerStats(
-            player_id="x", sport="nba", games_played=0, games_started=0,
+            player_id="x",
+            sport="nba",
+            games_played=0,
+            games_started=0,
         )
         core = adapt_espn_to_core(info, stats)
         assert core.is_starter is False
@@ -76,12 +102,23 @@ class TestAdaptESPNToCore:
     def test_none_stats_default_to_zero(self):
         """ESPN None fields should map to 0.0 in core."""
         info = PlayerInfo(
-            id="x", name="X", team="T", team_abbrev="T",
-            position="C", jersey="0", height="", weight="",
-            age=None, experience=None, headshot_url=None,
+            id="x",
+            name="X",
+            team="T",
+            team_abbrev="T",
+            position="C",
+            jersey="0",
+            height="",
+            weight="",
+            age=None,
+            experience=None,
+            headshot_url=None,
         )
         stats = ESPNPlayerStats(
-            player_id="x", sport="nba", games_played=10, games_started=10,
+            player_id="x",
+            sport="nba",
+            games_played=10,
+            games_started=10,
         )
         core = adapt_espn_to_core(info, stats)
         assert core.points_per_game == 0.0
@@ -89,7 +126,9 @@ class TestAdaptESPNToCore:
         assert core.usage_rate == 0.0
         assert core.field_goal_pct == 0.0
 
-    def test_trend_fields_default_to_zero(self, espn_nba_player_info, espn_nba_player_stats):
+    def test_trend_fields_default_to_zero(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
         """ESPN doesn't expose trends; they should be 0.0."""
         core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats)
         assert core.minutes_trend == 0.0
@@ -107,7 +146,9 @@ class TestAdaptESPNToCore:
 class TestAdapterRoundTrip:
     """Adapted stats should produce valid index scores."""
 
-    def test_nba_produces_valid_indices(self, espn_nba_player_info, espn_nba_player_stats):
+    def test_nba_produces_valid_indices(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
         core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats)
         indices = calculate_indices(core)
 
@@ -144,7 +185,9 @@ class TestAdapterRoundTrip:
         assert result["score_a"] > result["score_b"]  # Starter should outscore bench
         assert result["margin"] > 0
 
-    def test_neutral_msf_for_no_matchup_data(self, espn_nba_player_info, espn_nba_player_stats):
+    def test_neutral_msf_for_no_matchup_data(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
         """With no matchup data, MSF should be exactly 50."""
         core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats)
         indices = calculate_indices(core)
@@ -156,23 +199,33 @@ class TestAdapterTrends:
 
     def test_trends_mapped_correctly(self, espn_nba_player_info, espn_nba_player_stats):
         trends = {"minutes_trend": 3.5, "points_trend": 2.1, "usage_trend": 1.8}
-        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, trends=trends)
+        core = adapt_espn_to_core(
+            espn_nba_player_info, espn_nba_player_stats, trends=trends
+        )
         assert core.minutes_trend == 3.5
         assert core.points_trend == 2.1
         assert core.usage_trend == 1.8
 
-    def test_none_trends_defaults_to_zero(self, espn_nba_player_info, espn_nba_player_stats):
-        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, trends=None)
+    def test_none_trends_defaults_to_zero(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
+        core = adapt_espn_to_core(
+            espn_nba_player_info, espn_nba_player_stats, trends=None
+        )
         assert core.minutes_trend == 0.0
         assert core.points_trend == 0.0
         assert core.usage_trend == 0.0
 
-    def test_trends_produce_nonzero_od(self, espn_nba_player_info, espn_nba_player_stats):
+    def test_trends_produce_nonzero_od(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
         """Adapted stats with trends should produce non-zero OD."""
         from core.scoring import calculate_od
 
         trends = {"minutes_trend": 5.0, "points_trend": 3.0, "usage_trend": 2.0}
-        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, trends=trends)
+        core = adapt_espn_to_core(
+            espn_nba_player_info, espn_nba_player_stats, trends=trends
+        )
         od = calculate_od(core)
         assert od != 0.0
 
@@ -206,18 +259,22 @@ class TestAdapterMatchup:
             sport="nfl",
             points_allowed=28.5,
         )
-        core = adapt_espn_to_core(
-            espn_nfl_wr_info, espn_nfl_wr_stats, matchup=matchup
-        )
+        core = adapt_espn_to_core(espn_nfl_wr_info, espn_nfl_wr_stats, matchup=matchup)
         assert core.opponent_def_rating == 28.5
 
-    def test_none_matchup_yields_neutral_msf(self, espn_nba_player_info, espn_nba_player_stats):
+    def test_none_matchup_yields_neutral_msf(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
         from core.scoring import calculate_msf
 
-        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, matchup=None)
+        core = adapt_espn_to_core(
+            espn_nba_player_info, espn_nba_player_stats, matchup=None
+        )
         assert calculate_msf(core) == 50.0
 
-    def test_matchup_produces_non50_msf(self, espn_nba_player_info, espn_nba_player_stats):
+    def test_matchup_produces_non50_msf(
+        self, espn_nba_player_info, espn_nba_player_stats
+    ):
         from services.espn import TeamDefense
         from core.scoring import calculate_msf
 
@@ -247,7 +304,9 @@ class TestAdapterMLB:
         assert core.stolen_bases == 12.0
         assert core.ops == 0.875
 
-    def test_mlb_produces_valid_indices(self, espn_mlb_hitter_info, espn_mlb_hitter_stats):
+    def test_mlb_produces_valid_indices(
+        self, espn_mlb_hitter_info, espn_mlb_hitter_stats
+    ):
         core = adapt_espn_to_core(espn_mlb_hitter_info, espn_mlb_hitter_stats)
         indices = calculate_indices(core)
         assert 0 <= indices.sci <= 100
@@ -268,7 +327,9 @@ class TestAdapterNHL:
         assert core.plus_minus == 15.0
         assert core.shots == 250.0
 
-    def test_nhl_produces_valid_indices(self, espn_nhl_forward_info, espn_nhl_forward_stats):
+    def test_nhl_produces_valid_indices(
+        self, espn_nhl_forward_info, espn_nhl_forward_stats
+    ):
         core = adapt_espn_to_core(espn_nhl_forward_info, espn_nhl_forward_stats)
         indices = calculate_indices(core)
         assert 0 <= indices.sci <= 100
