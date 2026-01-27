@@ -151,17 +151,55 @@ class RedisService:
     # Decision Caching (for Claude responses)
     # =========================================================================
 
+    # =========================================================================
+    # Stats Version (Cache Invalidation)
+    # =========================================================================
+
+    def _stats_version_key(self, sport: str) -> str:
+        """Key for stats version counter."""
+        return f"stats_version:{sport}"
+
+    async def get_stats_version(self, sport: str) -> int:
+        """Get current stats version for a sport."""
+        if not self._client:
+            return 0
+        try:
+            val = await self._client.get(self._stats_version_key(sport))
+            return int(val) if val else 0
+        except redis.ConnectionError:
+            return 0
+
+    async def bump_stats_version(self, sport: str) -> int:
+        """Increment stats version for a sport. Returns new version."""
+        if not self._client:
+            return 0
+        try:
+            return await self._client.incr(self._stats_version_key(sport))
+        except redis.ConnectionError:
+            return 0
+
+    # =========================================================================
+    # Decision Caching (for Claude responses)
+    # =========================================================================
+
+    async def _versioned_decision_key(self, sport: str, risk_mode: str, query: str) -> str:
+        """Generate versioned cache key for decision."""
+        version = await self.get_stats_version(sport)
+        query_hash = hashlib.md5(query.lower().strip().encode()).hexdigest()[:12]
+        return f"decision:{sport}:v{version}:{risk_mode}:{query_hash}"
+
     def _decision_key(self, sport: str, risk_mode: str, query: str) -> str:
-        """Generate cache key for decision."""
+        """Generate cache key for decision (unversioned, for pattern matching)."""
         query_hash = hashlib.md5(query.lower().strip().encode()).hexdigest()[:12]
         return f"decision:{sport}:{risk_mode}:{query_hash}"
 
     async def get_decision(self, sport: str, risk_mode: str, query: str) -> dict | None:
-        """Get cached Claude decision."""
+        """Get cached Claude decision (versioned key)."""
         if not self._client:
             return None
         try:
-            data = await self._client.get(self._decision_key(sport, risk_mode, query))
+            key = await self._versioned_decision_key(sport, risk_mode, query)
+            data = await self._client.get(key)
             result = json.loads(data) if data else None
             track_cache_operation("get", hit=result is not None)
             return result
@@ -169,12 +207,13 @@ class RedisService:
             return None
 
     async def set_decision(self, sport: str, risk_mode: str, query: str, decision: dict) -> bool:
-        """Cache Claude decision."""
+        """Cache Claude decision (versioned key)."""
         if not self._client:
             return False
         try:
+            key = await self._versioned_decision_key(sport, risk_mode, query)
             await self._client.setex(
-                self._decision_key(sport, risk_mode, query),
+                key,
                 self.DECISION_TTL,
                 json.dumps(decision),
             )
