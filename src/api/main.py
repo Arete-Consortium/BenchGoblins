@@ -1530,6 +1530,81 @@ async def websocket_stats():
     return connection_manager.get_stats()
 
 
+# ---------------------------------------------------------------------------
+# Decision Accuracy Tracking
+# ---------------------------------------------------------------------------
+
+from services.accuracy import AccuracyTracker, DecisionOutcome
+
+accuracy_tracker = AccuracyTracker()
+
+
+class OutcomeRequest(BaseModel):
+    """Record the actual outcome of a decision."""
+    decision_id: str
+    actual_points_a: float | None = None
+    actual_points_b: float | None = None
+    user_followed: bool | None = None
+    feedback_note: str | None = None
+
+
+@app.post("/accuracy/outcomes")
+async def record_outcome(request: OutcomeRequest):
+    """Record the actual outcome for a past decision."""
+    outcome = DecisionOutcome(
+        decision_id=request.decision_id,
+        actual_points_a=request.actual_points_a,
+        actual_points_b=request.actual_points_b,
+        user_followed=request.user_followed,
+        feedback_note=request.feedback_note,
+    )
+    accuracy_tracker.record_outcome(outcome)
+    return {"status": "recorded", "decision_id": request.decision_id}
+
+
+@app.get("/accuracy/metrics")
+async def get_accuracy_metrics(sport: Sport | None = None):
+    """Get aggregate accuracy metrics across all tracked decisions."""
+    decisions = decision_history
+    if sport:
+        decisions = [d for d in decisions if d.get("sport") == sport.value]
+    metrics = accuracy_tracker.compute_metrics(decisions)
+    return {
+        "total_decisions": metrics.total_decisions,
+        "decisions_with_outcomes": metrics.decisions_with_outcomes,
+        "correct": metrics.correct_decisions,
+        "incorrect": metrics.incorrect_decisions,
+        "pushes": metrics.pushes,
+        "accuracy_pct": metrics.accuracy_pct,
+        "coverage_pct": metrics.coverage_pct,
+        "by_confidence": {
+            "high": {"total": metrics.high_confidence_total, "correct": metrics.high_confidence_correct, "accuracy": metrics.confidence_accuracy("high")},
+            "medium": {"total": metrics.medium_confidence_total, "correct": metrics.medium_confidence_correct, "accuracy": metrics.confidence_accuracy("medium")},
+            "low": {"total": metrics.low_confidence_total, "correct": metrics.low_confidence_correct, "accuracy": metrics.confidence_accuracy("low")},
+        },
+        "by_source": {
+            "local": {"total": metrics.local_total, "correct": metrics.local_correct},
+            "claude": {"total": metrics.claude_total, "correct": metrics.claude_correct},
+        },
+        "by_sport": metrics.by_sport,
+    }
+
+
+@app.get("/accuracy/outcome/{decision_id}")
+async def get_outcome(decision_id: str):
+    """Get the recorded outcome for a specific decision."""
+    outcome = accuracy_tracker.get_outcome(decision_id)
+    if not outcome:
+        raise HTTPException(status_code=404, detail="No outcome recorded for this decision")
+    return {
+        "decision_id": outcome.decision_id,
+        "actual_points_a": outcome.actual_points_a,
+        "actual_points_b": outcome.actual_points_b,
+        "user_followed": outcome.user_followed,
+        "feedback_note": outcome.feedback_note,
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 
