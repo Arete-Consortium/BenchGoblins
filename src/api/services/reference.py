@@ -20,7 +20,9 @@ PFR_BASE = "https://www.pro-football-reference.com"
 _RATE_LIMIT_SECONDS = 3.0
 _last_request_time: float = 0.0
 
-_USER_AGENT = "GameSpace/0.2.0 (Fantasy Sports Analytics; +https://github.com/AreteDriver/GameSpace)"
+_USER_AGENT = (
+    "GameSpace/0.2.0 (Fantasy Sports Analytics; +https://github.com/AreteDriver/GameSpace)"
+)
 
 
 @dataclass
@@ -163,7 +165,7 @@ class BasketballReferenceService:
             return match.group(1) if match else None
 
         # Search results page — find first player link
-        pattern = r'/players/\w/(\w+)\.html'
+        pattern = r"/players/\w/(\w+)\.html"
         match = re.search(pattern, resp.text)
         return match.group(1) if match else None
 
@@ -234,7 +236,7 @@ class ProFootballReferenceService:
             match = re.search(r"/players/\w/(\w+)\.htm", str(resp.url))
             return match.group(1) if match else None
 
-        pattern = r'/players/\w/(\w+)\.htm'
+        pattern = r"/players/\w/(\w+)\.htm"
         match = re.search(pattern, resp.text)
         return match.group(1) if match else None
 
