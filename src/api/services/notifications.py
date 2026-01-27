@@ -5,7 +5,6 @@ Uses Expo's push notification service for cross-platform delivery.
 In production, this could be replaced with Firebase Cloud Messaging directly.
 """
 
-import os
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -106,9 +105,7 @@ class NotificationService:
 
     def get_user_tokens(self, user_id: str) -> list[str]:
         """Get tokens for a specific user."""
-        return [
-            dt.token for dt in self._tokens.values() if dt.user_id == user_id
-        ]
+        return [dt.token for dt in self._tokens.values() if dt.user_id == user_id]
 
     # =========================================================================
     # Sending Notifications

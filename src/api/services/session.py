@@ -7,14 +7,14 @@ Handles session creation, validation, expiration, and credential storage.
 import json
 import os
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
+from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives import hashes
-from sqlalchemy import select, update, delete
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import Session, SessionCredential
@@ -39,6 +39,7 @@ class SessionService:
             key_b64 = os.getenv("SESSION_ENCRYPTION_KEY")
             if key_b64:
                 import base64
+
                 self._encryption_key = base64.b64decode(key_b64)
             else:
                 # For development only - generate a temporary key
@@ -87,7 +88,7 @@ class SessionService:
         user_id: str | None = None,
     ) -> Session:
         """Create a new session."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         expiry_days = int(os.getenv("SESSION_DEFAULT_EXPIRY_DAYS", self.DEFAULT_EXPIRY_DAYS))
 
         session = Session(
@@ -115,21 +116,17 @@ class SessionService:
         update_activity: bool = True,
     ) -> Session | None:
         """Get a session by its token, optionally updating last activity."""
-        result = await db.execute(
-            select(Session).where(Session.session_token == token)
-        )
+        result = await db.execute(select(Session).where(Session.session_token == token))
         session = result.scalar_one_or_none()
 
         if session and update_activity:
-            session.last_active_at = datetime.now(timezone.utc)
+            session.last_active_at = datetime.now(UTC)
 
         return session
 
     async def get_session_by_id(self, db: AsyncSession, session_id: UUID) -> Session | None:
         """Get a session by its UUID."""
-        result = await db.execute(
-            select(Session).where(Session.id == session_id)
-        )
+        result = await db.execute(select(Session).where(Session.id == session_id))
         return result.scalar_one_or_none()
 
     async def validate_session(
@@ -149,7 +146,7 @@ class SessionService:
         if not session:
             return False, None, "Session not found"
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check status
         if session.status == "revoked":
@@ -183,12 +180,14 @@ class SessionService:
     ) -> Session:
         """Extend a session's expiration time."""
         max_days = int(os.getenv("SESSION_MAX_EXPIRY_DAYS", self.MAX_EXPIRY_DAYS))
-        extend_days = extend_days or int(os.getenv("SESSION_DEFAULT_EXPIRY_DAYS", self.DEFAULT_EXPIRY_DAYS))
+        extend_days = extend_days or int(
+            os.getenv("SESSION_DEFAULT_EXPIRY_DAYS", self.DEFAULT_EXPIRY_DAYS)
+        )
 
         # Cap extension at max
         extend_days = min(extend_days, max_days)
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         session.expires_at = now + timedelta(days=extend_days)
         session.last_active_at = now
 
@@ -235,7 +234,7 @@ class SessionService:
         Returns:
             Tuple of (marked_expired_count, deleted_count)
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Mark expired sessions
         mark_result = await db.execute(
@@ -286,7 +285,7 @@ class SessionService:
             existing.encrypted_data = encrypted_data
             existing.encryption_iv = iv
             existing.expires_at = expires_at
-            existing.updated_at = datetime.now(timezone.utc)
+            existing.updated_at = datetime.now(UTC)
             return existing
 
         # Create new
@@ -319,7 +318,7 @@ class SessionService:
             return None
 
         # Check expiration
-        if credential.expires_at and credential.expires_at < datetime.now(timezone.utc):
+        if credential.expires_at and credential.expires_at < datetime.now(UTC):
             return None
 
         return self._decrypt_data(
@@ -349,12 +348,11 @@ class SessionService:
     ) -> dict[str, dict[str, Any]]:
         """Get status of all credentials for a session."""
         result = await db.execute(
-            select(SessionCredential)
-            .where(SessionCredential.session_id == session.id)
+            select(SessionCredential).where(SessionCredential.session_id == session.id)
         )
         credentials = result.scalars().all()
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         status = {}
 
         for cred in credentials:

@@ -15,12 +15,12 @@ from functools import wraps
 from typing import Any
 
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
     Counter,
     Gauge,
     Histogram,
     Info,
     generate_latest,
-    CONTENT_TYPE_LATEST,
 )
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -31,10 +31,12 @@ from starlette.responses import Response
 # =============================================================================
 
 APP_INFO = Info("gamespace_app", "GameSpace application information")
-APP_INFO.info({
-    "version": "0.3.0",
-    "name": "GameSpace API",
-})
+APP_INFO.info(
+    {
+        "version": "0.3.0",
+        "name": "GameSpace API",
+    }
+)
 
 # =============================================================================
 # Request Metrics
@@ -136,6 +138,7 @@ SUBSCRIPTION_EVENTS = Counter(
 # Metrics Middleware
 # =============================================================================
 
+
 def normalize_path(path: str) -> str:
     """Normalize path to reduce cardinality in metrics."""
     # Replace UUIDs and numeric IDs with placeholders
@@ -207,6 +210,7 @@ class MetricsMiddleware(BaseHTTPMiddleware):
 # Metrics Endpoint
 # =============================================================================
 
+
 async def metrics_endpoint(request: Request) -> Response:
     """Prometheus metrics endpoint."""
     return Response(
@@ -219,8 +223,10 @@ async def metrics_endpoint(request: Request) -> Response:
 # Instrumentation Decorators
 # =============================================================================
 
+
 def track_decision(sport: str, query_type: str, risk_mode: str, routed_to: str):
     """Decorator to track decision metrics."""
+
     def decorator(func: Callable) -> Callable:
         @wraps(func)
         async def wrapper(*args, **kwargs) -> Any:
@@ -242,6 +248,7 @@ def track_decision(sport: str, query_type: str, risk_mode: str, routed_to: str):
                 ).observe(duration)
 
         return wrapper
+
     return decorator
 
 

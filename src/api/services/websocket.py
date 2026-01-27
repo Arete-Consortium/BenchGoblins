@@ -11,18 +11,19 @@ Provides:
 import asyncio
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocket
 
 logger = logging.getLogger(__name__)
 
 
 class MessageType(str, Enum):
     """WebSocket message types."""
+
     # Client -> Server
     SUBSCRIBE = "subscribe"
     UNSUBSCRIBE = "unsubscribe"
@@ -231,7 +232,7 @@ class ConnectionManager:
         """Send a message to a WebSocket."""
         message = {
             "type": message_type.value,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "data": data,
         }
         await websocket.send_json(message)
@@ -259,6 +260,7 @@ connection_manager = ConnectionManager()
 # Topic Helpers
 # =============================================================================
 
+
 def player_topic(sport: str, player_id: str) -> str:
     """Generate topic for player updates."""
     return f"player:{sport}:{player_id}"
@@ -282,6 +284,7 @@ def injury_topic() -> str:
 # =============================================================================
 # Broadcast Helpers
 # =============================================================================
+
 
 async def broadcast_stat_update(
     sport: str,

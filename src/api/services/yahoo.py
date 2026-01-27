@@ -13,9 +13,7 @@ import os
 import time
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any
 from urllib.parse import urlencode
-import xml.etree.ElementTree as ET
 
 import httpx
 
@@ -455,10 +453,7 @@ class YahooService:
             return None
 
         try:
-            league_data = (
-                data.get("fantasy_content", {})
-                .get("league", [[{}]])[0]
-            )
+            league_data = data.get("fantasy_content", {}).get("league", [[{}]])[0]
             return self._parse_league(league_data, "")
 
         except (KeyError, TypeError, IndexError):
@@ -498,16 +493,18 @@ class YahooService:
                     basic = team_info[0][0] if isinstance(team_info[0], list) else team_info[0]
                     standings_info = team_info[1].get("team_standings", {})
 
-                    standings.append({
-                        "team_key": basic.get("team_key", ""),
-                        "team_name": basic.get("name", ""),
-                        "rank": standings_info.get("rank", 0),
-                        "wins": standings_info.get("outcome_totals", {}).get("wins", 0),
-                        "losses": standings_info.get("outcome_totals", {}).get("losses", 0),
-                        "ties": standings_info.get("outcome_totals", {}).get("ties", 0),
-                        "points_for": standings_info.get("points_for", 0),
-                        "points_against": standings_info.get("points_against", 0),
-                    })
+                    standings.append(
+                        {
+                            "team_key": basic.get("team_key", ""),
+                            "team_name": basic.get("name", ""),
+                            "rank": standings_info.get("rank", 0),
+                            "wins": standings_info.get("outcome_totals", {}).get("wins", 0),
+                            "losses": standings_info.get("outcome_totals", {}).get("losses", 0),
+                            "ties": standings_info.get("outcome_totals", {}).get("ties", 0),
+                            "points_for": standings_info.get("points_for", 0),
+                            "points_against": standings_info.get("points_against", 0),
+                        }
+                    )
 
                 team_idx += 1
 
@@ -561,7 +558,11 @@ class YahooService:
                 basic = team_info[0][0] if isinstance(team_info[0], list) else team_info[0]
 
                 # Filter by league if specified
-                if league_key and basic.get("team_key", "").split(".t.")[0] != league_key.split(".l.")[0] + ".l." + league_key.split(".l.")[1]:
+                if (
+                    league_key
+                    and basic.get("team_key", "").split(".t.")[0]
+                    != league_key.split(".l.")[0] + ".l." + league_key.split(".l.")[1]
+                ):
                     team_idx += 1
                     continue
 
@@ -652,7 +653,11 @@ class YahooService:
         # Get position
         eligible_positions = data.get("eligible_positions", [])
         if isinstance(eligible_positions, list) and eligible_positions:
-            position = eligible_positions[0].get("position", "") if isinstance(eligible_positions[0], dict) else str(eligible_positions[0])
+            position = (
+                eligible_positions[0].get("position", "")
+                if isinstance(eligible_positions[0], dict)
+                else str(eligible_positions[0])
+            )
         else:
             position = data.get("display_position", "")
 
@@ -664,8 +669,12 @@ class YahooService:
             position=position,
             status=data.get("status", ""),
             injury_status=data.get("status") if data.get("status") not in ["", "O", "IR"] else None,
-            bye_week=data.get("bye_weeks", {}).get("week") if isinstance(data.get("bye_weeks"), dict) else None,
-            headshot_url=data.get("headshot", {}).get("url") if isinstance(data.get("headshot"), dict) else None,
+            bye_week=data.get("bye_weeks", {}).get("week")
+            if isinstance(data.get("bye_weeks"), dict)
+            else None,
+            headshot_url=data.get("headshot", {}).get("url")
+            if isinstance(data.get("headshot"), dict)
+            else None,
         )
 
     # =========================================================================

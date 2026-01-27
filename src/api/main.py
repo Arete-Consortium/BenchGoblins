@@ -3,10 +3,14 @@ GameSpace API — Fantasy Sports Decision Engine
 """
 
 import os
+import secrets
 import sys
+import time
 from contextlib import asynccontextmanager
 from enum import Enum
-from uuid import UUID
+
+# Add parent directory to path for imports
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import sentry_sdk
 from dotenv import load_dotenv
@@ -16,8 +20,19 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-# Add parent directory to path for imports
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from models.database import Decision as DecisionModel
+from monitoring import MetricsMiddleware, metrics_endpoint
+from routes.sessions import router as sessions_router
+from services.claude import claude_service
+from services.database import db_service
+from services.espn import espn_service, format_player_context
+from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
+from services.notifications import PushNotification, notification_service
+from services.redis import redis_service
+from services.router import QueryComplexity, classify_query, extract_players_from_query
+from services.sleeper import sleeper_service
+from services.websocket import connection_manager
+from services.yahoo import yahoo_service
 
 load_dotenv()
 
@@ -31,26 +46,12 @@ if SENTRY_DSN:
     sentry_sdk.init(
         dsn=SENTRY_DSN,
         environment=os.getenv("ENVIRONMENT", "development"),
-        traces_sample_rate=0.1,  # 10% of transactions for performance monitoring
-        profiles_sample_rate=0.1,  # 10% of sampled transactions for profiling
+        traces_sample_rate=0.1,
+        profiles_sample_rate=0.1,
         enable_tracing=True,
-        send_default_pii=False,  # Don't send personally identifiable information
+        send_default_pii=False,
     )
     print("Sentry error monitoring enabled")
-
-from models.database import Decision as DecisionModel
-from services.claude import claude_service
-from services.database import db_service
-from services.espn import espn_service, format_player_context
-from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
-from services.notifications import notification_service, PushNotification
-from services.redis import redis_service
-from services.router import QueryComplexity, classify_query, extract_players_from_query
-from services.sleeper import sleeper_service
-from services.yahoo import yahoo_service
-from services.websocket import connection_manager, MessageType
-from monitoring import MetricsMiddleware, metrics_endpoint
-from routes.sessions import router as sessions_router
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -105,7 +106,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="GameSpace API",
-    description="Fantasy sports decision engine using role stability, spatial opportunity, and matchup context.",
+    description=(
+        "Fantasy sports decision engine using role stability,"
+        " spatial opportunity, and matchup context."
+    ),
     version="0.2.0",
     lifespan=lifespan,
 )
@@ -311,8 +315,12 @@ async def _store_decision(
                 confidence=response.confidence.value,
                 rationale=response.rationale,
                 source=response.source,
-                score_a=response.details.get("player_a", {}).get("score") if response.details else None,
-                score_b=response.details.get("player_b", {}).get("score") if response.details else None,
+                score_a=response.details.get("player_a", {}).get("score")
+                if response.details
+                else None,
+                score_b=response.details.get("player_b", {}).get("score")
+                if response.details
+                else None,
                 margin=response.details.get("margin") if response.details else None,
                 league_type=request.league_type,
                 player_context=player_context,
@@ -386,7 +394,9 @@ async def make_decision(request: DecisionRequest):
             }
             return DecisionResponse(
                 decision=cached["decision"],
-                confidence=confidence_map.get(cached.get("confidence", "medium"), Confidence.MEDIUM),
+                confidence=confidence_map.get(
+                    cached.get("confidence", "medium"), Confidence.MEDIUM
+                ),
                 rationale=cached.get("rationale", ""),
                 details=cached.get("details"),
                 source=cached.get("source", "claude") + "_cached",
@@ -448,11 +458,9 @@ async def _local_decision(
     if score_a > score_b:
         decision = f"Start {info_a.name}"
         winner_stats = stats_a
-        loser_stats = stats_b
     else:
         decision = f"Start {info_b.name}"
         winner_stats = stats_b
-        loser_stats = stats_a
 
     # Confidence based on margin
     if margin < 5:
@@ -579,7 +587,10 @@ def _build_rationale(sport: str, risk_mode: str, winner_info, winner_stats) -> s
             return f"{name} offers strong passing production for your {risk_mode} strategy."
         elif winner_stats.receiving_yards:
             targets = winner_stats.targets or 0
-            return f"{name} has consistent target share ({targets:.0f} targets), good for {risk_mode} mode."
+            return (
+                f"{name} has consistent target share"
+                f" ({targets:.0f} targets), good for {risk_mode} mode."
+            )
         else:
             return f"{name} has the better rushing floor for {risk_mode} mode."
     elif sport == "mlb":
@@ -848,7 +859,9 @@ _espn_credentials: dict[str, ESPNCredentials] = {}
 
 
 @app.post("/integrations/espn/connect", response_model=ESPNConnectResponse)
-async def connect_espn_account(request: ESPNConnectRequest, session_id: str = Query(default="default")):
+async def connect_espn_account(
+    request: ESPNConnectRequest, session_id: str = Query(default="default")
+):
     """
     Connect an ESPN Fantasy account using cookie credentials.
 
@@ -1072,7 +1085,10 @@ async def get_sleeper_leagues(
     ]
 
 
-@app.get("/integrations/sleeper/league/{league_id}/roster/{user_id}", response_model=SleeperRosterResponse)
+@app.get(
+    "/integrations/sleeper/league/{league_id}/roster/{user_id}",
+    response_model=SleeperRosterResponse,
+)
 async def get_sleeper_roster(
     league_id: str,
     user_id: str,
@@ -1219,8 +1235,6 @@ async def get_yahoo_auth_url(
     User should be redirected to this URL to authorize the app.
     After authorization, Yahoo will redirect back with an authorization code.
     """
-    import secrets
-
     state = secrets.token_urlsafe(16)
 
     # Store state for verification
@@ -1319,8 +1333,6 @@ async def _get_yahoo_token(session_id: str) -> str:
             status_code=401,
             detail="Yahoo account not connected. Complete OAuth flow first.",
         )
-
-    import time
 
     # Refresh if expired (with 60s buffer)
     if stored.get("expires_at", 0) < time.time() + 60:
@@ -1450,8 +1462,6 @@ async def get_yahoo_status(session_id: str = Query(default="default")):
     """
     stored = _yahoo_tokens.get(session_id)
     connected = stored is not None and "access_token" in stored
-
-    import time
 
     if connected:
         expires_at = stored.get("expires_at", 0)

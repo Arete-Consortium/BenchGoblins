@@ -5,10 +5,8 @@ Implements OAuth 2.0 flow for ESPN Fantasy Sports.
 Fetches leagues, rosters, and team data with user authentication.
 """
 
-import os
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from urllib.parse import urlencode
+from datetime import datetime
 
 import httpx
 
@@ -345,7 +343,19 @@ class ESPNFantasyService:
         # ESPN position slot mappings vary by sport
         nba_positions = {0: "PG", 1: "SG", 2: "SF", 3: "PF", 4: "C", 5: "G", 6: "F", 7: "UTIL"}
         nfl_positions = {0: "QB", 2: "RB", 4: "WR", 6: "TE", 16: "D/ST", 17: "K", 23: "FLEX"}
-        mlb_positions = {0: "C", 1: "1B", 2: "2B", 3: "3B", 4: "SS", 5: "LF", 6: "CF", 7: "RF", 10: "DH", 14: "SP", 15: "RP"}
+        mlb_positions = {
+            0: "C",
+            1: "1B",
+            2: "2B",
+            3: "3B",
+            4: "SS",
+            5: "LF",
+            6: "CF",
+            7: "RF",
+            10: "DH",
+            14: "SP",
+            15: "RP",
+        }
         nhl_positions = {0: "C", 1: "LW", 2: "RW", 3: "D", 4: "G"}
 
         positions = {
