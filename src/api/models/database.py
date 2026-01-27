@@ -11,6 +11,7 @@ from typing import Optional
 
 from sqlalchemy import (
     JSON,
+    Boolean,
     CheckConstraint,
     DateTime,
     ForeignKey,
@@ -347,6 +348,14 @@ class Decision(Base):
     margin: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     indices_a: Mapped[dict | None] = mapped_column(JSON)
     indices_b: Mapped[dict | None] = mapped_column(JSON)
+
+    # Token usage tracking
+    input_tokens: Mapped[int | None] = mapped_column(Integer)
+    output_tokens: Mapped[int | None] = mapped_column(Integer)
+    cache_hit: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # A/B prompt testing
+    prompt_variant: Mapped[str | None] = mapped_column(String(50))
 
     # Context
     league_type: Mapped[str | None] = mapped_column(String(50))
