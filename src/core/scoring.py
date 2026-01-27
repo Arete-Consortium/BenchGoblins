@@ -58,6 +58,23 @@ class PlayerStats:
     rush_yards: float = 0.0
     snap_pct: float = 0.0
 
+    # MLB-specific
+    batting_avg: float = 0.0
+    home_runs: float = 0.0
+    rbis: float = 0.0
+    stolen_bases: float = 0.0
+    ops: float = 0.0
+    era: float = 0.0  # Pitchers
+    wins: int = 0
+    strikeouts: float = 0.0
+
+    # NHL-specific
+    goals: float = 0.0
+    assists_nhl: float = 0.0
+    plus_minus: float = 0.0
+    shots: float = 0.0
+    save_pct: float = 0.0  # Goalies
+
     # Matchup context (populated per-game)
     opponent_def_rating: Optional[float] = None
     opponent_pace: Optional[float] = None
@@ -314,6 +331,169 @@ def calculate_gis_nfl(stats: PlayerStats) -> float:
 
 
 # =============================================================================
+# INDEX CALCULATIONS - MLB
+# =============================================================================
+
+
+def calculate_sci_mlb(stats: PlayerStats) -> float:
+    """
+    Space Creation Index (MLB).
+
+    Hitters: OPS-driven + SB speed + HR power.
+    Pitchers: K rate + ERA dominance.
+    """
+    # Detect pitcher by ERA > 0 or position
+    is_pitcher = stats.era > 0 or (stats.position and stats.position.upper() in ("P", "SP", "RP"))
+
+    if is_pitcher:
+        # K rate contribution (0-40)
+        k_score = min(40, stats.strikeouts * 0.2)
+        # ERA contribution (0-35): lower ERA = better
+        era_score = max(0, min(35, (5.0 - stats.era) * 10)) if stats.era > 0 else 0
+        # Wins contribution (0-25)
+        win_score = min(25, stats.wins * 2.5)
+        return max(0, min(100, k_score + era_score + win_score))
+
+    # Hitter
+    # OPS contribution (0-45)
+    ops_score = min(45, stats.ops * 50)
+    # HR power (0-25)
+    hr_score = min(25, stats.home_runs * 0.7)
+    # SB speed (0-15)
+    sb_score = min(15, stats.stolen_bases * 0.5)
+    # Batting avg floor (0-15)
+    avg_score = min(15, stats.batting_avg * 50)
+
+    return max(0, min(100, ops_score + hr_score + sb_score + avg_score))
+
+
+def calculate_rmi_mlb(stats: PlayerStats) -> float:
+    """
+    Role Motion Index (MLB).
+
+    Lineup position stability: starter pct, games played consistency.
+    """
+    base_score = 50.0
+
+    if stats.is_starter:
+        base_score -= 15
+    else:
+        base_score += 15
+
+    if stats.games_started_pct > 0.9:
+        base_score -= 10
+    elif stats.games_started_pct < 0.5:
+        base_score += 10
+
+    # Games played consistency (out of ~162)
+    if stats.games_played > 140:
+        base_score -= 5  # Very durable
+    elif stats.games_played < 80:
+        base_score += 10  # Platoon or injured
+
+    return max(0, min(100, base_score))
+
+
+def calculate_gis_mlb(stats: PlayerStats) -> float:
+    """
+    Gravity Impact Score (MLB).
+
+    Hitters: HR power + RBI gravity.
+    Pitchers: K dominance + win gravity.
+    """
+    is_pitcher = stats.era > 0 or (stats.position and stats.position.upper() in ("P", "SP", "RP"))
+
+    if is_pitcher:
+        k_gravity = min(45, stats.strikeouts * 0.25)
+        era_gravity = max(0, min(30, (4.5 - stats.era) * 10)) if stats.era > 0 else 0
+        win_gravity = min(25, stats.wins * 2.0)
+        return max(0, min(100, k_gravity + era_gravity + win_gravity))
+
+    # Hitter
+    hr_gravity = min(40, stats.home_runs * 1.1)
+    rbi_gravity = min(30, stats.rbis * 0.3)
+    ops_gravity = min(30, stats.ops * 35)
+
+    return max(0, min(100, hr_gravity + rbi_gravity + ops_gravity))
+
+
+# =============================================================================
+# INDEX CALCULATIONS - NHL
+# =============================================================================
+
+
+def calculate_sci_nhl(stats: PlayerStats) -> float:
+    """
+    Space Creation Index (NHL).
+
+    Skaters: Goals + shots + assists creation.
+    Goalies: Save pct based.
+    """
+    is_goalie = stats.save_pct > 0 or (stats.position and stats.position.upper() in ("G",))
+
+    if is_goalie:
+        # Goalie SCI based on save pct
+        sv_score = min(80, stats.save_pct * 90) if stats.save_pct > 0 else 40
+        gp_score = min(20, stats.games_played * 0.3)
+        return max(0, min(100, sv_score + gp_score))
+
+    # Skater
+    goal_score = min(35, stats.goals * 1.0)
+    assist_score = min(30, stats.assists_nhl * 0.7)
+    shot_score = min(20, stats.shots * 0.1)
+    pm_score = max(-15, min(15, stats.plus_minus * 0.5))
+
+    return max(0, min(100, goal_score + assist_score + shot_score + pm_score))
+
+
+def calculate_rmi_nhl(stats: PlayerStats) -> float:
+    """
+    Role Motion Index (NHL).
+
+    Games started pct, role stability.
+    """
+    base_score = 50.0
+
+    if stats.is_starter:
+        base_score -= 15
+    else:
+        base_score += 15
+
+    if stats.games_started_pct > 0.9:
+        base_score -= 10
+    elif stats.games_started_pct < 0.5:
+        base_score += 10
+
+    # Games played consistency (out of ~82)
+    if stats.games_played > 70:
+        base_score -= 5
+    elif stats.games_played < 40:
+        base_score += 10
+
+    return max(0, min(100, base_score))
+
+
+def calculate_gis_nhl(stats: PlayerStats) -> float:
+    """
+    Gravity Impact Score (NHL).
+
+    Shot volume + goal threat + assist playmaking.
+    """
+    is_goalie = stats.save_pct > 0 or (stats.position and stats.position.upper() in ("G",))
+
+    if is_goalie:
+        sv_gravity = min(70, stats.save_pct * 80) if stats.save_pct > 0 else 35
+        gp_gravity = min(30, stats.games_played * 0.4)
+        return max(0, min(100, sv_gravity + gp_gravity))
+
+    goal_gravity = min(40, stats.goals * 1.2)
+    shot_gravity = min(30, stats.shots * 0.12)
+    assist_gravity = min(30, stats.assists_nhl * 0.8)
+
+    return max(0, min(100, goal_gravity + shot_gravity + assist_gravity))
+
+
+# =============================================================================
 # OPPORTUNITY DELTA (All Sports)
 # =============================================================================
 
@@ -337,11 +517,22 @@ def calculate_od(stats: PlayerStats) -> float:
         usage_delta = stats.usage_trend * 1.5
         points_delta = stats.points_trend * 0.5
         raw_od = minutes_delta + usage_delta + points_delta
-    else:  # NFL
-        # For NFL, we'd use snap % trend and target trend
-        # Currently using generic trends
+    elif stats.sport == "nfl":
+        # Snap % trend and target trend
         usage_delta = stats.usage_trend * 2.0
         raw_od = minutes_delta + usage_delta
+    elif stats.sport == "mlb":
+        # For MLB, minutes_trend maps to at-bats trend; usage to plate appearances
+        usage_delta = stats.usage_trend * 1.5
+        points_delta = stats.points_trend * 1.0
+        raw_od = minutes_delta + usage_delta + points_delta
+    elif stats.sport == "nhl":
+        # TOI trend and shot trend
+        usage_delta = stats.usage_trend * 1.5
+        points_delta = stats.points_trend * 1.0
+        raw_od = minutes_delta + usage_delta + points_delta
+    else:
+        raw_od = minutes_delta
 
     return max(-50, min(50, raw_od))
 
@@ -374,6 +565,14 @@ def calculate_msf(stats: PlayerStats) -> float:
             # NBA defensive rating: 100 is neutral, higher is worse
             rating_boost = (stats.opponent_def_rating - 110) * 2
             base_msf += max(-25, min(25, rating_boost))
+        elif stats.sport == "mlb":
+            # MLB: ERA allowed or runs allowed, higher = worse pitching
+            rating_boost = (stats.opponent_def_rating - 4.5) * 8
+            base_msf += max(-25, min(25, rating_boost))
+        elif stats.sport == "nhl":
+            # NHL: goals allowed per game, higher = worse defense
+            rating_boost = (stats.opponent_def_rating - 3.0) * 10
+            base_msf += max(-25, min(25, rating_boost))
         else:
             # NFL: points allowed, higher = worse defense
             rating_boost = (stats.opponent_def_rating - 25) * 1.5
@@ -381,12 +580,14 @@ def calculate_msf(stats: PlayerStats) -> float:
 
     # Position-specific matchup (fantasy points allowed)
     if stats.opponent_vs_position is not None:
-        # Higher FP allowed = better matchup
-        # Assume league average is 30 for NBA guards, adjust per position
         if stats.sport == "nba":
-            avg_fp = 30.0  # Baseline
+            avg_fp = 30.0
+        elif stats.sport == "mlb":
+            avg_fp = 10.0
+        elif stats.sport == "nhl":
+            avg_fp = 8.0
         else:
-            avg_fp = 15.0  # NFL baseline
+            avg_fp = 15.0  # NFL
 
         position_boost = (stats.opponent_vs_position - avg_fp) * 1.5
         base_msf += max(-20, min(20, position_boost))
@@ -394,7 +595,6 @@ def calculate_msf(stats: PlayerStats) -> float:
     # Pace factor (higher pace = more opportunities)
     if stats.opponent_pace is not None:
         if stats.sport == "nba":
-            # NBA average pace ~100
             pace_boost = (stats.opponent_pace - 100) * 0.5
             base_msf += max(-10, min(10, pace_boost))
 
@@ -410,6 +610,10 @@ def calculate_sci(stats: PlayerStats) -> float:
     """Calculate SCI based on sport."""
     if stats.sport == "nfl":
         return calculate_sci_nfl(stats)
+    if stats.sport == "mlb":
+        return calculate_sci_mlb(stats)
+    if stats.sport == "nhl":
+        return calculate_sci_nhl(stats)
     return calculate_sci_nba(stats)
 
 
@@ -417,6 +621,10 @@ def calculate_rmi(stats: PlayerStats) -> float:
     """Calculate RMI based on sport."""
     if stats.sport == "nfl":
         return calculate_rmi_nfl(stats)
+    if stats.sport == "mlb":
+        return calculate_rmi_mlb(stats)
+    if stats.sport == "nhl":
+        return calculate_rmi_nhl(stats)
     return calculate_rmi_nba(stats)
 
 
@@ -424,6 +632,10 @@ def calculate_gis(stats: PlayerStats) -> float:
     """Calculate GIS based on sport."""
     if stats.sport == "nfl":
         return calculate_gis_nfl(stats)
+    if stats.sport == "mlb":
+        return calculate_gis_mlb(stats)
+    if stats.sport == "nhl":
+        return calculate_gis_nhl(stats)
     return calculate_gis_nba(stats)
 
 

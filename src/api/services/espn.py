@@ -439,6 +439,72 @@ class ESPNService:
             print(f"ESPN get_team_schedule error: {e}")
             return []
 
+    async def get_next_opponent(self, team_abbrev: str, sport: str) -> str | None:
+        """Return opponent abbreviation for the next upcoming game."""
+        games = await self.get_team_schedule(team_abbrev, sport)
+        if not games:
+            return None
+        game = games[0]
+        return game.away_abbrev if game.home_abbrev == team_abbrev else game.home_abbrev
+
+    async def get_team_defense(self, team_abbrev: str, sport: str) -> TeamDefense | None:
+        """Fetch team defensive stats from ESPN team stats endpoint."""
+        cache_key = f"defense:{sport}:{team_abbrev}"
+        if cache_key in _team_cache:
+            return _team_cache[cache_key]
+
+        sport_path = SPORT_PATHS.get(sport)
+        if not sport_path:
+            return None
+
+        try:
+            # Get team ID first
+            url = f"{ESPN_API_BASE}/{sport_path}/teams/{team_abbrev}"
+            response = await self.client.get(url)
+            response.raise_for_status()
+            data = response.json()
+
+            team_data = data.get("team", {})
+            team_id = team_data.get("id")
+            if not team_id:
+                return None
+
+            # Fetch team statistics
+            stats_url = f"{ESPN_API_BASE}/{sport_path}/teams/{team_id}/statistics"
+            stats_response = await self.client.get(stats_url)
+            stats_response.raise_for_status()
+            stats_data = stats_response.json()
+
+            defense = TeamDefense(team_abbrev=team_abbrev, sport=sport)
+
+            # Parse stats from the response
+            for category in stats_data.get("splits", {}).get("categories", []):
+                for stat in category.get("stats", []):
+                    name = stat.get("name", "").lower()
+                    value = stat.get("value", 0)
+                    try:
+                        value = float(value)
+                    except (ValueError, TypeError):
+                        continue
+
+                    if sport == "nba":
+                        if name in ("defensiverating", "defrtg"):
+                            defense.defensive_rating = value
+                        elif name in ("opponentpointspergame", "oppptspergame"):
+                            defense.points_allowed = value
+                        elif name == "pace":
+                            defense.pace = value
+                    elif sport == "nfl":
+                        if name in ("pointsallowed", "pointsagainst", "ptsagainst"):
+                            defense.points_allowed = value
+
+            _team_cache[cache_key] = defense
+            return defense
+
+        except Exception as e:
+            print(f"ESPN get_team_defense error: {e}")
+            return None
+
     async def _search_rosters(self, name: str, sport: str) -> PlayerInfo | None:
         """Search team rosters for a player."""
         sport_path = SPORT_PATHS.get(sport)
@@ -824,6 +890,34 @@ class ESPNService:
             trends["usage_trend"] = recent_targets - baseline_targets
 
             trends["points_trend"] = 0
+
+        elif sport == "mlb":
+            # At-bats as proxy for "minutes"
+            recent_ab = sum(g.get("at_bats", 0) for g in recent) / len(recent)
+            baseline_ab = sum(g.get("at_bats", 0) for g in baseline) / len(baseline)
+            trends["minutes_trend"] = recent_ab - baseline_ab
+
+            recent_hr = sum(g.get("home_runs", 0) for g in recent) / len(recent)
+            baseline_hr = sum(g.get("home_runs", 0) for g in baseline) / len(baseline)
+            trends["points_trend"] = recent_hr - baseline_hr
+
+            recent_hits = sum(g.get("hits", 0) for g in recent) / len(recent)
+            baseline_hits = sum(g.get("hits", 0) for g in baseline) / len(baseline)
+            trends["usage_trend"] = recent_hits - baseline_hits
+
+        elif sport == "nhl":
+            # Time on ice as minutes
+            recent_toi = sum(g.get("time_on_ice", 0) for g in recent) / len(recent)
+            baseline_toi = sum(g.get("time_on_ice", 0) for g in baseline) / len(baseline)
+            trends["minutes_trend"] = recent_toi - baseline_toi
+
+            recent_goals = sum(g.get("goals", 0) for g in recent) / len(recent)
+            baseline_goals = sum(g.get("goals", 0) for g in baseline) / len(baseline)
+            trends["points_trend"] = recent_goals - baseline_goals
+
+            recent_shots = sum(g.get("shots", 0) for g in recent) / len(recent)
+            baseline_shots = sum(g.get("shots", 0) for g in baseline) / len(baseline)
+            trends["usage_trend"] = recent_shots - baseline_shots
 
         else:
             trends = {"minutes_trend": 0, "points_trend": 0, "usage_trend": 0}

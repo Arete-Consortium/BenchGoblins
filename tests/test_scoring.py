@@ -403,3 +403,126 @@ class TestComparePlayers:
 
         assert result["margin"] < 10
         assert result["confidence"] in ["low", "medium"]
+
+
+class TestMLBScoring:
+    """Tests for MLB-specific scoring functions."""
+
+    def test_sci_mlb_hitter(self, mlb_hitter_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(mlb_hitter_stats)
+        # .875 OPS, 32 HR, 12 SB = should be solid
+        assert 50 <= sci <= 100
+
+    def test_sci_mlb_pitcher(self, mlb_pitcher_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(mlb_pitcher_stats)
+        # 3.25 ERA, 14 W, 210 K = should be solid
+        assert 50 <= sci <= 100
+
+    def test_rmi_mlb_starter(self, mlb_hitter_stats):
+        from core.scoring import calculate_rmi
+
+        rmi = calculate_rmi(mlb_hitter_stats)
+        # Starter with high GP = stable
+        assert rmi < 50
+
+    def test_gis_mlb_hitter(self, mlb_hitter_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(mlb_hitter_stats)
+        # 32 HR, 95 RBI, .875 OPS = high gravity
+        assert gis >= 50
+
+    def test_gis_mlb_pitcher(self, mlb_pitcher_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(mlb_pitcher_stats)
+        assert 0 <= gis <= 100
+
+    def test_od_mlb(self, mlb_hitter_stats):
+        from core.scoring import calculate_od
+
+        od = calculate_od(mlb_hitter_stats)
+        # Positive trends → positive OD
+        assert od > 0
+
+    def test_full_indices_mlb(self, mlb_hitter_stats):
+        from core.scoring import calculate_indices
+
+        indices = calculate_indices(mlb_hitter_stats)
+        assert 0 <= indices.sci <= 100
+        assert 0 <= indices.rmi <= 100
+        assert 0 <= indices.gis <= 100
+        assert -50 <= indices.od <= 50
+        assert 0 <= indices.msf <= 100
+
+
+class TestNHLScoring:
+    """Tests for NHL-specific scoring functions."""
+
+    def test_sci_nhl_forward(self, nhl_forward_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(nhl_forward_stats)
+        # 35 G, 45 A, 250 shots, +15 = should be high
+        assert sci >= 50
+
+    def test_sci_nhl_goalie(self, nhl_goalie_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(nhl_goalie_stats)
+        # .920 SV% = good
+        assert sci >= 50
+
+    def test_rmi_nhl_starter(self, nhl_forward_stats):
+        from core.scoring import calculate_rmi
+
+        rmi = calculate_rmi(nhl_forward_stats)
+        assert rmi < 50  # Stable starter
+
+    def test_gis_nhl_forward(self, nhl_forward_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(nhl_forward_stats)
+        assert gis >= 50
+
+    def test_gis_nhl_goalie(self, nhl_goalie_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(nhl_goalie_stats)
+        assert 0 <= gis <= 100
+
+    def test_od_nhl(self, nhl_forward_stats):
+        from core.scoring import calculate_od
+
+        od = calculate_od(nhl_forward_stats)
+        assert od > 0  # Positive trends
+
+    def test_full_indices_nhl(self, nhl_forward_stats):
+        from core.scoring import calculate_indices
+
+        indices = calculate_indices(nhl_forward_stats)
+        assert 0 <= indices.sci <= 100
+        assert 0 <= indices.rmi <= 100
+        assert 0 <= indices.gis <= 100
+        assert -50 <= indices.od <= 50
+        assert 0 <= indices.msf <= 100
+
+    def test_msf_nhl_with_matchup(self):
+        from core.scoring import PlayerStats, calculate_msf
+
+        stats = PlayerStats(
+            player_id="1",
+            name="Test",
+            team="TOR",
+            position="C",
+            sport="nhl",
+            opponent_def_rating=3.5,  # Goals allowed (above avg)
+            opponent_pace=None,
+            opponent_vs_position=10.0,  # Above avg FP allowed
+        )
+        msf = calculate_msf(stats)
+        assert msf > 50  # Favorable matchup

@@ -25,7 +25,9 @@ from monitoring import MetricsMiddleware, metrics_endpoint
 from routes.sessions import router as sessions_router
 from services.claude import claude_service
 from services.database import db_service
+from core.scoring import RiskMode as CoreRiskMode, compare_players
 from services.espn import espn_service, format_player_context
+from services.scoring_adapter import adapt_espn_to_core
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notifications import PushNotification, notification_service
 from services.redis import redis_service
@@ -439,166 +441,97 @@ async def _local_decision(
     player_b_data: tuple | None,
 ) -> DecisionResponse:
     """
-    Handle simple A vs B decisions locally using real stats.
+    Handle simple A vs B decisions locally using the core scoring engine.
     """
     if not player_a_data or not player_b_data:
-        # Fall back to Claude if we don't have data
         return await _claude_decision(request, player_a_name, player_b_name, None)
 
     info_a, stats_a = player_a_data
     info_b, stats_b = player_b_data
 
-    # Calculate simple scoring based on available stats
-    score_a = _calculate_simple_score(stats_a, request.sport.value, request.risk_mode.value)
-    score_b = _calculate_simple_score(stats_b, request.sport.value, request.risk_mode.value)
+    if not stats_a or not stats_b:
+        return await _claude_decision(request, player_a_name, player_b_name, None)
 
-    margin = abs(score_a - score_b)
+    sport = request.sport.value
 
-    # Determine winner and confidence
-    if score_a > score_b:
-        decision = f"Start {info_a.name}"
-        winner_stats = stats_a
-    else:
-        decision = f"Start {info_b.name}"
-        winner_stats = stats_b
+    # Fetch game logs and calculate trends for OD index
+    game_logs_a = await espn_service.get_player_game_logs(info_a.id, sport)
+    trends_a = espn_service.calculate_trends(game_logs_a, sport)
+    game_logs_b = await espn_service.get_player_game_logs(info_b.id, sport)
+    trends_b = espn_service.calculate_trends(game_logs_b, sport)
 
-    # Confidence based on margin
-    if margin < 5:
-        confidence = Confidence.LOW
-    elif margin < 15:
-        confidence = Confidence.MEDIUM
-    else:
-        confidence = Confidence.HIGH
+    # Fetch opponent defensive data for MSF index
+    opp_a = await espn_service.get_next_opponent(info_a.team_abbrev, sport)
+    matchup_a = await espn_service.get_team_defense(opp_a, sport) if opp_a else None
+    opp_b = await espn_service.get_next_opponent(info_b.team_abbrev, sport)
+    matchup_b = await espn_service.get_team_defense(opp_b, sport) if opp_b else None
 
-    # Build rationale based on sport
-    rationale = _build_rationale(
-        request.sport.value,
-        request.risk_mode.value,
-        info_a if score_a > score_b else info_b,
-        winner_stats,
+    # Adapt ESPN stats to core scoring format
+    core_a = adapt_espn_to_core(info_a, stats_a, trends=trends_a, matchup=matchup_a)
+    core_b = adapt_espn_to_core(info_b, stats_b, trends=trends_b, matchup=matchup_b)
+
+    # Map API risk mode to core enum
+    core_mode = CoreRiskMode(request.risk_mode.value)
+
+    # Run the five-index scoring engine
+    result = compare_players(core_a, core_b, core_mode)
+
+    # Map confidence
+    confidence_map = {
+        "low": Confidence.LOW,
+        "medium": Confidence.MEDIUM,
+        "high": Confidence.HIGH,
+    }
+    confidence = confidence_map.get(result["confidence"], Confidence.MEDIUM)
+
+    # Build rationale from index scores
+    indices_a = result["indices_a"]
+    indices_b = result["indices_b"]
+    winner_name = info_a.name if result["score_a"] > result["score_b"] else info_b.name
+    rationale = (
+        f"{winner_name} scores higher across the five-index system "
+        f"({result['score_a']} vs {result['score_b']}, margin {result['margin']}). "
+        f"SCI: {indices_a.sci:.0f}/{indices_b.sci:.0f}, "
+        f"GIS: {indices_a.gis:.0f}/{indices_b.gis:.0f}, "
+        f"OD: {indices_a.od:+.0f}/{indices_b.od:+.0f}, "
+        f"MSF: {indices_a.msf:.0f}/{indices_b.msf:.0f} "
+        f"({request.risk_mode.value} mode)."
     )
 
     return DecisionResponse(
-        decision=decision,
+        decision=result["decision"],
         confidence=confidence,
         rationale=rationale,
         details={
             "player_a": {
                 "name": info_a.name,
                 "team": info_a.team_abbrev,
-                "score": round(score_a, 1),
+                "score": result["score_a"],
+                "indices": {
+                    "sci": round(indices_a.sci, 1),
+                    "rmi": round(indices_a.rmi, 1),
+                    "gis": round(indices_a.gis, 1),
+                    "od": round(indices_a.od, 1),
+                    "msf": round(indices_a.msf, 1),
+                },
             },
             "player_b": {
                 "name": info_b.name,
                 "team": info_b.team_abbrev,
-                "score": round(score_b, 1),
+                "score": result["score_b"],
+                "indices": {
+                    "sci": round(indices_b.sci, 1),
+                    "rmi": round(indices_b.rmi, 1),
+                    "gis": round(indices_b.gis, 1),
+                    "od": round(indices_b.od, 1),
+                    "msf": round(indices_b.msf, 1),
+                },
             },
-            "margin": round(margin, 1),
+            "margin": result["margin"],
             "risk_mode": request.risk_mode.value,
         },
         source="local",
     )
-
-
-def _calculate_simple_score(stats, sport: str, risk_mode: str) -> float:
-    """Calculate a simple fantasy score for comparison."""
-    if not stats:
-        return 0.0
-
-    score = 0.0
-
-    if sport == "nba":
-        # Base on PPG, RPG, APG with risk mode adjustments
-        ppg = stats.points_per_game or 0
-        rpg = stats.rebounds_per_game or 0
-        apg = stats.assists_per_game or 0
-        mpg = stats.minutes_per_game or 0
-        gp = stats.games_played or 0
-        gs = stats.games_started or 0
-
-        # Base fantasy score
-        score = ppg + (rpg * 1.2) + (apg * 1.5)
-
-        # Risk mode adjustments
-        if risk_mode == "floor":
-            # Prioritize starters, minutes stability
-            starter_bonus = 10 if gs >= gp * 0.8 else 0
-            minutes_bonus = min(mpg / 3, 10)  # Up to 10 pts for 30+ mpg
-            score += starter_bonus + minutes_bonus
-        elif risk_mode == "ceiling":
-            # Prioritize scoring upside
-            score += ppg * 0.3  # Extra weight on points
-            if stats.usage_rate:
-                score += stats.usage_rate * 0.5
-
-    elif sport == "nfl":
-        # Fantasy points estimation
-        if stats.pass_yards:
-            score += stats.pass_yards * 0.04 + (stats.pass_tds or 0) * 4
-        if stats.rush_yards:
-            score += stats.rush_yards * 0.1 + (stats.rush_tds or 0) * 6
-        if stats.receiving_yards:
-            score += stats.receiving_yards * 0.1 + (stats.receiving_tds or 0) * 6
-            score += (stats.receptions or 0) * 0.5  # Half PPR
-
-        if risk_mode == "floor":
-            # Value volume
-            score += (stats.targets or 0) * 0.2
-        elif risk_mode == "ceiling":
-            # Value TD potential
-            score += (
-                (stats.pass_tds or 0) + (stats.rush_tds or 0) + (stats.receiving_tds or 0)
-            ) * 2
-
-    elif sport == "mlb":
-        if stats.batting_avg:
-            # Hitter
-            score = (
-                (stats.home_runs or 0) * 4 + (stats.rbis or 0) * 1 + (stats.stolen_bases or 0) * 2
-            )
-            if stats.ops:
-                score += stats.ops * 10
-        elif stats.era:
-            # Pitcher
-            score = (stats.wins or 0) * 5 + (stats.strikeouts or 0) * 0.5
-            score -= (stats.era or 4) * 2  # Lower ERA is better
-
-    elif sport == "nhl":
-        score = (stats.goals or 0) * 3 + (stats.assists_nhl or 0) * 2
-        if stats.plus_minus:
-            score += stats.plus_minus * 0.5
-
-    return score
-
-
-def _build_rationale(sport: str, risk_mode: str, winner_info, winner_stats) -> str:
-    """Build a rationale string for the decision."""
-    name = winner_info.name
-
-    if sport == "nba":
-        ppg = winner_stats.points_per_game or 0
-        mpg = winner_stats.minutes_per_game or 0
-        return (
-            f"{name} has the edge with {ppg:.1f} PPG on {mpg:.1f} minutes. "
-            f"For {risk_mode} mode, the role stability and usage support this pick."
-        )
-    elif sport == "nfl":
-        if winner_stats.pass_yards:
-            return f"{name} offers strong passing production for your {risk_mode} strategy."
-        elif winner_stats.receiving_yards:
-            targets = winner_stats.targets or 0
-            return (
-                f"{name} has consistent target share"
-                f" ({targets:.0f} targets), good for {risk_mode} mode."
-            )
-        else:
-            return f"{name} has the better rushing floor for {risk_mode} mode."
-    elif sport == "mlb":
-        return f"{name} has the statistical edge for {risk_mode} mode."
-    elif sport == "nhl":
-        return f"{name} offers better production for {risk_mode} strategy."
-
-    return f"{name} is the recommended start for {risk_mode} mode."
 
 
 async def _claude_decision(
