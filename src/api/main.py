@@ -13,6 +13,8 @@ from enum import Enum
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import sentry_sdk
+from core.scoring import RiskMode as CoreRiskMode
+from core.scoring import compare_players
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -23,15 +25,15 @@ from sqlalchemy import select
 from models.database import Decision as DecisionModel
 from monitoring import MetricsMiddleware, metrics_endpoint
 from routes.sessions import router as sessions_router
+from services.accuracy import AccuracyTracker, DecisionOutcome
 from services.claude import claude_service
 from services.database import db_service
-from core.scoring import RiskMode as CoreRiskMode, compare_players
 from services.espn import espn_service, format_player_context
-from services.scoring_adapter import adapt_espn_to_core
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notifications import PushNotification, notification_service
 from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
+from services.scoring_adapter import adapt_espn_to_core
 from services.sleeper import sleeper_service
 from services.websocket import connection_manager
 from services.yahoo import yahoo_service
@@ -1534,8 +1536,6 @@ async def websocket_stats():
 # Decision Accuracy Tracking
 # ---------------------------------------------------------------------------
 
-from services.accuracy import AccuracyTracker, DecisionOutcome
-
 accuracy_tracker = AccuracyTracker()
 
 
@@ -1563,11 +1563,30 @@ async def record_outcome(request: OutcomeRequest):
 
 
 @app.get("/accuracy/metrics")
-async def get_accuracy_metrics(sport: Sport | None = None):
+async def get_accuracy_metrics(sport: Sport | None = None, limit: int = Query(default=500, ge=1, le=5000)):
     """Get aggregate accuracy metrics across all tracked decisions."""
-    decisions = decision_history
-    if sport:
-        decisions = [d for d in decisions if d.get("sport") == sport.value]
+    decisions = []
+    if db_service.is_configured:
+        try:
+            async with db_service.session() as session:
+                query = select(DecisionModel).order_by(DecisionModel.created_at.desc()).limit(limit)
+                if sport:
+                    query = query.where(DecisionModel.sport == sport.value)
+                result = await session.execute(query)
+                rows = result.scalars().all()
+                decisions = [
+                    {
+                        "id": str(d.id),
+                        "sport": d.sport,
+                        "confidence": d.confidence,
+                        "source": d.source,
+                        "decision": d.decision,
+                        "player_a_name": d.player_a_name,
+                    }
+                    for d in rows
+                ]
+        except Exception:
+            decisions = []
     metrics = accuracy_tracker.compute_metrics(decisions)
     return {
         "total_decisions": metrics.total_decisions,

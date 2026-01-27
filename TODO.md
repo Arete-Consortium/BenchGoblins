@@ -8,8 +8,8 @@
 - [x] Build ESPN API client for player data
 - [x] Create nightly stats sync job (cron or scheduled task)
 - [x] Implement Redis caching layer for hot player data
-- [ ] Add Basketball Reference scraper for advanced stats (NBA)
-- [ ] Add Pro Football Reference scraper (NFL)
+- [x] Add Basketball Reference scraper for advanced stats (NBA)
+- [x] Add Pro Football Reference scraper (NFL)
 
 ### Core Scoring Engine
 - [x] Implement `Player` data model with all required fields
@@ -113,9 +113,9 @@
 - [x] Trending players endpoint
 
 ### Multi-Platform
-- [ ] Unified roster model across platforms
-- [ ] Conflict resolution for players on multiple platforms
-- [ ] Manual roster override option
+- [x] Unified roster model across platforms
+- [x] Conflict resolution for players on multiple platforms
+- [x] Manual roster override option
 
 ---
 
@@ -159,7 +159,7 @@
 - [ ] Stripe integration for web subscriptions (future)
 
 ### Analytics
-- [ ] Track decision accuracy (did user follow advice? what happened?)
+- [x] Track decision accuracy (did user follow advice? what happened?)
 - [ ] A/B test different prompt variations
 - [ ] User engagement metrics
 
@@ -189,21 +189,25 @@
 ## Current Sprint Focus
 
 **Active:**
-- [ ] Unified roster model across ESPN/Yahoo/Sleeper
-- [ ] Decision accuracy tracking (outcomes + feedback loop)
-- [ ] Basketball Reference / Pro Football Reference scrapers
 - [ ] Set up RevenueCat account and configure products
 - [ ] Create App Store Connect app listing
+- [ ] Token usage tracking and cost monitoring
+- [ ] Cache invalidation on stat updates
+- [ ] A/B test different prompt variations
 
 **Blocked:**
 - *Nothing yet*
 
 **Completed This Sprint:**
+- [x] Unified roster model (ESPN/Yahoo/Sleeper merge, conflict resolution, overrides)
+- [x] Decision accuracy tracking (outcomes, metrics by confidence/source/sport)
+- [x] Basketball Reference + Pro Football Reference scrapers
 - [x] Wire trends + matchup data into scoring engine (OD/MSF now live)
 - [x] MLB/NHL scoring functions (SCI, RMI, GIS for all 4 sports)
 - [x] Fix missing deps in pyproject.toml (cryptography, cachetools, sentry-sdk, prometheus-client)
 - [x] Fix hatch build config for editable installs
-- [x] 116 tests passing (54 new)
+- [x] App Store review prep docs
+- [x] 161 tests passing (99 new)
 - [x] iOS App Store configuration (bundle ID, entitlements, privacy manifests)
 - [x] RevenueCat SDK integration for subscriptions
 - [x] Subscription tiers and paywall UI
