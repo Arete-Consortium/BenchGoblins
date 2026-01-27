@@ -129,8 +129,6 @@ class BasketballReferenceService:
         stats = AdvancedNBAStats(player_name=player_slug, season=season)
 
         # Find the advanced stats table for the specified season
-        # Look for the row with the matching season
-        season_display = f"{int(season) - 1}-{season[-2:]}"  # e.g., "2024-25"
         season_pattern = rf'<tr[^>]*id="advanced\.{season}"[^>]*>(.*?)</tr>'
         match = re.search(season_pattern, html, re.DOTALL)
         if not match:

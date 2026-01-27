@@ -7,8 +7,10 @@ expected input format.
 
 from __future__ import annotations
 
-from services.espn import PlayerInfo, PlayerStats as ESPNPlayerStats, TeamDefense
 from core.scoring import PlayerStats as CorePlayerStats
+
+from services.espn import PlayerInfo, TeamDefense
+from services.espn import PlayerStats as ESPNPlayerStats
 
 
 def _position_matchup_field(matchup: TeamDefense, position: str) -> float | None:

@@ -7,7 +7,6 @@ Records outcomes for past decisions and computes accuracy metrics.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
 
 
 @dataclass
