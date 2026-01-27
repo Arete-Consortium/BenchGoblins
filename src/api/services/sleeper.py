@@ -186,9 +186,7 @@ class SleeperService:
         leagues = []
 
         try:
-            response = await client.get(
-                f"{SLEEPER_API}/user/{user_id}/leagues/{sport}/{season}"
-            )
+            response = await client.get(f"{SLEEPER_API}/user/{user_id}/leagues/{sport}/{season}")
 
             if response.status_code == 200:
                 data = response.json()
@@ -250,7 +248,9 @@ class SleeperService:
                         SleeperUser(
                             user_id=user_data.get("user_id", ""),
                             username=user_data.get("username", ""),
-                            display_name=user_data.get("display_name", user_data.get("username", "")),
+                            display_name=user_data.get(
+                                "display_name", user_data.get("username", "")
+                            ),
                             avatar=user_data.get("avatar"),
                         )
                     )

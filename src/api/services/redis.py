@@ -18,8 +18,10 @@ import redis.asyncio as redis
 try:
     from monitoring import track_cache_operation
 except ImportError:
+
     def track_cache_operation(operation: str, hit: bool) -> None:
         pass
+
 
 # Redis URL from environment
 REDIS_URL = os.getenv("REDIS_URL", "")
@@ -166,9 +168,7 @@ class RedisService:
         except (redis.ConnectionError, json.JSONDecodeError):
             return None
 
-    async def set_decision(
-        self, sport: str, risk_mode: str, query: str, decision: dict
-    ) -> bool:
+    async def set_decision(self, sport: str, risk_mode: str, query: str, decision: dict) -> bool:
         """Cache Claude decision."""
         if not self._client:
             return False

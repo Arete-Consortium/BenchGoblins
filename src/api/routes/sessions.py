@@ -4,7 +4,6 @@ Session Management API Routes.
 Handles session creation, validation, refresh, and revocation.
 """
 
-from datetime import datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -64,14 +63,19 @@ class CredentialStatusResponse(BaseModel):
 
 async def get_session_token(
     x_session_token: Annotated[str | None, Header()] = None,
-    session_id: str | None = Query(default=None, description="Session token (deprecated, use header)"),
+    session_id: str | None = Query(
+        default=None, description="Session token (deprecated, use header)"
+    ),
 ) -> str:
     """Extract session token from header or query parameter."""
     token = x_session_token or session_id
     if not token:
         raise HTTPException(
             status_code=401,
-            detail="Session token required. Provide X-Session-Token header or session_id query parameter.",
+            detail=(
+                "Session token required."
+                " Provide X-Session-Token header or session_id query parameter."
+            ),
         )
     return token
 
