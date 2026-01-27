@@ -257,6 +257,295 @@ def mock_espn_search_response():
 # =============================================================================
 
 
+# =============================================================================
+# ESPN-FORMAT FIXTURES (for scoring adapter tests)
+# =============================================================================
+
+
+@pytest.fixture
+def espn_nba_player_info():
+    """ESPN PlayerInfo for an NBA starter."""
+    from services.espn import PlayerInfo
+
+    return PlayerInfo(
+        id="12345",
+        name="Test Player A",
+        team="Los Angeles Lakers",
+        team_abbrev="LAL",
+        position="PG",
+        jersey="1",
+        height="6'3\"",
+        weight="190 lbs",
+        age=27,
+        experience=5,
+        headshot_url=None,
+    )
+
+
+@pytest.fixture
+def espn_nba_player_stats():
+    """ESPN PlayerStats for an NBA starter."""
+    from services.espn import PlayerStats
+
+    return PlayerStats(
+        player_id="12345",
+        sport="nba",
+        games_played=50,
+        games_started=48,
+        minutes_per_game=34.5,
+        points_per_game=26.3,
+        rebounds_per_game=4.5,
+        assists_per_game=8.2,
+        usage_rate=28.5,
+        field_goal_pct=0.485,
+        three_point_pct=0.378,
+    )
+
+
+@pytest.fixture
+def espn_nba_bench_info():
+    """ESPN PlayerInfo for an NBA bench player."""
+    from services.espn import PlayerInfo
+
+    return PlayerInfo(
+        id="67890",
+        name="Test Player B",
+        team="Boston Celtics",
+        team_abbrev="BOS",
+        position="SG",
+        jersey="7",
+        height="6'5\"",
+        weight="205 lbs",
+        age=24,
+        experience=3,
+        headshot_url=None,
+    )
+
+
+@pytest.fixture
+def espn_nba_bench_stats():
+    """ESPN PlayerStats for an NBA bench player."""
+    from services.espn import PlayerStats
+
+    return PlayerStats(
+        player_id="67890",
+        sport="nba",
+        games_played=48,
+        games_started=5,
+        minutes_per_game=22.3,
+        points_per_game=12.8,
+        rebounds_per_game=3.2,
+        assists_per_game=2.1,
+        usage_rate=18.5,
+        field_goal_pct=0.445,
+        three_point_pct=0.352,
+    )
+
+
+@pytest.fixture
+def espn_nfl_wr_info():
+    """ESPN PlayerInfo for an NFL WR."""
+    from services.espn import PlayerInfo
+
+    return PlayerInfo(
+        id="11111",
+        name="Test WR",
+        team="Kansas City Chiefs",
+        team_abbrev="KC",
+        position="WR",
+        jersey="11",
+        height="6'1\"",
+        weight="195 lbs",
+        age=26,
+        experience=4,
+        headshot_url=None,
+    )
+
+
+@pytest.fixture
+def espn_nfl_wr_stats():
+    """ESPN PlayerStats for an NFL WR."""
+    from services.espn import PlayerStats
+
+    return PlayerStats(
+        player_id="11111",
+        sport="nfl",
+        games_played=12,
+        games_started=12,
+        targets=8.5,
+        receptions=5.8,
+        receiving_yards=78.4,
+        snap_pct=85.0,
+    )
+
+
+# =============================================================================
+# MLB FIXTURES
+# =============================================================================
+
+
+@pytest.fixture
+def mlb_hitter_stats():
+    """Sample MLB hitter stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="30001",
+        name="Test Hitter",
+        team="NYY",
+        position="RF",
+        sport="mlb",
+        batting_avg=0.285,
+        home_runs=32.0,
+        rbis=95.0,
+        stolen_bases=12.0,
+        ops=0.875,
+        is_starter=True,
+        games_started_pct=0.95,
+        games_played=148,
+        minutes_trend=0.5,
+        usage_trend=0.2,
+        points_trend=0.3,
+    )
+
+
+@pytest.fixture
+def mlb_pitcher_stats():
+    """Sample MLB pitcher stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="30002",
+        name="Test Pitcher",
+        team="LAD",
+        position="SP",
+        sport="mlb",
+        era=3.25,
+        wins=14,
+        strikeouts=210.0,
+        is_starter=True,
+        games_started_pct=1.0,
+        games_played=30,
+    )
+
+
+@pytest.fixture
+def nhl_forward_stats():
+    """Sample NHL forward stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="40001",
+        name="Test Forward",
+        team="TOR",
+        position="C",
+        sport="nhl",
+        goals=35.0,
+        assists_nhl=45.0,
+        plus_minus=15.0,
+        shots=250.0,
+        is_starter=True,
+        games_started_pct=0.95,
+        games_played=78,
+        minutes_trend=1.0,
+        usage_trend=0.5,
+        points_trend=0.8,
+    )
+
+
+@pytest.fixture
+def nhl_goalie_stats():
+    """Sample NHL goalie stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="40002",
+        name="Test Goalie",
+        team="BOS",
+        position="G",
+        sport="nhl",
+        save_pct=0.920,
+        is_starter=True,
+        games_started_pct=0.85,
+        games_played=55,
+    )
+
+
+@pytest.fixture
+def espn_mlb_hitter_info():
+    """ESPN PlayerInfo for an MLB hitter."""
+    from services.espn import PlayerInfo
+
+    return PlayerInfo(
+        id="30001",
+        name="Test Hitter",
+        team="New York Yankees",
+        team_abbrev="NYY",
+        position="RF",
+        jersey="99",
+        height="6'7\"",
+        weight="282 lbs",
+        age=31,
+        experience=9,
+        headshot_url=None,
+    )
+
+
+@pytest.fixture
+def espn_mlb_hitter_stats():
+    """ESPN PlayerStats for an MLB hitter."""
+    from services.espn import PlayerStats
+
+    return PlayerStats(
+        player_id="30001",
+        sport="mlb",
+        games_played=148,
+        games_started=145,
+        batting_avg=0.285,
+        home_runs=32.0,
+        rbis=95.0,
+        stolen_bases=12.0,
+        ops=0.875,
+    )
+
+
+@pytest.fixture
+def espn_nhl_forward_info():
+    """ESPN PlayerInfo for an NHL forward."""
+    from services.espn import PlayerInfo
+
+    return PlayerInfo(
+        id="40001",
+        name="Test Forward",
+        team="Toronto Maple Leafs",
+        team_abbrev="TOR",
+        position="C",
+        jersey="34",
+        height="6'1\"",
+        weight="195 lbs",
+        age=27,
+        experience=7,
+        headshot_url=None,
+    )
+
+
+@pytest.fixture
+def espn_nhl_forward_stats():
+    """ESPN PlayerStats for an NHL forward."""
+    from services.espn import PlayerStats
+
+    return PlayerStats(
+        player_id="40001",
+        sport="nhl",
+        games_played=78,
+        games_started=75,
+        goals=35.0,
+        assists_nhl=45.0,
+        plus_minus=15.0,
+        shots=250.0,
+    )
+
+
 @pytest.fixture
 def test_client():
     """FastAPI test client."""
