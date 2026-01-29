@@ -209,6 +209,7 @@ class ClaudeService:
 
         Yields:
             Text chunks as they arrive from the API.
+            Final chunk includes token usage tracking.
         """
         if not self.client:
             raise RuntimeError("Claude API not configured - set ANTHROPIC_API_KEY")
@@ -232,6 +233,14 @@ class ClaudeService:
         ) as stream:
             for text in stream.text_stream:
                 yield text
+
+            # Track token usage after stream completes
+            final_message = stream.get_final_message()
+            input_tokens = final_message.usage.input_tokens
+            output_tokens = final_message.usage.output_tokens
+            track_claude_request(
+                input_tokens, output_tokens, success=True, variant=prompt_variant
+            )
 
     def _parse_response(self, response_text: str) -> dict:
         """Parse Claude's response into structured data."""
