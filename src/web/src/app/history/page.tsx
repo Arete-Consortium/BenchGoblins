@@ -2,9 +2,7 @@
 
 import { useEffect } from 'react';
 import { Navigation } from '@/components/Navigation';
-import { SportSelector } from '@/components/SportSelector';
 import { useHistoryStore } from '@/stores/historyStore';
-import { useAppStore } from '@/stores/appStore';
 import { cn, formatDate, getConfidenceColor, getSportDisplayName } from '@/lib/utils';
 import { Sport } from '@/types';
 import {
@@ -20,12 +18,12 @@ import {
 
 export default function HistoryPage() {
   const { items, isLoading, hasMore, filter, fetchHistory, setFilter } = useHistoryStore();
-  const { sport } = useAppStore();
 
   useEffect(() => {
     if (items.length === 0) {
       fetchHistory(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleFilterChange = (newSport: Sport) => {
