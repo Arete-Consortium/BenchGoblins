@@ -238,10 +238,7 @@ class ClaudeService:
             final_message = stream.get_final_message()
             input_tokens = final_message.usage.input_tokens
             output_tokens = final_message.usage.output_tokens
-            track_claude_request(
-                input_tokens, output_tokens, success=True, variant=prompt_variant
-            )
-
+            track_claude_request(input_tokens, output_tokens, success=True, variant=prompt_variant)
     def _parse_response(self, response_text: str) -> dict:
         """Parse Claude's response into structured data."""
         import json
