@@ -114,6 +114,9 @@ class TestBudgetEndpoints:
         mock_config.monthly_limit_usd = Decimal("50.00")
         mock_config.alert_threshold_pct = 80
         mock_config.updated_at = datetime.now(timezone.utc)
+        mock_config.slack_webhook_url = None
+        mock_config.discord_webhook_url = None
+        mock_config.alerts_enabled = True
 
         # Mock usage query result
         mock_usage = MagicMock()

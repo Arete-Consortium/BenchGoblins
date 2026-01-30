@@ -29,11 +29,13 @@ from models.database import Decision as DecisionModel
 from monitoring import MetricsMiddleware, metrics_endpoint
 from routes.sessions import router as sessions_router
 from services.accuracy import AccuracyTracker, DecisionOutcome
+from services.budget_alerts import check_and_send_alerts, send_test_webhook
 from services.claude import claude_service
 from services.database import db_service
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notifications import PushNotification, notification_service
+from services.rate_limiter import rate_limiter
 from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
 from services.scoring_adapter import adapt_espn_to_core
@@ -561,6 +563,16 @@ async def make_decision(
     Routes to local scoring engine for simple queries,
     Claude API for complex queries.
     """
+    # Check rate limit (use "anonymous" for requests without session_id)
+    effective_session = session_id or "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     # Check if query is sports-related
     if not _is_sports_query(request.query):
         raise HTTPException(
@@ -664,6 +676,9 @@ async def make_decision(
         response, input_tokens, output_tokens = await _claude_decision(
             request, player_a, player_b, player_context, prompt_variant=variant
         )
+
+        # Check and send budget alerts after Claude call
+        await check_and_send_alerts()
 
     # Store decision in database (async, non-blocking)
     await _store_decision(
@@ -863,6 +878,16 @@ async def make_decision_stream(
     Returns streamed text chunks from Claude for faster perceived response.
     Complex queries only - simple queries should use /decide.
     """
+    # Check rate limit (use "anonymous" for requests without session_id)
+    effective_session = session_id or "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     # Check if query is sports-related
     if not _is_sports_query(request.query):
         raise HTTPException(
@@ -974,6 +999,8 @@ async def make_decision_stream(
                         output_tokens=stream_metadata.get("output_tokens"),
                         prompt_variant=variant,
                     )
+                    # Check and send budget alerts after streaming completes
+                    await check_and_send_alerts()
                 except Exception as e:
                     # Don't fail the stream if persistence fails
                     print(f"Failed to persist streaming decision: {e}")
@@ -1036,6 +1063,24 @@ async def invalidate_sport_cache(sport: Sport):
         "keys_deleted": total_deleted,
         "stats_version": new_version,
     }
+
+
+# ---------------------------------------------------------------------------
+# Rate Limiting
+# ---------------------------------------------------------------------------
+
+
+@app.get("/rate-limit/status")
+async def get_rate_limit_status(
+    session_id: str | None = Query(default=None, description="Session ID to check"),
+):
+    """
+    Get current rate limit status for a session.
+
+    Returns requests used, remaining, and reset time.
+    """
+    effective_session = session_id or "anonymous"
+    return await rate_limiter.get_status(effective_session)
 
 
 @app.get("/usage")
@@ -1136,6 +1181,11 @@ class BudgetConfigRequest(BaseModel):
     alert_threshold_pct: int = Field(
         default=80, ge=0, le=100, description="Alert when spending reaches this percentage"
     )
+    alerts_enabled: bool = Field(default=True, description="Enable webhook alerts")
+    slack_webhook_url: str | None = Field(default=None, description="Slack webhook URL for alerts")
+    discord_webhook_url: str | None = Field(
+        default=None, description="Discord webhook URL for alerts"
+    )
 
 
 class BudgetConfigResponse(BaseModel):
@@ -1143,6 +1193,9 @@ class BudgetConfigResponse(BaseModel):
 
     monthly_limit_usd: float
     alert_threshold_pct: int
+    alerts_enabled: bool
+    slack_webhook_url: str | None
+    discord_webhook_url: str | None
     current_month_spent_usd: float
     percent_used: float
     budget_exceeded: bool
@@ -1183,6 +1236,9 @@ async def get_budget():
                 return BudgetConfigResponse(
                     monthly_limit_usd=0,
                     alert_threshold_pct=80,
+                    alerts_enabled=True,
+                    slack_webhook_url=None,
+                    discord_webhook_url=None,
                     current_month_spent_usd=0,
                     percent_used=0,
                     budget_exceeded=False,
@@ -1215,6 +1271,9 @@ async def get_budget():
             return BudgetConfigResponse(
                 monthly_limit_usd=limit,
                 alert_threshold_pct=config.alert_threshold_pct,
+                alerts_enabled=config.alerts_enabled,
+                slack_webhook_url=config.slack_webhook_url,
+                discord_webhook_url=config.discord_webhook_url,
                 current_month_spent_usd=round(current_spend, 4),
                 percent_used=round(percent_used, 2),
                 budget_exceeded=budget_exceeded,
@@ -1228,7 +1287,7 @@ async def get_budget():
 
 @app.put("/budget", response_model=BudgetConfigResponse)
 async def set_budget(request: BudgetConfigRequest):
-    """Set monthly spending limit and alert threshold."""
+    """Set monthly spending limit, alert threshold, and webhook URLs."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1244,12 +1303,18 @@ async def set_budget(request: BudgetConfigRequest):
                 # Update existing
                 config.monthly_limit_usd = request.monthly_limit_usd  # type: ignore[assignment]
                 config.alert_threshold_pct = request.alert_threshold_pct
+                config.alerts_enabled = request.alerts_enabled
+                config.slack_webhook_url = request.slack_webhook_url
+                config.discord_webhook_url = request.discord_webhook_url
                 config.updated_at = now
             else:
                 # Create new
                 config = BudgetConfig(
                     monthly_limit_usd=request.monthly_limit_usd,  # type: ignore[arg-type]
                     alert_threshold_pct=request.alert_threshold_pct,
+                    alerts_enabled=request.alerts_enabled,
+                    slack_webhook_url=request.slack_webhook_url,
+                    discord_webhook_url=request.discord_webhook_url,
                     created_at=now,
                     updated_at=now,
                 )
@@ -1334,6 +1399,33 @@ async def get_budget_alerts():
     except Exception as e:
         print(f"Failed to fetch budget alerts: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class WebhookTestRequest(BaseModel):
+    """Request to test a webhook URL."""
+
+    webhook_type: str = Field(..., description="Either 'slack' or 'discord'")
+    webhook_url: str = Field(..., description="The webhook URL to test")
+
+
+@app.post("/budget/webhooks/test")
+async def test_budget_webhook(request: WebhookTestRequest):
+    """Send a test notification to verify webhook configuration."""
+    if request.webhook_type.lower() not in ("slack", "discord"):
+        raise HTTPException(
+            status_code=400,
+            detail="webhook_type must be 'slack' or 'discord'",
+        )
+
+    success = await send_test_webhook(request.webhook_type, request.webhook_url)
+
+    if success:
+        return {"status": "success", "message": "Test notification sent successfully"}
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Failed to send test notification. Check the webhook URL.",
+        )
 
 
 class DecisionHistoryItem(BaseModel):

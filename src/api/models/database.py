@@ -391,6 +391,11 @@ class BudgetConfig(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     monthly_limit_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     alert_threshold_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
+    alerts_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    slack_webhook_url: Mapped[str | None] = mapped_column(Text)
+    discord_webhook_url: Mapped[str | None] = mapped_column(Text)
+    last_alert_time: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_alert_percent: Mapped[int | None] = mapped_column(Integer)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
 
