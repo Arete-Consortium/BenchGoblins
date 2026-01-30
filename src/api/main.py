@@ -405,6 +405,151 @@ async def _check_budget_exceeded() -> tuple[bool, str | None]:
         return False, None  # Fail open - don't block on errors
 
 
+# Sports-related keywords for query filtering
+SPORTS_KEYWORDS = {
+    # Actions
+    "start",
+    "sit",
+    "trade",
+    "waiver",
+    "add",
+    "drop",
+    "bench",
+    "lineup",
+    "roster",
+    "pick",
+    "draft",
+    "stash",
+    "stream",
+    "hold",
+    "sell",
+    "buy",
+    # Sports terms
+    "fantasy",
+    "player",
+    "team",
+    "matchup",
+    "injury",
+    "injured",
+    "questionable",
+    "doubtful",
+    "out",
+    "gtd",
+    "game",
+    "week",
+    "season",
+    "playoff",
+    "playoffs",
+    # Positions
+    "qb",
+    "rb",
+    "wr",
+    "te",
+    "flex",
+    "dst",
+    "defense",
+    "kicker",
+    "pg",
+    "sg",
+    "sf",
+    "pf",
+    "center",
+    "guard",
+    "forward",
+    "pitcher",
+    "catcher",
+    "outfield",
+    "infield",
+    "dh",
+    "goalie",
+    "winger",
+    "defenseman",
+    # Stats
+    "points",
+    "rebounds",
+    "assists",
+    "touchdowns",
+    "yards",
+    "receptions",
+    "targets",
+    "carries",
+    "rushing",
+    "passing",
+    "receiving",
+    "scoring",
+    "ppg",
+    "rpg",
+    "apg",
+    "ppr",
+    "half-ppr",
+    "standard",
+    # Sports
+    "nba",
+    "nfl",
+    "mlb",
+    "nhl",
+    "basketball",
+    "football",
+    "baseball",
+    "hockey",
+    # Context
+    "vs",
+    "versus",
+    "against",
+    "tonight",
+    "monday",
+    "tuesday",
+    "wednesday",
+    "thursday",
+    "friday",
+    "saturday",
+    "sunday",
+}
+
+# Explicit off-topic patterns to reject
+OFF_TOPIC_PATTERNS = [
+    "how do i look",
+    "what should i say",
+    "how to talk to",
+    "dating",
+    "girlfriend",
+    "boyfriend",
+    "write me",
+    "write a",
+    "code",
+    "programming",
+    "python",
+    "javascript",
+    "explain how",
+    "what is the meaning",
+    "tell me a joke",
+    "who is the president",
+    "capital of",
+]
+
+
+def _is_sports_query(query: str) -> bool:
+    """Check if query is sports-related.
+
+    Returns True if query appears to be about fantasy sports.
+    Uses keyword matching and off-topic pattern detection.
+    """
+    query_lower = query.lower()
+
+    # Check for explicit off-topic patterns first
+    for pattern in OFF_TOPIC_PATTERNS:
+        if pattern in query_lower:
+            return False
+
+    # Check for sports keywords
+    words = set(query_lower.replace("?", " ").replace(",", " ").split())
+    if words & SPORTS_KEYWORDS:
+        return True
+
+    # If no sports keywords found, likely off-topic
+    return False
+
+
 @app.post("/decide", response_model=DecisionResponse)
 async def make_decision(
     request: DecisionRequest,
@@ -416,6 +561,13 @@ async def make_decision(
     Routes to local scoring engine for simple queries,
     Claude API for complex queries.
     """
+    # Check if query is sports-related
+    if not _is_sports_query(request.query):
+        raise HTTPException(
+            status_code=400,
+            detail="Query must be about fantasy sports (start/sit, trades, waivers, player matchups, etc.)",
+        )
+
     # Assign A/B prompt variant
     variant = assign_variant(session_id)
 
@@ -711,6 +863,13 @@ async def make_decision_stream(
     Returns streamed text chunks from Claude for faster perceived response.
     Complex queries only - simple queries should use /decide.
     """
+    # Check if query is sports-related
+    if not _is_sports_query(request.query):
+        raise HTTPException(
+            status_code=400,
+            detail="Query must be about fantasy sports (start/sit, trades, waivers, player matchups, etc.)",
+        )
+
     if not claude_service.is_available:
         raise HTTPException(
             status_code=503,
