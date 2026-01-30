@@ -352,6 +352,59 @@ async def _store_decision(
         print(f"Failed to store decision: {e}")
 
 
+async def _check_budget_exceeded() -> tuple[bool, str | None]:
+    """Check if monthly budget is exceeded.
+
+    Returns:
+        Tuple of (exceeded: bool, message: str | None)
+    """
+    if not db_service.is_configured:
+        return False, None
+
+    # Cost per million tokens (Sonnet pricing)
+    input_cost_per_mtok = 3.0
+    output_cost_per_mtok = 15.0
+
+    try:
+        async with db_service.session() as session:
+            # Get budget config
+            config_q = select(BudgetConfig).order_by(BudgetConfig.id.desc()).limit(1)
+            result = await session.execute(config_q)
+            config = result.scalar_one_or_none()
+
+            if not config or float(config.monthly_limit_usd) == 0:
+                return False, None  # No limit set
+
+            # Calculate current month spend
+            now = datetime.now(UTC)
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            usage_q = select(
+                func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
+                func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
+            ).where(DecisionModel.created_at >= month_start)
+            usage_row = (await session.execute(usage_q)).one()
+
+            input_tokens = int(usage_row.input)
+            output_tokens = int(usage_row.output)
+            current_spend = (
+                input_tokens / 1_000_000 * input_cost_per_mtok
+                + output_tokens / 1_000_000 * output_cost_per_mtok
+            )
+
+            limit = float(config.monthly_limit_usd)
+            if current_spend >= limit:
+                return (
+                    True,
+                    f"Monthly budget exceeded: ${current_spend:.2f} spent of ${limit:.2f} limit",
+                )
+
+            return False, None
+    except Exception as e:
+        print(f"Budget check failed: {e}")
+        return False, None  # Fail open - don't block on errors
+
+
 @app.post("/decide", response_model=DecisionResponse)
 async def make_decision(
     request: DecisionRequest,
@@ -447,6 +500,14 @@ async def make_decision(
         # Use local scoring engine with real data
         response = await _local_decision(request, player_a, player_b, player_a_data, player_b_data)
     else:
+        # Check budget before calling Claude (costs money)
+        budget_exceeded, budget_msg = await _check_budget_exceeded()
+        if budget_exceeded:
+            raise HTTPException(
+                status_code=402,
+                detail=budget_msg or "Monthly API budget exceeded",
+            )
+
         # Use Claude for complex queries or when we need more reasoning
         response, input_tokens, output_tokens = await _claude_decision(
             request, player_a, player_b, player_context, prompt_variant=variant
@@ -654,6 +715,14 @@ async def make_decision_stream(
         raise HTTPException(
             status_code=503,
             detail="Claude API not configured. Set ANTHROPIC_API_KEY environment variable.",
+        )
+
+    # Check budget before calling Claude (streaming always uses Claude)
+    budget_exceeded, budget_msg = await _check_budget_exceeded()
+    if budget_exceeded:
+        raise HTTPException(
+            status_code=402,
+            detail=budget_msg or "Monthly API budget exceeded",
         )
 
     # Assign A/B prompt variant

@@ -318,3 +318,153 @@ class TestBudgetConfigModel:
         assert hasattr(BudgetConfig, "alert_threshold_pct")
         assert hasattr(BudgetConfig, "created_at")
         assert hasattr(BudgetConfig, "updated_at")
+
+
+class TestBudgetEnforcement:
+    """Test budget enforcement blocks requests when exceeded."""
+
+    @pytest.fixture
+    def mock_db_session(self):
+        """Create a mock database session."""
+        session = AsyncMock()
+        session.__aenter__ = AsyncMock(return_value=session)
+        session.__aexit__ = AsyncMock(return_value=None)
+        return session
+
+    @pytest.mark.asyncio
+    async def test_check_budget_no_config(self, mock_db_session):
+        """Test _check_budget_exceeded returns False when no config."""
+        from main import _check_budget_exceeded
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("main.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value = mock_db_session
+
+            exceeded, msg = await _check_budget_exceeded()
+
+            assert exceeded is False
+            assert msg is None
+
+    @pytest.mark.asyncio
+    async def test_check_budget_zero_limit(self, mock_db_session):
+        """Test _check_budget_exceeded returns False when limit is 0."""
+        from main import _check_budget_exceeded
+        from models.database import BudgetConfig
+
+        mock_config = MagicMock(spec=BudgetConfig)
+        mock_config.monthly_limit_usd = Decimal("0")
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_config
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("main.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value = mock_db_session
+
+            exceeded, msg = await _check_budget_exceeded()
+
+            assert exceeded is False
+            assert msg is None
+
+    @pytest.mark.asyncio
+    async def test_check_budget_under_limit(self, mock_db_session):
+        """Test _check_budget_exceeded returns False when under limit."""
+        from main import _check_budget_exceeded
+        from models.database import BudgetConfig
+
+        mock_config = MagicMock(spec=BudgetConfig)
+        mock_config.monthly_limit_usd = Decimal("100.00")
+
+        # Mock usage: $4.50 spent < $100 limit
+        mock_usage = MagicMock()
+        mock_usage.input = 1_000_000
+        mock_usage.output = 100_000
+
+        mock_config_result = MagicMock()
+        mock_config_result.scalar_one_or_none.return_value = mock_config
+
+        mock_usage_result = MagicMock()
+        mock_usage_result.one.return_value = mock_usage
+
+        mock_db_session.execute = AsyncMock(
+            side_effect=[mock_config_result, mock_usage_result]
+        )
+
+        with patch("main.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value = mock_db_session
+
+            exceeded, msg = await _check_budget_exceeded()
+
+            assert exceeded is False
+            assert msg is None
+
+    @pytest.mark.asyncio
+    async def test_check_budget_exceeded(self, mock_db_session):
+        """Test _check_budget_exceeded returns True when over limit."""
+        from main import _check_budget_exceeded
+        from models.database import BudgetConfig
+
+        mock_config = MagicMock(spec=BudgetConfig)
+        mock_config.monthly_limit_usd = Decimal("1.00")
+
+        # Mock usage: $4.50 spent > $1 limit
+        mock_usage = MagicMock()
+        mock_usage.input = 1_000_000
+        mock_usage.output = 100_000
+
+        mock_config_result = MagicMock()
+        mock_config_result.scalar_one_or_none.return_value = mock_config
+
+        mock_usage_result = MagicMock()
+        mock_usage_result.one.return_value = mock_usage
+
+        mock_db_session.execute = AsyncMock(
+            side_effect=[mock_config_result, mock_usage_result]
+        )
+
+        with patch("main.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value = mock_db_session
+
+            exceeded, msg = await _check_budget_exceeded()
+
+            assert exceeded is True
+            assert "exceeded" in msg.lower()
+            assert "$4.50" in msg
+            assert "$1.00" in msg
+
+    @pytest.mark.asyncio
+    async def test_check_budget_db_not_configured(self):
+        """Test _check_budget_exceeded returns False when DB not configured."""
+        from main import _check_budget_exceeded
+
+        with patch("main.db_service") as mock_db:
+            mock_db.is_configured = False
+
+            exceeded, msg = await _check_budget_exceeded()
+
+            assert exceeded is False
+            assert msg is None
+
+    @pytest.mark.asyncio
+    async def test_check_budget_fails_open_on_error(self, mock_db_session):
+        """Test _check_budget_exceeded fails open (returns False) on DB errors."""
+        from main import _check_budget_exceeded
+
+        mock_db_session.execute = AsyncMock(side_effect=Exception("DB error"))
+
+        with patch("main.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value = mock_db_session
+
+            exceeded, msg = await _check_budget_exceeded()
+
+            # Should fail open - don't block on errors
+            assert exceeded is False
+            assert msg is None
