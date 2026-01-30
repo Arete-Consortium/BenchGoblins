@@ -320,6 +320,94 @@ class TestBudgetConfigModel:
         assert hasattr(BudgetConfig, "updated_at")
 
 
+class TestSportsQueryFilter:
+    """Test sports-only query filtering."""
+
+    def test_valid_start_sit_query(self):
+        """Test start/sit queries pass filter."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Should I start LeBron or Giannis?") is True
+        assert _is_sports_query("Start Mahomes or Allen this week?") is True
+        assert _is_sports_query("Sit Kelce against the Ravens?") is True
+
+    def test_valid_trade_query(self):
+        """Test trade queries pass filter."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Should I trade Ja Morant for Trae Young?") is True
+        assert _is_sports_query("Is this trade fair: Tyreek for Jefferson?") is True
+
+    def test_valid_waiver_query(self):
+        """Test waiver queries pass filter."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Should I add Jamal Murray from waivers?") is True
+        assert _is_sports_query("Drop Zach LaVine for waiver pickup?") is True
+
+    def test_valid_matchup_query(self):
+        """Test matchup queries pass filter."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Good matchup for Steph vs the Lakers?") is True
+        assert _is_sports_query("How does Saquon look against Dallas defense?") is True
+
+    def test_valid_injury_query(self):
+        """Test injury queries pass filter."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Is Ja Morant injured this week?") is True
+        assert _is_sports_query("Questionable status for Luka?") is True
+
+    def test_valid_sport_specific_query(self):
+        """Test sport-specific keywords pass."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Best QB to stream in NFL?") is True
+        assert _is_sports_query("PPR value for this RB?") is True
+        assert _is_sports_query("NBA fantasy points projection?") is True
+
+    def test_reject_dating_query(self):
+        """Test dating/relationship queries are rejected."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("How do I talk to a girl I like?") is False
+        assert _is_sports_query("What should I say to my girlfriend?") is False
+        assert _is_sports_query("Dating advice please") is False
+
+    def test_reject_appearance_query(self):
+        """Test appearance queries are rejected."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("How do I look today?") is False
+        assert _is_sports_query("Do I look good in this outfit?") is False
+
+    def test_reject_coding_query(self):
+        """Test coding queries are rejected."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Write me a Python script") is False
+        assert _is_sports_query("How do I code a website?") is False
+        assert _is_sports_query("JavaScript tutorial please") is False
+
+    def test_reject_general_knowledge(self):
+        """Test general knowledge queries are rejected."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Who is the president of the US?") is False
+        assert _is_sports_query("What is the capital of France?") is False
+        assert _is_sports_query("Explain how the economy works") is False
+        assert _is_sports_query("Tell me a joke") is False
+
+    def test_reject_random_query(self):
+        """Test queries with no sports keywords are rejected."""
+        from main import _is_sports_query
+
+        assert _is_sports_query("Hello how are you?") is False
+        assert _is_sports_query("What's the weather like?") is False
+        assert _is_sports_query("Can you help me with something?") is False
+
+
 class TestBudgetEnforcement:
     """Test budget enforcement blocks requests when exceeded."""
 
