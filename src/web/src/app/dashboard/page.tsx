@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Navigation } from '@/components/Navigation';
+import { Header } from '@/components/layout/Header';
 import { useAppStore } from '@/stores/appStore';
 import api from '@/lib/api';
 import { UsageStats, HealthResponse } from '@/types';
@@ -72,7 +72,7 @@ export default function DashboardPage() {
       try {
         const [usageData, healthData] = await Promise.all([
           api.getUsage().catch(() => null),
-          api.health().catch(() => null),
+          api.getHealth().catch(() => null),
         ]);
         setUsage(usageData);
         setHealth(healthData);
@@ -94,7 +94,7 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen">
-      <Navigation />
+      <Header />
 
       <main className="pt-20 pb-8 px-4">
         <div className="max-w-6xl mx-auto">
@@ -211,7 +211,7 @@ export default function DashboardPage() {
           <div className="mt-8 bg-dark-800/50 border border-dark-700 rounded-xl p-6">
             <h2 className="text-xl font-semibold mb-4">The Five-Index System</h2>
             <p className="text-dark-400 mb-6">
-              GameSpace uses five qualitative indices to evaluate fantasy decisions,
+              BenchGoblin uses five qualitative indices to evaluate fantasy decisions,
               moving beyond simple projections to capture role stability, spatial opportunity,
               and matchup context.
             </p>

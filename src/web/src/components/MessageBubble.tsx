@@ -101,29 +101,29 @@ export function MessageBubble({ message }: MessageBubbleProps) {
   const isUser = message.role === 'user';
 
   return (
-    <div className={cn('flex gap-3', isUser ? 'justify-end' : 'justify-start')}>
+    <div className={cn('flex gap-3 animate-fadeIn', isUser ? 'justify-end' : 'justify-start')}>
       {!isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center">
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary-500/20 flex items-center justify-center ring-2 ring-primary-500/10">
           <Bot className="w-5 h-5 text-primary-400" />
         </div>
       )}
 
       <div
         className={cn(
-          'max-w-[80%] rounded-2xl px-4 py-3',
+          'max-w-[80%] rounded-2xl px-4 py-3 shadow-lg',
           isUser
-            ? 'bg-primary-600 text-white rounded-br-md'
-            : 'bg-dark-800 text-dark-100 rounded-bl-md'
+            ? 'bg-gradient-to-br from-primary-600 to-primary-700 text-white rounded-br-md shadow-primary-500/20'
+            : 'bg-dark-800/90 text-dark-100 rounded-bl-md border border-dark-700/50'
         )}
       >
-        <p className="whitespace-pre-wrap">{message.content}</p>
+        <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
 
         {message.decision && <DecisionDetails decision={message.decision} />}
 
         <div
           className={cn(
-            'text-xs mt-2',
-            isUser ? 'text-primary-200' : 'text-dark-400'
+            'text-xs mt-2 opacity-70',
+            isUser ? 'text-primary-100' : 'text-dark-400'
           )}
         >
           {formatRelativeTime(message.timestamp)}
@@ -131,8 +131,8 @@ export function MessageBubble({ message }: MessageBubbleProps) {
       </div>
 
       {isUser && (
-        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-dark-700 flex items-center justify-center">
-          <User className="w-5 h-5 text-dark-300" />
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gradient-to-br from-dark-600 to-dark-700 flex items-center justify-center ring-2 ring-dark-600/50">
+          <User className="w-5 h-5 text-dark-200" />
         </div>
       )}
     </div>

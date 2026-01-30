@@ -1,5 +1,5 @@
 """
-Performance monitoring and metrics for GameSpace API.
+Performance monitoring and metrics for BenchGoblin API.
 
 Provides:
 - Prometheus metrics endpoint (/metrics)
@@ -30,11 +30,11 @@ from starlette.responses import Response
 # Application Info
 # =============================================================================
 
-APP_INFO = Info("gamespace_app", "GameSpace application information")
+APP_INFO = Info("gamespace_app", "BenchGoblin application information")
 APP_INFO.info(
     {
         "version": "0.3.0",
-        "name": "GameSpace API",
+        "name": "BenchGoblin API",
     }
 )
 

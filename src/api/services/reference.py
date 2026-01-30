@@ -21,7 +21,7 @@ _RATE_LIMIT_SECONDS = 3.0
 _last_request_time: float = 0.0
 
 _USER_AGENT = (
-    "GameSpace/0.2.0 (Fantasy Sports Analytics; +https://github.com/AreteDriver/GameSpace)"
+    "BenchGoblin/0.2.0 (Fantasy Sports Analytics; +https://github.com/AreteDriver/BenchGoblin)"
 )
 
 

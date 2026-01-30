@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Navigation } from '@/components/Navigation';
+import { Header } from '@/components/layout/Header';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
 import { useAppStore } from '@/stores/appStore';
@@ -44,14 +44,14 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen">
-      <Navigation />
+      <Header />
 
       <main className="pt-20 pb-8 px-4">
         <div className="max-w-2xl mx-auto">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-3xl font-bold">Settings</h1>
-            <p className="text-dark-400 mt-1">Customize your GameSpace experience</p>
+            <p className="text-dark-400 mt-1">Customize your BenchGoblin experience</p>
           </div>
 
           <div className="space-y-6">
@@ -185,7 +185,7 @@ export default function SettingsPage() {
             {/* About */}
             <SettingsSection title="About">
               <div className="text-sm text-dark-400 space-y-1">
-                <p>GameSpace v1.0.0</p>
+                <p>BenchGoblin v1.0.0</p>
                 <p>Fantasy Sports Decision Engine</p>
                 <p className="pt-2">
                   Built with the five-index scoring system for smarter fantasy decisions.

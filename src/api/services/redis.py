@@ -260,7 +260,7 @@ class RedisService:
             return 0
 
     async def clear_all(self) -> bool:
-        """Clear all GameSpace cache keys."""
+        """Clear all BenchGoblin cache keys."""
         if not self._client:
             return False
         try:

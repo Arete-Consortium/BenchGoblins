@@ -99,7 +99,7 @@ class ESPNFantasyService:
             self._client = httpx.AsyncClient(
                 timeout=30.0,
                 headers={
-                    "User-Agent": "Mozilla/5.0 (compatible; GameSpace/1.0)",
+                    "User-Agent": "Mozilla/5.0 (compatible; BenchGoblin/1.0)",
                     "Accept": "application/json",
                 },
             )

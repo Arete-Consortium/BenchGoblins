@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DecisionHistoryItem, Sport } from '@/types';
+import type { DecisionHistoryItem, Sport } from '@/types';
 import api from '@/lib/api';
 
 interface HistoryState {
@@ -30,15 +30,18 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
     set({ isLoading: true });
 
     try {
-      const offset = reset ? 0 : items.length;
-      const history = await api.getHistory(PAGE_SIZE, offset, filter || undefined);
+      // Note: Current API doesn't support offset pagination
+      // For now, just fetch all at once
+      const limit = reset ? PAGE_SIZE : items.length + PAGE_SIZE;
+      const history = await api.getHistory(limit, filter || undefined);
 
       set({
-        items: reset ? history : [...items, ...history],
-        hasMore: history.length === PAGE_SIZE,
+        items: history,
+        hasMore: history.length === limit,
         isLoading: false,
       });
     } catch (error) {
+      console.error('Failed to fetch history:', error);
       set({ isLoading: false });
     }
   },

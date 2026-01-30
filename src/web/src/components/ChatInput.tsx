@@ -47,7 +47,7 @@ export function ChatInput({
 
   return (
     <div className="flex gap-3 items-end">
-      <div className="flex-1 relative">
+      <div className="flex-1 relative group">
         <textarea
           ref={textareaRef}
           value={message}
@@ -57,15 +57,20 @@ export function ChatInput({
           disabled={disabled}
           rows={1}
           className={cn(
-            'w-full resize-none rounded-xl border-2 border-dark-700 bg-dark-800',
-            'px-4 py-3 pr-12 text-dark-100 placeholder-dark-500',
-            'focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20',
-            'transition-all duration-200',
+            'w-full resize-none rounded-xl border-2 border-dark-700/50 bg-dark-800/80',
+            'px-4 py-3 pr-12 text-dark-100 placeholder-dark-400',
+            'focus:outline-none focus:border-primary-500 focus:ring-4 focus:ring-primary-500/10',
+            'focus:bg-dark-800 transition-all duration-300',
+            'group-hover:border-dark-600',
             disabled && 'opacity-50 cursor-not-allowed'
           )}
         />
-        <div className="absolute right-2 bottom-2 text-xs text-dark-500">
-          {message.length > 0 && `${message.length}/500`}
+        <div className="absolute right-3 bottom-3 text-xs text-dark-500 transition-opacity">
+          {message.length > 0 && (
+            <span className={cn(message.length > 450 && 'text-orange-400')}>
+              {message.length}/500
+            </span>
+          )}
         </div>
       </div>
 
@@ -74,10 +79,10 @@ export function ChatInput({
         disabled={disabled || !message.trim()}
         className={cn(
           'flex-shrink-0 w-12 h-12 rounded-xl flex items-center justify-center',
-          'transition-all duration-200',
+          'transition-all duration-300 transform',
           message.trim() && !disabled
-            ? 'bg-primary-600 hover:bg-primary-500 text-white shadow-lg shadow-primary-500/25'
-            : 'bg-dark-700 text-dark-500 cursor-not-allowed'
+            ? 'bg-gradient-to-br from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500 text-white shadow-lg shadow-primary-500/30 hover:shadow-primary-500/40 hover:scale-105 active:scale-95'
+            : 'bg-dark-700/50 text-dark-500 cursor-not-allowed'
         )}
       >
         {disabled ? (
