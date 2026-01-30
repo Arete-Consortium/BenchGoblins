@@ -203,13 +203,13 @@ class ClaudeService:
         league_type: str | None = None,
         player_context: str | None = None,
         prompt_variant: str = "control",
-    ) -> AsyncGenerator[str, None]:
+    ) -> AsyncGenerator[str | dict, None]:
         """
         Stream a fantasy decision from Claude.
 
         Yields:
             Text chunks as they arrive from the API.
-            Final chunk includes token usage tracking.
+            Final yield is a dict with token metadata: {"_metadata": True, "input_tokens": N, "output_tokens": M, "full_response": str}
         """
         if not self.client:
             raise RuntimeError("Claude API not configured - set ANTHROPIC_API_KEY")
@@ -225,6 +225,7 @@ class ClaudeService:
             player_context=player_context,
         )
 
+        full_response = ""
         with self.client.messages.stream(
             model="claude-sonnet-4-20250514",
             max_tokens=500,
@@ -232,6 +233,7 @@ class ClaudeService:
             messages=[{"role": "user", "content": user_message}],
         ) as stream:
             for text in stream.text_stream:
+                full_response += text
                 yield text
 
             # Track token usage after stream completes
@@ -239,6 +241,14 @@ class ClaudeService:
             input_tokens = final_message.usage.input_tokens
             output_tokens = final_message.usage.output_tokens
             track_claude_request(input_tokens, output_tokens, success=True, variant=prompt_variant)
+
+            # Yield metadata for caller to capture
+            yield {
+                "_metadata": True,
+                "input_tokens": input_tokens,
+                "output_tokens": output_tokens,
+                "full_response": full_response,
+            }
 
     def _parse_response(self, response_text: str) -> dict:
         """Parse Claude's response into structured data."""

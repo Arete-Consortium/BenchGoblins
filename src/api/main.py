@@ -24,6 +24,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import Integer as SAInteger
 from sqlalchemy import func, select
 
+from models.database import BudgetConfig
 from models.database import Decision as DecisionModel
 from monitoring import MetricsMiddleware, metrics_endpoint
 from routes.sessions import router as sessions_router
@@ -688,8 +689,12 @@ async def make_decision_stream(
         if context_parts:
             player_context = "\n\n".join(context_parts)
 
+    # Capture metadata for persistence after streaming
+    stream_metadata: dict = {}
+
     async def event_generator():
         """Generate Server-Sent Events."""
+        nonlocal stream_metadata
         try:
             async for chunk in claude_service.make_decision_stream(
                 query=request.query,
@@ -702,9 +707,48 @@ async def make_decision_stream(
                 player_context=player_context,
                 prompt_variant=variant,
             ):
+                # Check if this is the final metadata dict
+                if isinstance(chunk, dict) and chunk.get("_metadata"):
+                    stream_metadata = chunk
+                    continue
                 # Format as SSE
                 yield f"data: {chunk}\n\n"
             yield "data: [DONE]\n\n"
+
+            # Persist decision to database after stream completes
+            if stream_metadata:
+                try:
+                    # Parse the response to build a DecisionResponse
+                    parsed = claude_service._parse_response(
+                        stream_metadata.get("full_response", "")
+                    )
+                    confidence_map = {
+                        "low": Confidence.LOW,
+                        "medium": Confidence.MEDIUM,
+                        "high": Confidence.HIGH,
+                    }
+                    response = DecisionResponse(
+                        decision=parsed["decision"],
+                        confidence=confidence_map.get(
+                            parsed.get("confidence", "medium"), Confidence.MEDIUM
+                        ),
+                        rationale=parsed["rationale"],
+                        details=parsed.get("details"),
+                        source="claude",
+                    )
+                    await _store_decision(
+                        request,
+                        response,
+                        player_a,
+                        player_b,
+                        player_context,
+                        input_tokens=stream_metadata.get("input_tokens"),
+                        output_tokens=stream_metadata.get("output_tokens"),
+                        prompt_variant=variant,
+                    )
+                except Exception as e:
+                    # Don't fail the stream if persistence fails
+                    print(f"Failed to persist streaming decision: {e}")
         except Exception as e:
             yield f"data: [ERROR] {str(e)}\n\n"
 
@@ -850,6 +894,218 @@ async def get_token_usage(
     except Exception as e:
         print(f"Failed to fetch usage: {e}")
         return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Budget Configuration
+# ---------------------------------------------------------------------------
+
+
+class BudgetConfigRequest(BaseModel):
+    """Request to set budget configuration."""
+
+    monthly_limit_usd: float = Field(..., ge=0, description="Monthly spending cap in USD")
+    alert_threshold_pct: int = Field(
+        default=80, ge=0, le=100, description="Alert when spending reaches this percentage"
+    )
+
+
+class BudgetConfigResponse(BaseModel):
+    """Budget configuration and current status."""
+
+    monthly_limit_usd: float
+    alert_threshold_pct: int
+    current_month_spent_usd: float
+    percent_used: float
+    budget_exceeded: bool
+    alert_triggered: bool
+    updated_at: str | None
+
+
+class BudgetAlertResponse(BaseModel):
+    """Active budget alert information."""
+
+    alert_active: bool
+    alert_type: str | None  # "threshold" or "exceeded"
+    message: str | None
+    current_spend_usd: float
+    monthly_limit_usd: float
+    percent_used: float
+
+
+@app.get("/budget", response_model=BudgetConfigResponse)
+async def get_budget():
+    """Get current budget configuration and spending status."""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    # Cost per million tokens (Sonnet pricing)
+    input_cost_per_mtok = 3.0
+    output_cost_per_mtok = 15.0
+
+    try:
+        async with db_service.session() as session:
+            # Get current budget config (most recent)
+            config_q = select(BudgetConfig).order_by(BudgetConfig.id.desc()).limit(1)
+            result = await session.execute(config_q)
+            config = result.scalar_one_or_none()
+
+            if not config:
+                # No config set, return defaults
+                return BudgetConfigResponse(
+                    monthly_limit_usd=0,
+                    alert_threshold_pct=80,
+                    current_month_spent_usd=0,
+                    percent_used=0,
+                    budget_exceeded=False,
+                    alert_triggered=False,
+                    updated_at=None,
+                )
+
+            # Calculate current month spend
+            now = datetime.now(UTC)
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            usage_q = select(
+                func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
+                func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
+            ).where(DecisionModel.created_at >= month_start)
+            usage_row = (await session.execute(usage_q)).one()
+
+            input_tokens = int(usage_row.input)
+            output_tokens = int(usage_row.output)
+            current_spend = (
+                input_tokens / 1_000_000 * input_cost_per_mtok
+                + output_tokens / 1_000_000 * output_cost_per_mtok
+            )
+
+            limit = float(config.monthly_limit_usd)
+            percent_used = (current_spend / limit * 100) if limit > 0 else 0
+            budget_exceeded = limit > 0 and current_spend >= limit
+            alert_triggered = limit > 0 and percent_used >= config.alert_threshold_pct
+
+            return BudgetConfigResponse(
+                monthly_limit_usd=limit,
+                alert_threshold_pct=config.alert_threshold_pct,
+                current_month_spent_usd=round(current_spend, 4),
+                percent_used=round(percent_used, 2),
+                budget_exceeded=budget_exceeded,
+                alert_triggered=alert_triggered,
+                updated_at=config.updated_at.isoformat() if config.updated_at else None,
+            )
+    except Exception as e:
+        print(f"Failed to fetch budget: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/budget", response_model=BudgetConfigResponse)
+async def set_budget(request: BudgetConfigRequest):
+    """Set monthly spending limit and alert threshold."""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    try:
+        async with db_service.session() as session:
+            # Check if config exists
+            config_q = select(BudgetConfig).order_by(BudgetConfig.id.desc()).limit(1)
+            result = await session.execute(config_q)
+            config = result.scalar_one_or_none()
+
+            now = datetime.now(UTC)
+            if config:
+                # Update existing
+                config.monthly_limit_usd = request.monthly_limit_usd  # type: ignore[assignment]
+                config.alert_threshold_pct = request.alert_threshold_pct
+                config.updated_at = now
+            else:
+                # Create new
+                config = BudgetConfig(
+                    monthly_limit_usd=request.monthly_limit_usd,  # type: ignore[arg-type]
+                    alert_threshold_pct=request.alert_threshold_pct,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(config)
+
+        # Return updated status
+        return await get_budget()
+    except Exception as e:
+        print(f"Failed to set budget: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/budget/alerts", response_model=BudgetAlertResponse)
+async def get_budget_alerts():
+    """Get any active budget warnings or alerts."""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    # Cost per million tokens (Sonnet pricing)
+    input_cost_per_mtok = 3.0
+    output_cost_per_mtok = 15.0
+
+    try:
+        async with db_service.session() as session:
+            # Get budget config
+            config_q = select(BudgetConfig).order_by(BudgetConfig.id.desc()).limit(1)
+            result = await session.execute(config_q)
+            config = result.scalar_one_or_none()
+
+            if not config or float(config.monthly_limit_usd) == 0:
+                return BudgetAlertResponse(
+                    alert_active=False,
+                    alert_type=None,
+                    message=None,
+                    current_spend_usd=0,
+                    monthly_limit_usd=0,
+                    percent_used=0,
+                )
+
+            # Calculate current month spend
+            now = datetime.now(UTC)
+            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+            usage_q = select(
+                func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
+                func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
+            ).where(DecisionModel.created_at >= month_start)
+            usage_row = (await session.execute(usage_q)).one()
+
+            input_tokens = int(usage_row.input)
+            output_tokens = int(usage_row.output)
+            current_spend = (
+                input_tokens / 1_000_000 * input_cost_per_mtok
+                + output_tokens / 1_000_000 * output_cost_per_mtok
+            )
+
+            limit = float(config.monthly_limit_usd)
+            percent_used = (current_spend / limit * 100) if limit > 0 else 0
+
+            # Determine alert status
+            alert_active = False
+            alert_type = None
+            message = None
+
+            if current_spend >= limit:
+                alert_active = True
+                alert_type = "exceeded"
+                message = f"Budget exceeded! Spent ${current_spend:.2f} of ${limit:.2f} limit."
+            elif percent_used >= config.alert_threshold_pct:
+                alert_active = True
+                alert_type = "threshold"
+                message = f"Budget warning: {percent_used:.1f}% of monthly limit used (${current_spend:.2f} of ${limit:.2f})."
+
+            return BudgetAlertResponse(
+                alert_active=alert_active,
+                alert_type=alert_type,
+                message=message,
+                current_spend_usd=round(current_spend, 4),
+                monthly_limit_usd=limit,
+                percent_used=round(percent_used, 2),
+            )
+    except Exception as e:
+        print(f"Failed to fetch budget alerts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class DecisionHistoryItem(BaseModel):

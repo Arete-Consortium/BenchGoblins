@@ -383,6 +383,26 @@ class Decision(Base):
     )
 
 
+class BudgetConfig(Base):
+    """Budget configuration for Claude API spending limits."""
+
+    __tablename__ = "budget_configs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    monthly_limit_usd: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
+    alert_threshold_pct: Mapped[int] = mapped_column(Integer, nullable=False, default=80)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
+
+    __table_args__ = (
+        CheckConstraint("monthly_limit_usd >= 0", name="check_monthly_limit_positive"),
+        CheckConstraint(
+            "alert_threshold_pct >= 0 AND alert_threshold_pct <= 100",
+            name="check_alert_threshold_range",
+        ),
+    )
+
+
 class Session(Base):
     """Client session for credential and state management."""
 
