@@ -35,6 +35,8 @@ from services.database import db_service
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notifications import PushNotification, notification_service
+from services.query_classifier import QueryCategory
+from services.query_classifier import classify_query as classify_sports_query
 from services.rate_limiter import rate_limiter
 from services.redis import redis_service
 from services.router import QueryComplexity, classify_query, extract_players_from_query
@@ -407,149 +409,24 @@ async def _check_budget_exceeded() -> tuple[bool, str | None]:
         return False, None  # Fail open - don't block on errors
 
 
-# Sports-related keywords for query filtering
-SPORTS_KEYWORDS = {
-    # Actions
-    "start",
-    "sit",
-    "trade",
-    "waiver",
-    "add",
-    "drop",
-    "bench",
-    "lineup",
-    "roster",
-    "pick",
-    "draft",
-    "stash",
-    "stream",
-    "hold",
-    "sell",
-    "buy",
-    # Sports terms
-    "fantasy",
-    "player",
-    "team",
-    "matchup",
-    "injury",
-    "injured",
-    "questionable",
-    "doubtful",
-    "out",
-    "gtd",
-    "game",
-    "week",
-    "season",
-    "playoff",
-    "playoffs",
-    # Positions
-    "qb",
-    "rb",
-    "wr",
-    "te",
-    "flex",
-    "dst",
-    "defense",
-    "kicker",
-    "pg",
-    "sg",
-    "sf",
-    "pf",
-    "center",
-    "guard",
-    "forward",
-    "pitcher",
-    "catcher",
-    "outfield",
-    "infield",
-    "dh",
-    "goalie",
-    "winger",
-    "defenseman",
-    # Stats
-    "points",
-    "rebounds",
-    "assists",
-    "touchdowns",
-    "yards",
-    "receptions",
-    "targets",
-    "carries",
-    "rushing",
-    "passing",
-    "receiving",
-    "scoring",
-    "ppg",
-    "rpg",
-    "apg",
-    "ppr",
-    "half-ppr",
-    "standard",
-    # Sports
-    "nba",
-    "nfl",
-    "mlb",
-    "nhl",
-    "basketball",
-    "football",
-    "baseball",
-    "hockey",
-    # Context
-    "vs",
-    "versus",
-    "against",
-    "tonight",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-}
+def _is_sports_query(query: str) -> tuple[bool, str]:
+    """Check if query is sports-related using the smart classifier.
 
-# Explicit off-topic patterns to reject
-OFF_TOPIC_PATTERNS = [
-    "how do i look",
-    "what should i say",
-    "how to talk to",
-    "dating",
-    "girlfriend",
-    "boyfriend",
-    "write me",
-    "write a",
-    "code",
-    "programming",
-    "python",
-    "javascript",
-    "explain how",
-    "what is the meaning",
-    "tell me a joke",
-    "who is the president",
-    "capital of",
-]
-
-
-def _is_sports_query(query: str) -> bool:
-    """Check if query is sports-related.
-
-    Returns True if query appears to be about fantasy sports.
-    Uses keyword matching and off-topic pattern detection.
+    Returns (is_allowed, reason) tuple.
+    - SPORTS: allowed
+    - AMBIGUOUS: allowed (logged for review)
+    - OFF_TOPIC: rejected with reason
     """
-    query_lower = query.lower()
+    result = classify_sports_query(query)
 
-    # Check for explicit off-topic patterns first
-    for pattern in OFF_TOPIC_PATTERNS:
-        if pattern in query_lower:
-            return False
+    if result.category == QueryCategory.OFF_TOPIC:
+        return False, result.reason
 
-    # Check for sports keywords
-    words = set(query_lower.replace("?", " ").replace(",", " ").split())
-    if words & SPORTS_KEYWORDS:
-        return True
+    # Log ambiguous queries for review (could add proper logging here)
+    if result.category == QueryCategory.AMBIGUOUS:
+        print(f"AMBIGUOUS query allowed: '{query[:50]}...' - {result.reason}")
 
-    # If no sports keywords found, likely off-topic
-    return False
+    return True, result.reason
 
 
 @app.post("/decide", response_model=DecisionResponse)
@@ -573,11 +450,12 @@ async def make_decision(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check if query is sports-related
-    if not _is_sports_query(request.query):
+    # Check if query is sports-related using smart classifier
+    is_allowed, rejection_reason = _is_sports_query(request.query)
+    if not is_allowed:
         raise HTTPException(
             status_code=400,
-            detail="Query must be about fantasy sports (start/sit, trades, waivers, player matchups, etc.)",
+            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
         )
 
     # Assign A/B prompt variant
@@ -888,11 +766,12 @@ async def make_decision_stream(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check if query is sports-related
-    if not _is_sports_query(request.query):
+    # Check if query is sports-related using smart classifier
+    is_allowed, rejection_reason = _is_sports_query(request.query)
+    if not is_allowed:
         raise HTTPException(
             status_code=400,
-            detail="Query must be about fantasy sports (start/sit, trades, waivers, player matchups, etc.)",
+            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
         )
 
     if not claude_service.is_available:
@@ -2390,6 +2269,40 @@ async def get_outcome(decision_id: str):
         "user_followed": outcome.user_followed,
         "feedback_note": outcome.feedback_note,
     }
+
+
+class SyncOutcomesRequest(BaseModel):
+    """Request to sync outcomes from ESPN box scores."""
+
+    days_back: int = Field(default=2, ge=1, le=14, description="Days back to process")
+    sport: str | None = Field(default=None, description="Filter by sport (nba, nfl, mlb, nhl)")
+
+
+@app.post("/accuracy/sync")
+async def sync_outcomes(request: SyncOutcomesRequest | None = None):
+    """
+    Manually trigger outcome recording from ESPN box scores.
+
+    Fetches actual fantasy points for decisions from the past N days
+    and records outcomes (correct/incorrect/push).
+    """
+    from services.outcome_recorder import sync_recent_outcomes
+
+    days_back = request.days_back if request else 2
+    sport = request.sport if request else None
+
+    # Validate sport if provided
+    if sport and sport not in ("nba", "nfl", "mlb", "nhl"):
+        raise HTTPException(status_code=400, detail="Invalid sport. Must be nba, nfl, mlb, or nhl.")
+
+    try:
+        result = await sync_recent_outcomes(days_back=days_back, sport=sport)
+        return {
+            "status": "completed",
+            **result,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
 
 
 # ---------------------------------------------------------------------------
