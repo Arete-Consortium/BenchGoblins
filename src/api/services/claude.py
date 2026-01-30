@@ -1,5 +1,5 @@
 """
-Claude API integration for GameSpace.
+Claude API integration for BenchGoblin.
 
 Handles complex queries that require nuanced reasoning beyond local scoring.
 """

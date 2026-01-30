@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect } from 'react';
-import { Navigation } from '@/components/Navigation';
+import { Header } from '@/components/layout/Header';
 import { useHistoryStore } from '@/stores/historyStore';
 import { cn, formatDate, getConfidenceColor, getSportDisplayName } from '@/lib/utils';
-import { Sport } from '@/types';
+import type { Sport } from '@/types';
 import {
   Clock,
   CheckCircle,
@@ -36,7 +36,7 @@ export default function HistoryPage() {
 
   return (
     <div className="min-h-screen">
-      <Navigation />
+      <Header />
 
       <main className="pt-20 pb-8 px-4">
         <div className="max-w-4xl mx-auto">

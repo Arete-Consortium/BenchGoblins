@@ -30,7 +30,7 @@ export function Navigation() {
             <div className="w-8 h-8 rounded-lg bg-primary-600 flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold gradient-text">GameSpace</span>
+            <span className="text-xl font-bold gradient-text">BenchGoblin</span>
           </Link>
 
           {/* Nav Links */}

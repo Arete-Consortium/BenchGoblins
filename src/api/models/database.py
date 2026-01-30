@@ -1,5 +1,5 @@
 """
-SQLAlchemy ORM Models for GameSpace.
+SQLAlchemy ORM Models for BenchGoblin.
 
 Maps to the PostgreSQL schema in data/schema.sql.
 """
@@ -22,6 +22,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -31,6 +32,35 @@ class Base(DeclarativeBase):
     """Base class for all models."""
 
     pass
+
+
+class User(Base):
+    """User account for authentication and subscription management."""
+
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    google_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(255))
+    picture_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    subscription_tier: Mapped[str] = mapped_column(String(50), default="free")  # free, pro
+    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    queries_today: Mapped[int] = mapped_column(default=0)
+    queries_reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "subscription_tier IN ('free', 'pro')", name="check_subscription_tier"
+        ),
+        Index("idx_users_google_id", "google_id"),
+        Index("idx_users_email", "email"),
+    )
 
 
 class Player(Base):

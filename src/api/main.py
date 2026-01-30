@@ -1,5 +1,5 @@
 """
-GameSpace API — Fantasy Sports Decision Engine
+BenchGoblin API — Fantasy Sports Decision Engine
 """
 
 import os
@@ -17,16 +17,19 @@ import sentry_sdk
 from core.scoring import RiskMode as CoreRiskMode
 from core.scoring import compare_players
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Integer as SAInteger
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from models.database import BudgetConfig
 from models.database import Decision as DecisionModel
+from models.database import User
+from services import stripe_billing
 from monitoring import MetricsMiddleware, metrics_endpoint
+from routes.auth import router as auth_router
 from routes.sessions import router as sessions_router
 from services.accuracy import AccuracyTracker, DecisionOutcome
 from services.budget_alerts import check_and_send_alerts, send_test_webhook
@@ -122,7 +125,7 @@ async def lifespan(app: FastAPI):
 # ---------------------------------------------------------------------------
 
 app = FastAPI(
-    title="GameSpace API",
+    title="BenchGoblin API",
     description=(
         "Fantasy sports decision engine using role stability,"
         " spatial opportunity, and matchup context."
@@ -147,6 +150,9 @@ app.add_route("/metrics", metrics_endpoint)
 
 # Session management routes
 app.include_router(sessions_router)
+
+# Authentication routes
+app.include_router(auth_router)
 
 
 # ---------------------------------------------------------------------------
@@ -429,16 +435,70 @@ def _is_sports_query(query: str) -> tuple[bool, str]:
     return True, result.reason
 
 
+# ---------------------------------------------------------------------------
+# Tier-Based Query Limiting Helpers
+# ---------------------------------------------------------------------------
+
+# Tier limits
+FREE_TIER_DAILY_LIMIT = 5
+PRO_TIER_DAILY_LIMIT = -1  # Unlimited
+
+
+async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int]:
+    """Check if user can make a query and increment counter.
+
+    Returns:
+        Tuple of (allowed, queries_today, daily_limit)
+    """
+    if not db_service.is_configured:
+        return True, 0, FREE_TIER_DAILY_LIMIT
+
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+
+        if not user:
+            return True, 0, FREE_TIER_DAILY_LIMIT
+
+        # Determine daily limit based on tier
+        daily_limit = PRO_TIER_DAILY_LIMIT if user.subscription_tier == "pro" else FREE_TIER_DAILY_LIMIT
+
+        # Check if counter needs reset (new day)
+        now = datetime.now(UTC)
+        if user.queries_reset_at is None or user.queries_reset_at.date() < now.date():
+            # Reset counter for new day
+            user.queries_today = 0
+            user.queries_reset_at = now
+
+        # Pro tier has unlimited queries
+        if user.subscription_tier == "pro":
+            user.queries_today += 1
+            return True, user.queries_today, daily_limit
+
+        # Free tier - check limit
+        if user.queries_today >= daily_limit:
+            return False, user.queries_today, daily_limit
+
+        # Increment counter
+        user.queries_today += 1
+        return True, user.queries_today, daily_limit
+
+
 @app.post("/decide", response_model=DecisionResponse)
 async def make_decision(
     request: DecisionRequest,
     session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
+    user_id: int | None = Query(default=None, description="User ID for tier-based rate limiting"),
 ):
     """
     Make a fantasy sports decision.
 
     Routes to local scoring engine for simple queries,
     Claude API for complex queries.
+
+    Rate limits:
+    - Free tier: 5 queries per day
+    - Pro tier: unlimited queries
     """
     # Check rate limit (use "anonymous" for requests without session_id)
     effective_session = session_id or "anonymous"
@@ -449,6 +509,20 @@ async def make_decision(
             detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
             headers={"Retry-After": str(retry_after)},
         )
+
+    # Check tier-based daily limit if user_id provided
+    if user_id is not None:
+        tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
+        if not tier_allowed:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "message": f"Daily query limit reached ({queries_today}/{daily_limit}). Upgrade to Pro for unlimited queries.",
+                    "queries_today": queries_today,
+                    "daily_limit": daily_limit,
+                    "upgrade_url": "/billing/create-checkout",
+                },
+            )
 
     # Check if query is sports-related using smart classifier
     is_allowed, rejection_reason = _is_sports_query(request.query)
@@ -749,12 +823,17 @@ async def _claude_decision(
 async def make_decision_stream(
     request: DecisionRequest,
     session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
+    user_id: int | None = Query(default=None, description="User ID for tier-based rate limiting"),
 ):
     """
     Stream a fantasy sports decision (Server-Sent Events).
 
     Returns streamed text chunks from Claude for faster perceived response.
     Complex queries only - simple queries should use /decide.
+
+    Rate limits:
+    - Free tier: 5 queries per day
+    - Pro tier: unlimited queries
     """
     # Check rate limit (use "anonymous" for requests without session_id)
     effective_session = session_id or "anonymous"
@@ -765,6 +844,20 @@ async def make_decision_stream(
             detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
             headers={"Retry-After": str(retry_after)},
         )
+
+    # Check tier-based daily limit if user_id provided
+    if user_id is not None:
+        tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
+        if not tier_allowed:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "message": f"Daily query limit reached ({queries_today}/{daily_limit}). Upgrade to Pro for unlimited queries.",
+                    "queries_today": queries_today,
+                    "daily_limit": daily_limit,
+                    "upgrade_url": "/billing/create-checkout",
+                },
+            )
 
     # Check if query is sports-related using smart classifier
     is_allowed, rejection_reason = _is_sports_query(request.query)
@@ -2428,6 +2521,212 @@ async def end_experiment():
             "duration_hours": ended.duration_hours,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# Stripe Billing Endpoints
+# ---------------------------------------------------------------------------
+
+
+class CheckoutRequest(BaseModel):
+    """Request to create a Stripe checkout session."""
+
+    price_id: str = Field(
+        default=stripe_billing.PRICE_IDS["pro_monthly"],
+        description="Stripe Price ID for the subscription",
+    )
+    success_url: str = Field(..., description="URL to redirect to after successful checkout")
+    cancel_url: str = Field(..., description="URL to redirect to if checkout is cancelled")
+
+
+class CheckoutResponse(BaseModel):
+    """Response with checkout session URL."""
+
+    checkout_url: str
+
+
+class PortalRequest(BaseModel):
+    """Request to create a Stripe billing portal session."""
+
+    return_url: str = Field(..., description="URL to return to after portal session")
+
+
+class PortalResponse(BaseModel):
+    """Response with billing portal URL."""
+
+    portal_url: str
+
+
+class BillingStatusResponse(BaseModel):
+    """Current billing status for user."""
+
+    tier: str
+    status: str
+    queries_today: int
+    daily_limit: int
+    queries_remaining: int | None  # None if unlimited
+    subscription_id: str | None = None
+    current_period_end: str | None = None
+    cancel_at_period_end: bool = False
+
+
+async def _get_user_by_id(user_id: int) -> User | None:
+    """Get user from database by ID."""
+    if not db_service.is_configured:
+        return None
+
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == user_id))
+        return result.scalar_one_or_none()
+
+
+@app.post("/billing/create-checkout", response_model=CheckoutResponse)
+async def create_checkout(
+    request: CheckoutRequest,
+    user_id: int = Query(..., description="User ID for the subscription"),
+    user_email: str = Query(..., description="User email for Stripe customer"),
+):
+    """
+    Create a Stripe Checkout session for Pro subscription upgrade.
+
+    Redirects user to Stripe-hosted checkout page.
+    """
+    if not stripe_billing.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Stripe billing is not configured. Set STRIPE_SECRET_KEY.",
+        )
+
+    try:
+        checkout_url = await stripe_billing.create_checkout_session(
+            user_id=user_id,
+            user_email=user_email,
+            price_id=request.price_id,
+            success_url=request.success_url,
+            cancel_url=request.cancel_url,
+        )
+        return CheckoutResponse(checkout_url=checkout_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {e}")
+
+
+@app.post("/billing/create-portal", response_model=PortalResponse)
+async def create_portal(
+    request: PortalRequest,
+    user_id: int = Query(..., description="User ID to get Stripe customer"),
+):
+    """
+    Create a Stripe Billing Portal session for subscription management.
+
+    Allows users to update payment method, cancel subscription, etc.
+    """
+    if not stripe_billing.is_configured():
+        raise HTTPException(
+            status_code=503,
+            detail="Stripe billing is not configured. Set STRIPE_SECRET_KEY.",
+        )
+
+    # Get user's Stripe customer ID
+    user = await _get_user_by_id(user_id)
+    if not user or not user.stripe_customer_id:
+        raise HTTPException(
+            status_code=404,
+            detail="User has no active subscription. Subscribe first.",
+        )
+
+    try:
+        portal_url = await stripe_billing.create_portal_session(
+            customer_id=user.stripe_customer_id,
+            return_url=request.return_url,
+        )
+        return PortalResponse(portal_url=portal_url)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to create portal session: {e}")
+
+
+@app.post("/billing/webhook")
+async def handle_stripe_webhook(request: Request):
+    """
+    Handle Stripe webhook events.
+
+    Processes subscription lifecycle events:
+    - checkout.session.completed
+    - customer.subscription.updated
+    - customer.subscription.deleted
+    - invoice.payment_failed
+    """
+    payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    if not sig_header:
+        raise HTTPException(status_code=400, detail="Missing Stripe signature header")
+
+    try:
+        result = await stripe_billing.handle_webhook(payload, sig_header)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {e}")
+
+
+@app.get("/billing/status", response_model=BillingStatusResponse)
+async def get_billing_status(
+    user_id: int = Query(..., description="User ID to check billing status"),
+):
+    """
+    Get current billing status for a user.
+
+    Returns subscription tier, usage, and limits.
+    """
+    user = await _get_user_by_id(user_id)
+
+    if not user:
+        return BillingStatusResponse(
+            tier="free",
+            status="none",
+            queries_today=0,
+            daily_limit=FREE_TIER_DAILY_LIMIT,
+            queries_remaining=FREE_TIER_DAILY_LIMIT,
+        )
+
+    # Check if queries_reset_at needs update for new day
+    now = datetime.now(UTC)
+    queries_today = user.queries_today
+    if user.queries_reset_at is None or user.queries_reset_at.date() < now.date():
+        queries_today = 0
+
+    # Determine limits
+    if user.subscription_tier == "pro":
+        daily_limit = -1  # Unlimited
+        queries_remaining = None
+    else:
+        daily_limit = FREE_TIER_DAILY_LIMIT
+        queries_remaining = max(0, daily_limit - queries_today)
+
+    # Get Stripe subscription details if available
+    subscription_status = "none"
+    current_period_end = None
+    cancel_at_period_end = False
+
+    if user.stripe_customer_id:
+        stripe_status = stripe_billing.get_subscription_status(user.stripe_customer_id)
+        subscription_status = stripe_status.get("status", "none")
+        current_period_end = stripe_status.get("current_period_end")
+        cancel_at_period_end = stripe_status.get("cancel_at_period_end", False)
+
+    return BillingStatusResponse(
+        tier=user.subscription_tier,
+        status=subscription_status,
+        queries_today=queries_today,
+        daily_limit=daily_limit,
+        queries_remaining=queries_remaining,
+        subscription_id=user.stripe_subscription_id,
+        current_period_end=current_period_end,
+        cancel_at_period_end=cancel_at_period_end,
+    )
 
 
 if __name__ == "__main__":

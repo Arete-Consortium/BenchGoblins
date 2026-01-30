@@ -1,5 +1,5 @@
 {
-  "name": "gamespace-web",
+  "name": "benchgoblin-web",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -9,12 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@radix-ui/react-avatar": "^1.1.0",
+    "@radix-ui/react-dialog": "^1.1.0",
+    "@radix-ui/react-dropdown-menu": "^2.1.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.0",
+    "@radix-ui/react-toast": "^1.2.0",
+    "@react-oauth/google": "^0.12.2",
+    "@tanstack/react-query": "^5.50.0",
     "axios": "^1.7.0",
+    "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
     "lucide-react": "^0.400.0",
     "next": "^14.2.0",
+    "next-themes": "^0.3.0",
     "react": "^18.3.0",
     "react-dom": "^18.3.0",
+    "tailwind-merge": "^2.4.0",
     "zustand": "^5.0.0"
   },
   "devDependencies": {

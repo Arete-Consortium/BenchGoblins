@@ -55,7 +55,7 @@ async def send_slack_alert(
                 "type": "header",
                 "text": {
                     "type": "plain_text",
-                    "text": "GameSpace Budget Alert",
+                    "text": "BenchGoblin Budget Alert",
                     "emoji": True,
                 },
             },
@@ -138,7 +138,7 @@ async def send_discord_alert(
     payload = {
         "embeds": [
             {
-                "title": "GameSpace Budget Alert",
+                "title": "BenchGoblin Budget Alert",
                 "description": message,
                 "color": color,
                 "fields": [
@@ -380,7 +380,7 @@ async def send_test_webhook(
     Returns:
         True if test notification was sent successfully.
     """
-    message = "This is a test notification from GameSpace budget alerts."
+    message = "This is a test notification from BenchGoblin budget alerts."
     spend = 0.0
     limit = 100.0
     percent = 0.0

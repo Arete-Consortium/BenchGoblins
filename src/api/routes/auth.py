@@ -1,0 +1,326 @@
+"""
+Authentication API Routes.
+
+Handles Google OAuth login, JWT session management, and user info retrieval.
+
+Dependencies exported for use in other routes:
+    - get_current_user: FastAPI dependency that validates JWT and returns user info
+    - get_current_user_token: FastAPI dependency that extracts JWT from Authorization header
+
+Usage in other routes:
+    from routes.auth import get_current_user
+
+    @router.get("/protected")
+    async def protected_endpoint(current_user: dict = Depends(get_current_user)):
+        # current_user contains: user_id, email, name, tier, exp
+        return {"user_id": current_user["user_id"]}
+"""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
+from pydantic import BaseModel, Field
+
+__all__ = ["router", "get_current_user", "get_current_user_token"]
+
+from services.auth import (
+    ConfigurationError,
+    InvalidTokenError,
+    blacklist_token,
+    create_jwt_token,
+    get_or_create_user,
+    get_user_by_id,
+    is_configured,
+    is_token_blacklisted,
+    verify_google_token,
+    verify_jwt_token,
+)
+from services.database import db_service
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+# ---------------------------------------------------------------------------
+# Request/Response Models
+# ---------------------------------------------------------------------------
+
+
+class GoogleAuthRequest(BaseModel):
+    """Request to authenticate with Google ID token."""
+
+    id_token: str = Field(
+        ...,
+        description="Google ID token from client-side authentication (e.g., @react-native-google-signin/google-signin)",
+    )
+
+
+class AuthResponse(BaseModel):
+    """Response after successful authentication."""
+
+    access_token: str = Field(..., description="JWT access token for API requests")
+    token_type: str = Field(default="bearer", description="Token type (always 'bearer')")
+    expires_in: int = Field(..., description="Token expiration time in seconds")
+    user: "UserResponse"
+
+
+class UserResponse(BaseModel):
+    """User information response."""
+
+    id: int
+    email: str
+    name: str
+    picture_url: str | None
+    subscription_tier: str
+    queries_today: int
+    created_at: str
+
+
+class AuthStatusResponse(BaseModel):
+    """Authentication service status."""
+
+    google_oauth_configured: bool
+    jwt_configured: bool
+    fully_configured: bool
+
+
+# ---------------------------------------------------------------------------
+# Dependencies
+# ---------------------------------------------------------------------------
+
+
+async def get_current_user_token(
+    authorization: Annotated[str | None, Header()] = None,
+) -> str:
+    """
+    Extract and validate JWT from Authorization header.
+
+    Expects: Authorization: Bearer <token>
+    """
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Authorization header required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header format. Use: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    return parts[1]
+
+
+async def get_current_user(token: str = Depends(get_current_user_token)) -> dict:
+    """
+    Validate JWT and return current user info.
+
+    Use as dependency: current_user: dict = Depends(get_current_user)
+    """
+    # Check if token is blacklisted (logged out)
+    if is_token_blacklisted(token):
+        raise HTTPException(
+            status_code=401,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        return verify_jwt_token(token)
+    except ConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except InvalidTokenError as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
+@router.get("/status", response_model=AuthStatusResponse)
+async def get_auth_status():
+    """
+    Check if authentication is properly configured.
+
+    Useful for debugging deployment issues.
+    """
+    status = is_configured()
+    return AuthStatusResponse(
+        google_oauth_configured=status["google_oauth"],
+        jwt_configured=status["jwt"],
+        fully_configured=status["fully_configured"],
+    )
+
+
+@router.post("/google", response_model=AuthResponse)
+async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
+    """
+    Authenticate with Google ID token.
+
+    The client should use Google Sign-In to obtain an ID token, then send it here.
+    This endpoint will:
+    1. Verify the Google ID token with Google's servers
+    2. Create or update the user in our database
+    3. Return a JWT access token for subsequent API requests
+
+    Example flow:
+    1. Client uses Google Sign-In SDK to authenticate user
+    2. Client receives ID token from Google
+    3. Client sends ID token to this endpoint
+    4. Server returns JWT for use in Authorization header
+    """
+    if not db_service.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not configured. Authentication unavailable.",
+        )
+
+    # Verify the Google ID token
+    try:
+        google_user_info = verify_google_token(request.id_token)
+    except ConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except InvalidTokenError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
+    # Verify email is verified
+    if not google_user_info.get("email_verified", False):
+        raise HTTPException(
+            status_code=401,
+            detail="Email address not verified with Google",
+        )
+
+    # Get or create user in database
+    async with db_service.session() as db:
+        user = await get_or_create_user(google_user_info, db)
+
+        # Create JWT token
+        try:
+            access_token = create_jwt_token(user)
+        except ConfigurationError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+        # Calculate expiration in seconds (7 days)
+        expires_in = 7 * 24 * 60 * 60
+
+        return AuthResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=expires_in,
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                name=user.name,
+                picture_url=user.picture_url,
+                subscription_tier=user.subscription_tier,
+                queries_today=user.queries_today,
+                created_at=user.created_at.isoformat(),
+            ),
+        )
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(current_user: dict = Depends(get_current_user)):
+    """
+    Get current authenticated user's information.
+
+    Requires valid JWT in Authorization header.
+    """
+    if not db_service.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not configured. User lookup unavailable.",
+        )
+
+    async with db_service.session() as db:
+        user = await get_user_by_id(current_user["user_id"], db)
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found. Account may have been deleted.",
+            )
+
+        return UserResponse(
+            id=user.id,
+            email=user.email,
+            name=user.name,
+            picture_url=user.picture_url,
+            subscription_tier=user.subscription_tier,
+            queries_today=user.queries_today,
+            created_at=user.created_at.isoformat(),
+        )
+
+
+@router.post("/logout")
+async def logout(
+    token: str = Depends(get_current_user_token),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Logout the current user by invalidating their JWT.
+
+    The token will be blacklisted and can no longer be used for authentication.
+    Client should discard the token after calling this endpoint.
+    """
+    blacklist_token(token)
+
+    return {
+        "status": "logged_out",
+        "message": "Token has been revoked",
+        "user_id": current_user["user_id"],
+    }
+
+
+@router.post("/refresh", response_model=AuthResponse)
+async def refresh_token(current_user: dict = Depends(get_current_user)):
+    """
+    Get a fresh JWT token.
+
+    Use this to extend the session before the current token expires.
+    The current token remains valid until it expires.
+    """
+    if not db_service.is_configured:
+        raise HTTPException(
+            status_code=503,
+            detail="Database not configured. Token refresh unavailable.",
+        )
+
+    async with db_service.session() as db:
+        user = await get_user_by_id(current_user["user_id"], db)
+
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found. Account may have been deleted.",
+            )
+
+        try:
+            access_token = create_jwt_token(user)
+        except ConfigurationError as e:
+            raise HTTPException(status_code=503, detail=str(e))
+
+        expires_in = 7 * 24 * 60 * 60
+
+        return AuthResponse(
+            access_token=access_token,
+            token_type="bearer",
+            expires_in=expires_in,
+            user=UserResponse(
+                id=user.id,
+                email=user.email,
+                name=user.name,
+                picture_url=user.picture_url,
+                subscription_tier=user.subscription_tier,
+                queries_today=user.queries_today,
+                created_at=user.created_at.isoformat(),
+            ),
+        )

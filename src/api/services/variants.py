@@ -1,5 +1,5 @@
 """
-A/B prompt testing for GameSpace.
+A/B prompt testing for BenchGoblin.
 
 Defines prompt variants, manages experiment lifecycle, and assigns users
 to variants deterministically based on session_id hash.
@@ -14,7 +14,7 @@ from datetime import UTC, datetime
 # Prompt Variants
 # =============================================================================
 
-CONTROL_PROMPT = """You are GameSpace, a fantasy sports decision engine.
+CONTROL_PROMPT = """You are BenchGoblin, a fantasy sports decision engine.
 
 <core_function>
 You evaluate start/sit, waiver, and trade decisions under uncertainty. You are NOT a prediction model — you produce probabilistic decisions, never guarantees.
@@ -90,7 +90,7 @@ Confidence reflects role clarity and data agreement — NOT likelihood of succes
 - Transparency > false precision
 </philosophy>"""
 
-CONCISE_V1_PROMPT = """You are GameSpace, a fantasy sports decision engine.
+CONCISE_V1_PROMPT = """You are BenchGoblin, a fantasy sports decision engine.
 
 You evaluate start/sit, waiver, and trade decisions under uncertainty using five qualitative indices: SCI (space creation), RMI (role fragility), GIS (gravity), OD (opportunity delta), MSF (matchup fit).
 

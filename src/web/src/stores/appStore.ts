@@ -13,6 +13,7 @@ interface AppState {
   messages: Message[];
   isLoading: boolean;
   streamingContent: string;
+  streamingMessageId: string | null;
 
   // Actions
   setSport: (sport: Sport) => void;
@@ -30,6 +31,7 @@ export const useAppStore = create<AppState>()(
       messages: [],
       isLoading: false,
       streamingContent: '',
+      streamingMessageId: null,
 
       // Actions
       setSport: (sport) => set({ sport }),
@@ -46,10 +48,14 @@ export const useAppStore = create<AppState>()(
           timestamp: new Date(),
         };
 
+        // Create placeholder for streaming response
+        const assistantMessageId = generateId();
+
         set({
           messages: [...messages, userMessage],
           isLoading: true,
           streamingContent: '',
+          streamingMessageId: assistantMessageId,
         });
 
         try {
@@ -64,47 +70,69 @@ export const useAppStore = create<AppState>()(
             decisionType = 'explain';
           }
 
-          // Make API request
-          const response = await api.decide({
-            sport,
-            risk_mode: riskMode,
-            decision_type: decisionType,
-            query: content,
-          });
+          // Use streaming API for real-time response
+          let fullContent = '';
+          const responseHolder: { value: DecisionResponse | null } = { value: null };
 
-          // Add assistant message
+          await api.decideStream(
+            {
+              sport,
+              risk_mode: riskMode,
+              decision_type: decisionType,
+              query: content,
+            },
+            // On each chunk, update streaming content
+            (chunk) => {
+              fullContent += chunk;
+              set({ streamingContent: fullContent });
+            },
+            // On complete, get the full response
+            (response) => {
+              responseHolder.value = response;
+            }
+          );
+
+          // Add completed assistant message
+          const finalResponse = responseHolder.value;
           const assistantMessage: Message = {
-            id: generateId(),
+            id: assistantMessageId,
             role: 'assistant',
-            content: response.rationale,
+            content: finalResponse?.rationale || fullContent,
             timestamp: new Date(),
-            decision: response,
+            decision: finalResponse || undefined,
           };
 
           set((state) => ({
             messages: [...state.messages, assistantMessage],
             isLoading: false,
+            streamingContent: '',
+            streamingMessageId: null,
           }));
         } catch (error) {
+          console.error('Decision error:', error);
           // Add error message
           const errorMessage: Message = {
-            id: generateId(),
+            id: assistantMessageId,
             role: 'assistant',
-            content: 'Sorry, I encountered an error processing your request. Please try again.',
+            content: error instanceof Error && error.message.includes('sports')
+              ? error.message
+              : 'Sorry, I encountered an error processing your request. Please try again.',
             timestamp: new Date(),
           };
 
           set((state) => ({
             messages: [...state.messages, errorMessage],
             isLoading: false,
+            streamingContent: '',
+            streamingMessageId: null,
           }));
         }
       },
 
-      clearMessages: () => set({ messages: [] }),
+      clearMessages: () => set({ messages: [], streamingContent: '', streamingMessageId: null }),
     }),
     {
-      name: 'gamespace-app',
+      name: 'benchgoblin-app',
       partialize: (state) => ({
         sport: state.sport,
         riskMode: state.riskMode,

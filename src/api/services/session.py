@@ -1,5 +1,5 @@
 """
-Session Management Service for GameSpace.
+Session Management Service for BenchGoblin.
 
 Handles session creation, validation, expiration, and credential storage.
 """

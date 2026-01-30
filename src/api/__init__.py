@@ -1,1 +1,1 @@
-"""GameSpace API"""
+"""BenchGoblin API"""
