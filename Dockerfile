@@ -26,4 +26,4 @@ EXPOSE 8000
 
 # Run the application from the api directory
 WORKDIR /app/src/api
-CMD ["sh", "-c", "echo 'Starting uvicorn...' && python -c 'from main import app; print(\"Import OK\")' && uvicorn main:app --host 0.0.0.0 --port 8000"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
