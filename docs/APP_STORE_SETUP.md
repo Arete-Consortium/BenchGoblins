@@ -38,9 +38,9 @@ After init, your `app.json` will have:
 ### Create App in RevenueCat Dashboard
 
 1. Go to https://app.revenuecat.com
-2. Create new project: "GameSpace"
+2. Create new project: "BenchGoblins"
 3. Add iOS app:
-   - Bundle ID: `com.gamespace.app`
+   - Bundle ID: `com.benchgoblins.app`
    - App Store Connect App-Specific Shared Secret (get from App Store Connect)
 
 ### Create Products
@@ -49,9 +49,9 @@ In RevenueCat Dashboard → Products:
 
 | Identifier | Type | Price |
 |------------|------|-------|
-| `gamespace_pro_weekly` | Auto-renewable | $4.99/week |
-| `gamespace_pro_monthly` | Auto-renewable | $9.99/month |
-| `gamespace_pro_annual` | Auto-renewable | $49.99/year |
+| `benchgoblins_pro_weekly` | Auto-renewable | $4.99/week |
+| `benchgoblins_pro_monthly` | Auto-renewable | $9.99/month |
+| `benchgoblins_pro_annual` | Auto-renewable | $49.99/year |
 
 ### Create Entitlement
 
@@ -62,9 +62,9 @@ In RevenueCat Dashboard → Products:
 
 - Offering ID: `default`
 - Add all 3 packages:
-  - `$rc_weekly` → gamespace_pro_weekly
-  - `$rc_monthly` → gamespace_pro_monthly
-  - `$rc_annual` → gamespace_pro_annual
+  - `$rc_weekly` → benchgoblins_pro_weekly
+  - `$rc_monthly` → benchgoblins_pro_monthly
+  - `$rc_annual` → benchgoblins_pro_annual
 
 ### Get API Keys
 
@@ -86,10 +86,10 @@ Copy your iOS API key and update `app.json`:
 2. My Apps → + → New App
 3. Fill in:
    - Platform: iOS
-   - Name: GameSpace
+   - Name: BenchGoblins
    - Primary Language: English (US)
-   - Bundle ID: com.gamespace.app
-   - SKU: gamespace-ios-001
+   - Bundle ID: com.benchgoblins.app
+   - SKU: benchgoblins-ios-001
 
 ### Create In-App Purchases
 
@@ -98,25 +98,25 @@ Go to your app → Features → In-App Purchases → +
 For each product:
 
 **Weekly ($4.99)**
-- Reference Name: GameSpace Pro Weekly
-- Product ID: `gamespace_pro_weekly`
+- Reference Name: BenchGoblins Pro Weekly
+- Product ID: `benchgoblins_pro_weekly`
 - Type: Auto-Renewable Subscription
-- Subscription Group: GameSpace Pro
+- Subscription Group: BenchGoblins Pro
 - Price: $4.99
 - Localization: Add title/description
 
 **Monthly ($9.99)**
-- Reference Name: GameSpace Pro Monthly
-- Product ID: `gamespace_pro_monthly`
+- Reference Name: BenchGoblins Pro Monthly
+- Product ID: `benchgoblins_pro_monthly`
 - Type: Auto-Renewable Subscription
-- Subscription Group: GameSpace Pro
+- Subscription Group: BenchGoblins Pro
 - Price: $9.99
 
 **Annual ($49.99)**
-- Reference Name: GameSpace Pro Annual
-- Product ID: `gamespace_pro_annual`
+- Reference Name: BenchGoblins Pro Annual
+- Product ID: `benchgoblins_pro_annual`
 - Type: Auto-Renewable Subscription
-- Subscription Group: GameSpace Pro
+- Subscription Group: BenchGoblins Pro
 - Price: $49.99
 
 ### Get Shared Secret
@@ -194,8 +194,8 @@ npx eas-cli submit --platform ios
    - Settings/subscription screen
 2. **App Description** — 4000 chars max, focus on fantasy sports decision-making
 3. **Keywords** — 100 chars: "fantasy,sports,nba,nfl,mlb,nhl,start,sit,roster,decision"
-4. **Privacy URL** — `https://aretedriver.github.io/GameSpace/legal/privacy-policy.html`
-5. **Support URL** — `https://github.com/AreteDriver/GameSpace/issues`
+4. **Privacy URL** — `https://aretedriver.github.io/BenchGoblins/legal/privacy-policy.html`
+5. **Support URL** — `https://github.com/AreteDriver/BenchGoblins/issues`
 6. **App Category** — Sports
 7. **Age Rating** — 4+ (no objectionable content)
 

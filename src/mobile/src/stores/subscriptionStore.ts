@@ -8,8 +8,8 @@ import {
 } from '../services/purchases';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const DAILY_QUERIES_KEY = '@gamespace/daily_queries';
-const LAST_QUERY_DATE_KEY = '@gamespace/last_query_date';
+const DAILY_QUERIES_KEY = '@benchgoblins/daily_queries';
+const LAST_QUERY_DATE_KEY = '@benchgoblins/last_query_date';
 
 interface SubscriptionState {
   // Subscription status

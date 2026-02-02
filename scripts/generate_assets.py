@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate app icon and splash screen assets for GameSpace."""
+"""Generate app icon and splash screen assets for BenchGoblins."""
 
 from PIL import Image, ImageDraw
 import os
@@ -18,7 +18,7 @@ def hex_to_rgb(hex_color: str) -> tuple:
 
 
 def create_app_icon(size: int = 1024, output_path: str = "icon.png"):
-    """Create the GameSpace app icon."""
+    """Create the BenchGoblins app icon."""
     img = Image.new("RGB", (size, size), hex_to_rgb(BACKGROUND))
     draw = ImageDraw.Draw(img)
 

@@ -65,7 +65,7 @@ export interface SessionState {
 // Secure Storage Adapter
 // -------------------------------------------------------------------------
 
-const SECURE_STORE_KEY = 'gamespace_session_token';
+const SECURE_STORE_KEY = 'benchgoblins_session_token';
 
 async function getSecureToken(): Promise<string | null> {
   try {

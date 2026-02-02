@@ -115,7 +115,7 @@ export function DashboardScreen() {
         {/* Header */}
         <View style={styles.header}>
           <View>
-            <Text style={[styles.greeting, { color: theme.primaryLight }]}>GameSpace</Text>
+            <Text style={[styles.greeting, { color: theme.primaryLight }]}>BenchGoblins</Text>
             <Text style={[styles.subtitle, { color: theme.textTertiary }]}>Fantasy decision engine</Text>
           </View>
           <TouchableOpacity
@@ -193,7 +193,7 @@ export function DashboardScreen() {
               <Ionicons name="chatbubbles-outline" size={48} color={theme.textTertiary} />
               <Text style={[styles.emptyText, { color: theme.textSecondary }]}>No decisions yet</Text>
               <Text style={[styles.emptySubtext, { color: theme.textTertiary }]}>
-                Ask GameSpace for your first recommendation
+                Ask BenchGoblins for your first recommendation
               </Text>
             </View>
           ) : (

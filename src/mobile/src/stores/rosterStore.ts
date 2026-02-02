@@ -63,7 +63,7 @@ export const useRosterStore = create<RosterState>()(
         }),
     }),
     {
-      name: 'gamespace-roster',
+      name: 'benchgoblins-roster',
       storage: createJSONStorage(() => AsyncStorage),
     }
   )

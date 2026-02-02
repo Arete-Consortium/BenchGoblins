@@ -1,8 +1,8 @@
-# GameSpace
+# BenchGoblins
 
 A fantasy sports decision engine that evaluates start/sit, waiver, and trade decisions under uncertainty.
 
-GameSpace is **not** a prediction model. It produces probabilistic decisions using role stability, spatial opportunity, and matchup context — never guarantees.
+BenchGoblins is **not** a prediction model. It produces probabilistic decisions using role stability, spatial opportunity, and matchup context — never guarantees.
 
 ## Philosophy
 
@@ -25,13 +25,13 @@ GameSpace is **not** a prediction model. It produces probabilistic decisions usi
 
 ## Architecture
 
-GameSpace uses a hybrid approach to balance speed, cost, and reasoning quality:
+BenchGoblins uses a hybrid approach to balance speed, cost, and reasoning quality:
 
 ```
 ┌─────────────────────────────────────────────────────┐
 │                 React Native App                     │
 │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │
-│  │  Dashboard  │  │  GameSpace  │  │   Roster    │  │
+│  │  Dashboard  │  │  BenchGoblins  │  │   Roster    │  │
 │  │             │  │    Chat     │  │   Manager   │  │
 │  └─────────────┘  └─────────────┘  └─────────────┘  │
 └────────────────────────┬────────────────────────────┘
@@ -60,7 +60,7 @@ GameSpace uses a hybrid approach to balance speed, cost, and reasoning quality:
 
 ### Qualitative Indices
 
-GameSpace models space and opportunity using five qualitative proxies:
+BenchGoblins models space and opportunity using five qualitative proxies:
 
 | Index | Purpose | Example |
 |-------|---------|---------|
@@ -95,8 +95,8 @@ The same inputs produce different recommendations depending on mode.
 
 ```bash
 # Clone
-git clone https://github.com/yourusername/GameSpace.git
-cd GameSpace
+git clone https://github.com/yourusername/BenchGoblins.git
+cd BenchGoblins
 
 # Backend setup
 cd src/api
@@ -115,7 +115,7 @@ npx expo start
 ## Project Structure
 
 ```
-GameSpace/
+BenchGoblins/
 ├── README.md
 ├── TODO.md
 ├── DECISIONS.md

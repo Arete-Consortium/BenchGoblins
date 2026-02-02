@@ -119,7 +119,7 @@ export const useThemeStore = create<ThemeState>()(
       },
     }),
     {
-      name: 'gamespace-theme',
+      name: 'benchgoblins-theme',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({ mode: state.mode }),
       onRehydrateStorage: () => (state) => {

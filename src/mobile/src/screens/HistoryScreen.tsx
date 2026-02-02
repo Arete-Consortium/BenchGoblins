@@ -189,7 +189,7 @@ export function HistoryScreen() {
       <Ionicons name="time-outline" size={64} color={theme.textTertiary} />
       <Text style={[styles.emptyTitle, { color: theme.text }]}>No decisions yet</Text>
       <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>
-        Your decision history will appear here after you ask GameSpace for advice
+        Your decision history will appear here after you ask BenchGoblins for advice
       </Text>
       <TouchableOpacity
         style={[styles.askButton, { backgroundColor: theme.primary }]}
@@ -199,7 +199,7 @@ export function HistoryScreen() {
         }}
       >
         <Ionicons name="chatbubbles" size={20} color="#fff" />
-        <Text style={styles.askButtonText}>Ask GameSpace</Text>
+        <Text style={styles.askButtonText}>Ask BenchGoblins</Text>
       </TouchableOpacity>
     </View>
   );

@@ -1,4 +1,4 @@
-# GameSpace — Development TODO
+# BenchGoblins — Development TODO
 
 ## Phase 1: Foundation (Week 1-2)
 *Goal: Local scoring engine works for simple A vs B comparisons*
@@ -70,7 +70,7 @@
 
 ### Screens
 - [x] **Dashboard** — Quick actions, recent decisions, league overview
-- [x] **Ask GameSpace** — Chat interface for queries
+- [x] **Ask BenchGoblins** — Chat interface for queries
 - [x] **Roster Manager** — View/edit rosters manually
 - [x] **Decision History** — Past decisions with outcomes
 - [x] **Settings** — Risk mode default, notification prefs

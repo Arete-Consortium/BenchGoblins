@@ -1,4 +1,4 @@
-"""GameSpace Core Logic"""
+"""BenchGoblins Core Logic"""
 
 from .scoring import (
     RiskMode,

@@ -39,7 +39,7 @@ jobs:
           ./scripts/backup_db.sh ./backups
 
           # Extract backup path for artifact upload
-          BACKUP_FILE=$(ls -t ./backups/gamespace_backup_*.sql.gz | head -1)
+          BACKUP_FILE=$(ls -t ./backups/benchgoblins_backup_*.sql.gz | head -1)
           echo "BACKUP_FILE=${BACKUP_FILE}" >> $GITHUB_ENV
           echo "BACKUP_FILENAME=$(basename ${BACKUP_FILE})" >> $GITHUB_ENV
 
@@ -58,8 +58,8 @@ jobs:
           AWS_REGION: ${{ vars.AWS_REGION || 'us-east-1' }}
           S3_BUCKET: ${{ vars.S3_BACKUP_BUCKET }}
         run: |
-          aws s3 cp "${{ env.BACKUP_FILE }}" "s3://${S3_BUCKET}/gamespace/${{ env.BACKUP_FILENAME }}"
-          echo "Backup uploaded to s3://${S3_BUCKET}/gamespace/${{ env.BACKUP_FILENAME }}"
+          aws s3 cp "${{ env.BACKUP_FILE }}" "s3://${S3_BUCKET}/benchgoblins/${{ env.BACKUP_FILENAME }}"
+          echo "Backup uploaded to s3://${S3_BUCKET}/benchgoblins/${{ env.BACKUP_FILENAME }}"
 
       - name: Report backup status
         run: |

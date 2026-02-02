@@ -1,4 +1,4 @@
-"""Protocol interface contracts for GameSpace components."""
+"""Protocol interface contracts for BenchGoblins components."""
 
 from protocols.intelligence import IntelligenceBackend
 from protocols.router import QueryClassifier

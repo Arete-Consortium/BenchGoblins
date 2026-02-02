@@ -1,4 +1,4 @@
-# GameSpace Deployment Guide
+# BenchGoblins Deployment Guide
 
 ## Railway Deployment (Recommended)
 
@@ -17,7 +17,7 @@ Railway provides managed PostgreSQL, Redis, and easy deployment from GitHub.
 2. **Add Services:**
    - Click "New" → "Database" → **PostgreSQL**
    - Click "New" → "Database" → **Redis**
-   - Click "New" → "GitHub Repo" → Select `GameSpace`
+   - Click "New" → "GitHub Repo" → Select `BenchGoblins`
 
 3. **Configure API Service:**
    - Set root directory: `src/api`
@@ -74,7 +74,7 @@ The API exposes `/health` for monitoring:
 ### Custom Domain
 
 1. Go to service Settings → Networking
-2. Add custom domain (e.g., `api.gamespace.app`)
+2. Add custom domain (e.g., `api.benchgoblins.app`)
 3. Configure DNS CNAME to Railway's provided domain
 
 ---
@@ -84,7 +84,7 @@ The API exposes `/health` for monitoring:
 For local development or self-hosted deployment:
 
 ```bash
-cd /home/arete/projects/GameSpace
+cd /home/arete/projects/BenchGoblins
 
 # Create .env file
 cp .env.example .env
@@ -198,7 +198,7 @@ The repository includes a GitHub Actions workflow for automated daily backups.
 
 ```bash
 # Set your database URL
-export DATABASE_URL="postgresql://user:pass@host:5432/gamespace"
+export DATABASE_URL="postgresql://user:pass@host:5432/benchgoblins"
 
 # Run backup script
 ./scripts/backup_db.sh
@@ -216,7 +216,7 @@ For self-hosted deployments:
 docker-compose --profile backup up backup
 
 # Or use the backup script with Docker
-docker-compose exec postgres pg_dump -U gamespace gamespace | gzip > backups/gamespace_backup_$(date +%Y%m%d).sql.gz
+docker-compose exec postgres pg_dump -U benchgoblins benchgoblins | gzip > backups/benchgoblins_backup_$(date +%Y%m%d).sql.gz
 ```
 
 For scheduled backups, add a cron job on the host:
@@ -226,17 +226,17 @@ For scheduled backups, add a cron job on the host:
 crontab -e
 
 # Add daily backup at 3 AM
-0 3 * * * cd /path/to/GameSpace && docker-compose --profile backup up backup
+0 3 * * * cd /path/to/BenchGoblins && docker-compose --profile backup up backup
 ```
 
 ### Restore from Backup
 
 ```bash
 # Set your database URL
-export DATABASE_URL="postgresql://user:pass@host:5432/gamespace"
+export DATABASE_URL="postgresql://user:pass@host:5432/benchgoblins"
 
 # Restore from backup (will prompt for confirmation)
-./scripts/restore_db.sh backups/gamespace_backup_20260125_120000.sql.gz
+./scripts/restore_db.sh backups/benchgoblins_backup_20260125_120000.sql.gz
 ```
 
 **Warning:** Restore will replace all existing data!
@@ -260,7 +260,7 @@ Railway pricing (as of 2024):
 - **Hobby**: $5/month, includes $5 credit
 - **Pro**: $20/month, includes usage credits
 
-Typical GameSpace costs:
+Typical BenchGoblins costs:
 - PostgreSQL: ~$5-10/month
 - Redis: ~$3-5/month
 - API: ~$5-15/month (depends on traffic)

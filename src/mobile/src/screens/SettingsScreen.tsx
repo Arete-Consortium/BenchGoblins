@@ -210,7 +210,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
           <TouchableOpacity
             style={[styles.menuItem, { backgroundColor: theme.backgroundSecondary }]}
-            onPress={() => Linking.openURL('mailto:support@gamespace.app')}
+            onPress={() => Linking.openURL('mailto:support@benchgoblins.app')}
           >
             <View style={styles.menuItemLeft}>
               <Ionicons name="mail-outline" size={22} color={theme.textSecondary} />
@@ -222,7 +222,7 @@ export default function SettingsScreen({ navigation }: SettingsScreenProps) {
 
         {/* App Info */}
         <View style={styles.appInfo}>
-          <Text style={[styles.appName, { color: theme.textTertiary }]}>GameSpace</Text>
+          <Text style={[styles.appName, { color: theme.textTertiary }]}>BenchGoblins</Text>
           <Text style={[styles.appVersion, { color: theme.textTertiary }]}>Version 1.0.0</Text>
         </View>
       </ScrollView>

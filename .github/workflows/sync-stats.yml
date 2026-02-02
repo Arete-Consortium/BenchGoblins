@@ -1,4 +1,4 @@
-# GameSpace Nightly Stats Sync
+# BenchGoblins Nightly Stats Sync
 # Syncs player stats from ESPN to PostgreSQL database
 
 name: Nightly Stats Sync

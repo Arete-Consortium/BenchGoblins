@@ -1,5 +1,5 @@
 #!/bin/bash
-# GameSpace Database Backup Script
+# BenchGoblins Database Backup Script
 #
 # Usage:
 #   ./scripts/backup_db.sh [output_dir]
@@ -21,7 +21,7 @@ set -euo pipefail
 OUTPUT_DIR="${1:-./backups}"
 RETENTION_DAYS="${BACKUP_RETENTION_DAYS:-7}"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILENAME="gamespace_backup_${TIMESTAMP}.sql.gz"
+BACKUP_FILENAME="benchgoblins_backup_${TIMESTAMP}.sql.gz"
 
 # Colors for output
 RED='\033[0;31m'
@@ -77,7 +77,7 @@ fi
 # Cleanup old backups
 if [ "${RETENTION_DAYS}" -gt 0 ]; then
     log_info "Cleaning up backups older than ${RETENTION_DAYS} days..."
-    DELETED_COUNT=$(find "${OUTPUT_DIR}" -name "gamespace_backup_*.sql.gz" -type f -mtime +${RETENTION_DAYS} -delete -print | wc -l)
+    DELETED_COUNT=$(find "${OUTPUT_DIR}" -name "benchgoblins_backup_*.sql.gz" -type f -mtime +${RETENTION_DAYS} -delete -print | wc -l)
     if [ "${DELETED_COUNT}" -gt 0 ]; then
         log_info "Deleted ${DELETED_COUNT} old backup(s)"
     fi
@@ -85,7 +85,7 @@ fi
 
 # List current backups
 log_info "Current backups:"
-ls -lh "${OUTPUT_DIR}"/gamespace_backup_*.sql.gz 2>/dev/null || log_warn "No backups found"
+ls -lh "${OUTPUT_DIR}"/benchgoblins_backup_*.sql.gz 2>/dev/null || log_warn "No backups found"
 
 # Output the backup path for scripts to use
 echo ""
