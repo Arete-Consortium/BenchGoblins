@@ -1,4 +1,4 @@
-# GameSpace — Decision Log
+# BenchGoblins — Decision Log
 
 This document records architectural and design decisions with rationale. Newest entries at top.
 

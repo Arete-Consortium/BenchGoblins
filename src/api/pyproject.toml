@@ -1,5 +1,5 @@
 [project]
-name = "gamespace-api"
+name = "benchgoblins-api"
 version = "0.1.0"
 description = "Fantasy sports decision engine API"
 readme = "../../README.md"

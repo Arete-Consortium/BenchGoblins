@@ -2,7 +2,7 @@
  * Push Notification Utilities
  *
  * Handles push notification permissions, token registration,
- * and notification handling for GameSpace.
+ * and notification handling for BenchGoblins.
  */
 
 import * as Device from 'expo-device';
@@ -83,7 +83,7 @@ export async function setupNotificationChannel(): Promise<void> {
   if (Platform.OS === 'android') {
     // Main notification channel
     await Notifications.setNotificationChannelAsync('default', {
-      name: 'GameSpace Alerts',
+      name: 'BenchGoblins Alerts',
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
       lightColor: '#818CF8',

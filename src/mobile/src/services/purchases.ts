@@ -10,9 +10,9 @@ import Constants from 'expo-constants';
 // Product identifiers - must match App Store Connect configuration
 export const ENTITLEMENT_ID = 'pro';
 export const PRODUCT_IDS = {
-  WEEKLY: 'gamespace_pro_weekly',
-  MONTHLY: 'gamespace_pro_monthly',
-  ANNUAL: 'gamespace_pro_annual',
+  WEEKLY: 'benchgoblins_pro_weekly',
+  MONTHLY: 'benchgoblins_pro_monthly',
+  ANNUAL: 'benchgoblins_pro_annual',
 } as const;
 
 // Subscription tier limits

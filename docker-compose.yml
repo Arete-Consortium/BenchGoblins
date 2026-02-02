@@ -15,7 +15,7 @@ services:
       - "8000:8000"
     environment:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
-      - DATABASE_URL=postgresql://gamespace:${POSTGRES_PASSWORD:-gamespace}@postgres:5432/gamespace
+      - DATABASE_URL=postgresql://benchgoblins:${POSTGRES_PASSWORD:-benchgoblins}@postgres:5432/benchgoblins
       - REDIS_URL=${REDIS_URL:-}
       - LOG_LEVEL=${LOG_LEVEL:-info}
     env_file:
@@ -31,36 +31,36 @@ services:
       retries: 3
       start_period: 10s
     networks:
-      - gamespace-net
+      - benchgoblins-net
 
   postgres:
     image: postgres:16-alpine
-    container_name: gamespace-db
+    container_name: benchgoblins-db
     environment:
-      POSTGRES_USER: gamespace
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gamespace}
-      POSTGRES_DB: gamespace
+      POSTGRES_USER: benchgoblins
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-benchgoblins}
+      POSTGRES_DB: benchgoblins
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U gamespace -d gamespace"]
+      test: ["CMD-SHELL", "pg_isready -U benchgoblins -d benchgoblins"]
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - gamespace-net
+      - benchgoblins-net
 
   db-init:
     image: postgres:16-alpine
-    container_name: gamespace-db-init
+    container_name: benchgoblins-db-init
     environment:
       PGHOST: postgres
-      PGUSER: gamespace
-      PGPASSWORD: ${POSTGRES_PASSWORD:-gamespace}
-      PGDATABASE: gamespace
+      PGUSER: benchgoblins
+      PGPASSWORD: ${POSTGRES_PASSWORD:-benchgoblins}
+      PGDATABASE: benchgoblins
     volumes:
       - ./data/schema.sql:/schema.sql:ro
     depends_on:
@@ -68,11 +68,11 @@ services:
         condition: service_healthy
     entrypoint: ["sh", "-c", "psql -f /schema.sql"]
     networks:
-      - gamespace-net
+      - benchgoblins-net
 
   redis:
     image: redis:7-alpine
-    container_name: gamespace-redis
+    container_name: benchgoblins-redis
     ports:
       - "6379:6379"
     volumes:
@@ -85,17 +85,17 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - gamespace-net
+      - benchgoblins-net
 
   # Database backup service - runs daily at 3 AM
   backup:
     image: postgres:16-alpine
-    container_name: gamespace-backup
+    container_name: benchgoblins-backup
     environment:
       PGHOST: postgres
-      PGUSER: gamespace
-      PGPASSWORD: ${POSTGRES_PASSWORD:-gamespace}
-      PGDATABASE: gamespace
+      PGUSER: benchgoblins
+      PGPASSWORD: ${POSTGRES_PASSWORD:-benchgoblins}
+      PGDATABASE: benchgoblins
       BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
     volumes:
       - ./backups:/backups
@@ -105,16 +105,16 @@ services:
         condition: service_healthy
     # Run backup immediately on start, then can be triggered manually
     # For scheduled backups, use cron on host or GitHub Actions
-    entrypoint: ["sh", "-c", "pg_dump --no-owner --no-acl --clean --if-exists | gzip > /backups/gamespace_backup_$$(date +%Y%m%d_%H%M%S).sql.gz && echo 'Backup completed' && find /backups -name 'gamespace_backup_*.sql.gz' -mtime +$${BACKUP_RETENTION_DAYS} -delete"]
+    entrypoint: ["sh", "-c", "pg_dump --no-owner --no-acl --clean --if-exists | gzip > /backups/benchgoblins_backup_$$(date +%Y%m%d_%H%M%S).sql.gz && echo 'Backup completed' && find /backups -name 'benchgoblins_backup_*.sql.gz' -mtime +$${BACKUP_RETENTION_DAYS} -delete"]
     profiles:
       - backup
     networks:
-      - gamespace-net
+      - benchgoblins-net
 
 volumes:
   postgres_data:
   redis_data:
 
 networks:
-  gamespace-net:
+  benchgoblins-net:
     driver: bridge

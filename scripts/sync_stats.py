@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-GameSpace Nightly Stats Sync Job
+BenchGoblins Nightly Stats Sync Job
 
 Syncs player stats from ESPN API to PostgreSQL database.
 Run nightly via cron or GitHub Actions.
@@ -302,7 +302,7 @@ async def run_sync(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="GameSpace nightly stats sync")
+    parser = argparse.ArgumentParser(description="BenchGoblins nightly stats sync")
     parser.add_argument(
         "--sport",
         choices=SPORTS,

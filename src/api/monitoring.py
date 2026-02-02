@@ -30,7 +30,7 @@ from starlette.responses import Response
 # Application Info
 # =============================================================================
 
-APP_INFO = Info("gamespace_app", "BenchGoblin application information")
+APP_INFO = Info("benchgoblins_app", "BenchGoblin application information")
 APP_INFO.info(
     {
         "version": "0.3.0",
@@ -43,20 +43,20 @@ APP_INFO.info(
 # =============================================================================
 
 REQUEST_COUNT = Counter(
-    "gamespace_http_requests_total",
+    "benchgoblins_http_requests_total",
     "Total HTTP requests",
     ["method", "endpoint", "status_code"],
 )
 
 REQUEST_LATENCY = Histogram(
-    "gamespace_http_request_duration_seconds",
+    "benchgoblins_http_request_duration_seconds",
     "HTTP request latency in seconds",
     ["method", "endpoint"],
     buckets=[0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
 )
 
 REQUESTS_IN_PROGRESS = Gauge(
-    "gamespace_http_requests_in_progress",
+    "benchgoblins_http_requests_in_progress",
     "Number of HTTP requests currently in progress",
     ["method", "endpoint"],
 )
@@ -66,70 +66,70 @@ REQUESTS_IN_PROGRESS = Gauge(
 # =============================================================================
 
 DECISION_REQUESTS = Counter(
-    "gamespace_decisions_total",
+    "benchgoblins_decisions_total",
     "Total decision requests",
     ["sport", "query_type", "risk_mode"],
 )
 
 DECISION_LATENCY = Histogram(
-    "gamespace_decision_duration_seconds",
+    "benchgoblins_decision_duration_seconds",
     "Decision request latency in seconds",
     ["sport", "routed_to"],  # routed_to: local, claude
     buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0, 60.0],
 )
 
 CLAUDE_REQUESTS = Counter(
-    "gamespace_claude_requests_total",
+    "benchgoblins_claude_requests_total",
     "Total requests to Claude API",
     ["status", "prompt_variant"],  # status: success, error, rate_limited
 )
 
 CLAUDE_TOKENS = Counter(
-    "gamespace_claude_tokens_total",
+    "benchgoblins_claude_tokens_total",
     "Total tokens used in Claude requests",
     ["type"],  # input, output
 )
 
 CACHE_OPERATIONS = Counter(
-    "gamespace_cache_operations_total",
+    "benchgoblins_cache_operations_total",
     "Cache operations",
     ["operation", "result"],  # operation: get, set; result: hit, miss, error
 )
 
 EXTERNAL_API_REQUESTS = Counter(
-    "gamespace_external_api_requests_total",
+    "benchgoblins_external_api_requests_total",
     "External API requests",
     ["service", "status"],  # service: espn, yahoo, sleeper
 )
 
 EXTERNAL_API_LATENCY = Histogram(
-    "gamespace_external_api_duration_seconds",
+    "benchgoblins_external_api_duration_seconds",
     "External API latency in seconds",
     ["service"],
     buckets=[0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0],
 )
 
 DATABASE_OPERATIONS = Counter(
-    "gamespace_database_operations_total",
+    "benchgoblins_database_operations_total",
     "Database operations",
     ["operation", "table", "status"],  # operation: select, insert, update, delete
 )
 
 DATABASE_LATENCY = Histogram(
-    "gamespace_database_duration_seconds",
+    "benchgoblins_database_duration_seconds",
     "Database operation latency in seconds",
     ["operation"],
     buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0],
 )
 
 ACTIVE_USERS = Gauge(
-    "gamespace_active_users",
+    "benchgoblins_active_users",
     "Number of active users",
     ["tier"],  # free, premium
 )
 
 SUBSCRIPTION_EVENTS = Counter(
-    "gamespace_subscription_events_total",
+    "benchgoblins_subscription_events_total",
     "Subscription events",
     ["event_type"],  # started, renewed, cancelled, expired
 )

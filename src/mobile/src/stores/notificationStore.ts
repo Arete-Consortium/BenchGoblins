@@ -135,7 +135,7 @@ export const useNotificationStore = create<NotificationState>()(
       },
     }),
     {
-      name: 'gamespace-notifications',
+      name: 'benchgoblins-notifications',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (state) => ({
         pushToken: state.pushToken,

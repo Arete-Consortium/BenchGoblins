@@ -27,20 +27,20 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>1. Acceptance of Terms</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          By accessing or using GameSpace, you agree to be bound by these Terms of Service.
+          By accessing or using BenchGoblins, you agree to be bound by these Terms of Service.
           If you do not agree to these terms, do not use the app.
         </Text>
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>2. Description of Service</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          GameSpace is a fantasy sports decision engine that provides analysis and
+          BenchGoblins is a fantasy sports decision engine that provides analysis and
           recommendations for start/sit, waiver, and trade decisions. The service is
           for entertainment and informational purposes only.
         </Text>
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>3. No Guarantee of Results</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          GameSpace provides probabilistic analysis, not predictions or guarantees. Fantasy
+          BenchGoblins provides probabilistic analysis, not predictions or guarantees. Fantasy
           sports involve uncertainty, and our recommendations are based on available data
           and analytical models. We do not guarantee any specific outcomes or results.
           Past performance is not indicative of future results.
@@ -54,7 +54,7 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>5. Subscriptions and Payments</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          GameSpace offers subscription plans that provide access to premium features.
+          BenchGoblins offers subscription plans that provide access to premium features.
         </Text>
         <Text style={[styles.bulletPoint, { color: theme.textSecondary }]}>
           {'\u2022'} Payment will be charged to your Apple ID account at confirmation of purchase
@@ -96,7 +96,7 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>7. Intellectual Property</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          All content, features, and functionality of GameSpace are owned by us and are
+          All content, features, and functionality of BenchGoblins are owned by us and are
           protected by copyright, trademark, and other intellectual property laws. You
           may not copy, modify, distribute, or create derivative works without our
           prior written consent.
@@ -104,7 +104,7 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>8. Disclaimer of Warranties</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          GAMESPACE IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED.
+          BENCHGOBLINS IS PROVIDED "AS IS" WITHOUT WARRANTIES OF ANY KIND, EXPRESS OR IMPLIED.
           WE DO NOT WARRANT THAT THE SERVICE WILL BE UNINTERRUPTED, ERROR-FREE, OR SECURE.
           WE DISCLAIM ALL WARRANTIES, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR
           PURPOSE, AND NON-INFRINGEMENT.
@@ -134,7 +134,7 @@ export default function TermsOfServiceScreen({ navigation }: TermsOfServiceScree
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
           If you have questions about these Terms, please contact us at:
         </Text>
-        <Text style={[styles.contactInfo, { color: theme.primary }]}>legal@gamespace.app</Text>
+        <Text style={[styles.contactInfo, { color: theme.primary }]}>legal@benchgoblins.app</Text>
       </ScrollView>
     </SafeAreaView>
   );

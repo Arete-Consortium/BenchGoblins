@@ -1,1 +1,1 @@
-"""GameSpace Test Suite"""
+"""BenchGoblins Test Suite"""

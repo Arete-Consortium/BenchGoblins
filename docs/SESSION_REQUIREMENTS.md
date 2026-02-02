@@ -2,7 +2,7 @@
 
 ## Overview
 
-This document defines the session management requirements for GameSpace, a fantasy sports decision engine. Sessions provide secure, stateful interactions between the mobile app and backend API, managing user credentials for ESPN, Yahoo, and other fantasy platform integrations.
+This document defines the session management requirements for BenchGoblins, a fantasy sports decision engine. Sessions provide secure, stateful interactions between the mobile app and backend API, managing user credentials for ESPN, Yahoo, and other fantasy platform integrations.
 
 ## Current State
 
@@ -218,14 +218,14 @@ interface SessionState {
 
 - **iOS**: Keychain Services via `expo-secure-store`
 - **Android**: EncryptedSharedPreferences via `expo-secure-store`
-- **Storage Key**: `gamespace_session_token`
+- **Storage Key**: `benchgoblins_session_token`
 
 #### Session Initialization
 
 ```typescript
 async function initSession() {
   // 1. Check for stored token
-  const storedToken = await SecureStore.getItemAsync('gamespace_session_token');
+  const storedToken = await SecureStore.getItemAsync('benchgoblins_session_token');
 
   if (storedToken) {
     // 2. Validate with server
@@ -243,7 +243,7 @@ async function initSession() {
   });
 
   // 4. Store token securely
-  await SecureStore.setItemAsync('gamespace_session_token', newSession.token);
+  await SecureStore.setItemAsync('benchgoblins_session_token', newSession.token);
 
   return newSession;
 }
@@ -357,7 +357,7 @@ def encrypt_credentials(data: dict, master_key: bytes, session_id: str) -> tuple
         algorithm=hashes.SHA256(),
         length=32,
         salt=session_id.encode(),
-        info=b"gamespace-credentials",
+        info=b"benchgoblins-credentials",
     )
     key = hkdf.derive(master_key)
 

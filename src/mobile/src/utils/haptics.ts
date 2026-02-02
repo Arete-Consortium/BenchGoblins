@@ -2,7 +2,7 @@ import * as Haptics from 'expo-haptics';
 import { Platform } from 'react-native';
 
 /**
- * Haptic feedback utilities for GameSpace
+ * Haptic feedback utilities for BenchGoblins
  *
  * Uses expo-haptics for iOS and Android.
  * Web platform is a no-op (haptics not supported).

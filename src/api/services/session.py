@@ -57,7 +57,7 @@ class SessionService:
             algorithm=hashes.SHA256(),
             length=32,
             salt=session_id.encode(),
-            info=b"gamespace-credentials",
+            info=b"benchgoblins-credentials",
         )
         return hkdf.derive(self.encryption_key)
 

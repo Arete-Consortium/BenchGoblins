@@ -33,7 +33,7 @@ export function ChatScreen() {
 
   const renderEmptyState = () => (
     <View style={styles.emptyContainer}>
-      <Text style={[styles.emptyTitle, { color: theme.primaryLight }]}>GameSpace</Text>
+      <Text style={[styles.emptyTitle, { color: theme.primaryLight }]}>BenchGoblins</Text>
       <Text style={[styles.emptySubtitle, { color: theme.textTertiary }]}>Fantasy sports decision engine</Text>
       <View style={styles.examplesContainer}>
         <Text style={[styles.examplesHeader, { color: theme.textSecondary }]}>Try asking:</Text>

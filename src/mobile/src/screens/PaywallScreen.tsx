@@ -74,7 +74,7 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
     try {
       const success = await purchasePackage(selectedPackage);
       if (success) {
-        Alert.alert('Welcome to Pro!', 'You now have unlimited access to GameSpace.');
+        Alert.alert('Welcome to Pro!', 'You now have unlimited access to BenchGoblins.');
       }
     } catch (error: any) {
       Alert.alert('Purchase Failed', error.message || 'Please try again later.');

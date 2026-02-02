@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "GameSpace",
-    "slug": "gamespace",
+    "name": "BenchGoblins",
+    "slug": "benchgoblins",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gamespace.app",
+      "bundleIdentifier": "com.benchgoblins.app",
       "buildNumber": "1",
       "infoPlist": {
         "NSUserTrackingUsageDescription": "This identifier will be used to deliver personalized ads to you.",
@@ -25,7 +25,7 @@
         ]
       },
       "entitlements": {
-        "com.apple.developer.in-app-payments": ["merchant.com.gamespace.app"]
+        "com.apple.developer.in-app-payments": ["merchant.com.benchgoblins.app"]
       },
       "config": {
         "usesNonExemptEncryption": false
@@ -45,7 +45,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0f0f1a"
       },
-      "package": "com.gamespace.app",
+      "package": "com.benchgoblins.app",
       "edgeToEdgeEnabled": true,
       "versionCode": 1
     },
@@ -71,10 +71,10 @@
         "android": "YOUR_REVENUECAT_ANDROID_API_KEY"
       },
       "legalUrls": {
-        "privacyPolicy": "https://aretedriver.github.io/GameSpace/legal/privacy-policy.html",
-        "termsOfService": "https://aretedriver.github.io/GameSpace/legal/terms-of-service.html"
+        "privacyPolicy": "https://aretedriver.github.io/BenchGoblins/legal/privacy-policy.html",
+        "termsOfService": "https://aretedriver.github.io/BenchGoblins/legal/terms-of-service.html"
       }
     },
-    "owner": "gamespace"
+    "owner": "benchgoblins"
   }
 }

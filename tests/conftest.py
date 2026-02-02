@@ -1,5 +1,5 @@
 """
-Pytest fixtures for GameSpace tests.
+Pytest fixtures for BenchGoblins tests.
 """
 
 import sys

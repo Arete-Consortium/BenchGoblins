@@ -27,7 +27,7 @@ export default function PrivacyPolicyScreen({ navigation }: PrivacyPolicyScreenP
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>1. Information We Collect</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          GameSpace collects information you provide directly to us, including:
+          BenchGoblins collects information you provide directly to us, including:
         </Text>
         <Text style={[styles.bulletPoint, { color: theme.textSecondary }]}>
           {'\u2022'} Account information (email address, username)
@@ -105,7 +105,7 @@ export default function PrivacyPolicyScreen({ navigation }: PrivacyPolicyScreenP
 
         <Text style={[styles.sectionTitle, { color: theme.text }]}>6. Children's Privacy</Text>
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
-          GameSpace is not intended for children under 13. We do not knowingly collect
+          BenchGoblins is not intended for children under 13. We do not knowingly collect
           personal information from children under 13. If you believe we have collected
           information from a child under 13, please contact us.
         </Text>
@@ -121,7 +121,7 @@ export default function PrivacyPolicyScreen({ navigation }: PrivacyPolicyScreenP
         <Text style={[styles.paragraph, { color: theme.textSecondary }]}>
           If you have questions about this Privacy Policy, please contact us at:
         </Text>
-        <Text style={[styles.contactInfo, { color: theme.primary }]}>privacy@gamespace.app</Text>
+        <Text style={[styles.contactInfo, { color: theme.primary }]}>privacy@benchgoblins.app</Text>
       </ScrollView>
     </SafeAreaView>
   );

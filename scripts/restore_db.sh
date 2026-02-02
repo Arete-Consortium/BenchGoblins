@@ -1,5 +1,5 @@
 #!/bin/bash
-# GameSpace Database Restore Script
+# BenchGoblins Database Restore Script
 #
 # Usage:
 #   ./scripts/restore_db.sh <backup_file>
@@ -8,7 +8,7 @@
 #   DATABASE_URL - PostgreSQL connection string (required)
 #
 # Examples:
-#   DATABASE_URL=postgresql://... ./scripts/restore_db.sh backups/gamespace_backup_20260125_120000.sql.gz
+#   DATABASE_URL=postgresql://... ./scripts/restore_db.sh backups/benchgoblins_backup_20260125_120000.sql.gz
 
 set -euo pipefail
 

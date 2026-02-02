@@ -1,4 +1,4 @@
--- GameSpace PostgreSQL Schema
+-- BenchGoblins PostgreSQL Schema
 -- Fantasy Sports Decision Engine Database
 
 -- Enable UUID extension

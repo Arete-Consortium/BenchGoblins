@@ -1,5 +1,5 @@
 """
-GameSpace Core Scoring Engine
+BenchGoblins Core Scoring Engine
 
 Local scoring logic for fast A vs B comparisons without Claude API calls.
 Implements the five qualitative indices (SCI, RMI, GIS, OD, MSF).
