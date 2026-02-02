@@ -264,7 +264,7 @@ async def health_check():
     redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
     return {
         "status": "healthy",
-        "version": "0.4.0",
+        "version": "0.4.1-psycopg",
         "claude_available": claude_service.is_available,
         "espn_available": True,
         "postgres_connected": db_service.is_configured,
