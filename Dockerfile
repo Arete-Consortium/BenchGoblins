@@ -27,5 +27,6 @@ EXPOSE 8000
 # Run the application from the api directory
 WORKDIR /app/src/api
 
-# Debug: print environment and test imports before starting
-CMD ["sh", "-c", "echo '=== Starting BenchGoblins API ===' && echo 'PYTHONPATH:' $PYTHONPATH && echo 'Working dir:' $(pwd) && ls -la && echo 'Testing imports...' && python -c 'import sys; print(sys.path); from main import app; print(\"Imports OK\")' && echo 'Starting uvicorn...' && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
+# Use PORT env variable (Railway sets this), default to 8000
+ENV PORT=8000
+CMD ["sh", "-c", "echo 'Starting on port:' $PORT && python -c 'import sys; print(sys.path); from main import app; print(\"Imports OK\")' && exec uvicorn main:app --host 0.0.0.0 --port $PORT"]
