@@ -5,6 +5,7 @@ Provides async database sessions using SQLAlchemy 2.0 with asyncpg.
 """
 
 import os
+import ssl
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -19,6 +20,10 @@ if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
 elif DATABASE_URL.startswith("postgresql://"):
     DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+# Detect Railway internal connection - will need SSL disabled via connect_args
+IS_RAILWAY_INTERNAL = DATABASE_URL and ".railway.internal" in DATABASE_URL
+
 
 
 class DatabaseService:
@@ -39,10 +44,17 @@ class DatabaseService:
         if not self._url:
             return
 
+        # For Railway internal connections, disable SSL via connect_args
+        # asyncpg doesn't support ssl=disable in URL, must use connect_args
+        connect_args = {}
+        if IS_RAILWAY_INTERNAL:
+            connect_args["ssl"] = False
+
         self._engine = create_async_engine(
             self._url,
             poolclass=NullPool,  # Better for async in web contexts
             echo=os.getenv("DB_ECHO", "false").lower() == "true",
+            connect_args=connect_args,
         )
         self._session_factory = async_sessionmaker(
             self._engine,

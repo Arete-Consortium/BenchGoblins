@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const GOOGLE_REDIRECT_URI = `${APP_URL}/api/auth/callback`;
 
@@ -22,12 +21,6 @@ interface GoogleUserInfo {
   picture?: string;
   email: string;
   email_verified: boolean;
-}
-
-interface SessionResponse {
-  session_id: string;
-  session_token: string;
-  expires_at: string;
 }
 
 export async function GET(request: NextRequest) {
@@ -88,42 +81,36 @@ export async function GET(request: NextRequest) {
 
     const userInfo: GoogleUserInfo = await userResponse.json();
 
-    // Create session with backend
-    const sessionResponse = await fetch(`${API_BASE_URL}/sessions`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        platform: 'web',
-        device_id: `google-${userInfo.sub}`,
-        device_name: userInfo.name || userInfo.email,
-      }),
-    });
-
-    if (!sessionResponse.ok) {
-      console.error('Failed to create session');
-      return NextResponse.redirect(`${APP_URL}/auth/login?error=session_create`);
-    }
-
-    const session: SessionResponse = await sessionResponse.json();
-
     // Create response with redirect to /ask
     const response = NextResponse.redirect(`${APP_URL}/ask`);
 
-    // Set session token in cookie (httpOnly for security)
-    response.cookies.set('benchgoblin_session_token', session.session_token, {
+    // Store user info directly in cookies (temporary workaround while DB is being fixed)
+    // In production, this should create a session in the backend
+    const sessionData = {
+      user_id: userInfo.sub,
+      email: userInfo.email,
+      name: userInfo.name,
+      picture: userInfo.picture,
+      exp: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days
+    };
+
+    // Set session data in httpOnly cookie (URL encoded for safety)
+    response.cookies.set('benchgoblin_session', encodeURIComponent(JSON.stringify(sessionData)), {
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // Always secure on Vercel
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60, // 30 days
       path: '/',
     });
 
-    // Also set a non-httpOnly cookie for client-side access
-    response.cookies.set('benchgoblin_session_exists', 'true', {
+    // Set a non-httpOnly cookie for client-side to know user is logged in
+    response.cookies.set('benchgoblin_user', encodeURIComponent(JSON.stringify({
+      name: userInfo.name,
+      email: userInfo.email,
+      picture: userInfo.picture,
+    })), {
       httpOnly: false,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true, // Always secure on Vercel
       sameSite: 'lax',
       maxAge: 30 * 24 * 60 * 60,
       path: '/',

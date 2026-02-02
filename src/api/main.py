@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Integer as SAInteger
-from sqlalchemy import func, select, update
+from sqlalchemy import func, select, text, update
 
 from models.database import BudgetConfig
 from models.database import Decision as DecisionModel
@@ -91,9 +91,18 @@ async def lifespan(app: FastAPI):
     if db_service.is_configured:
         try:
             await db_service.connect()
-            print("PostgreSQL connected")
+            # Test the connection with a simple query
+            async with db_service._engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            # Create tables if they don't exist
+            from models.database import Base
+            async with db_service._engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("PostgreSQL connected and tables created")
         except Exception as e:
+            import traceback
             print(f"WARNING: PostgreSQL connection failed: {e}")
+            traceback.print_exc()
     else:
         print("WARNING: DATABASE_URL not set - persistence disabled")
 
