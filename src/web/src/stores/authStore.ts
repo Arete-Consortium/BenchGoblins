@@ -4,6 +4,18 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/api';
 
+// Helper to get cookie by name
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; ${name}=`);
+  if (parts.length === 2) {
+    const cookieValue = parts.pop()?.split(';').shift();
+    return cookieValue ? decodeURIComponent(cookieValue) : null;
+  }
+  return null;
+}
+
 // User type for authenticated users
 export interface User {
   id: number;
@@ -139,7 +151,30 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: state.isAuthenticated,
       }),
       onRehydrateStorage: () => (state) => {
-        // After rehydration, refresh user data if we have a token
+        // First check for cookie-based session (OAuth workaround)
+        const userCookie = getCookie('benchgoblin_user');
+        if (userCookie && state) {
+          try {
+            const cookieUser = JSON.parse(userCookie);
+            // Create a user object from cookie data
+            state.user = {
+              id: 0, // No ID in cookie session
+              email: cookieUser.email || '',
+              name: cookieUser.name || 'User',
+              picture_url: cookieUser.picture,
+              subscription_tier: 'free', // Default to free for cookie sessions
+              queries_today: 0,
+              queries_limit: 5,
+            };
+            state.isAuthenticated = true;
+            state.isLoading = false;
+            return; // Don't try to refresh from backend
+          } catch (e) {
+            console.error('Failed to parse user cookie:', e);
+          }
+        }
+
+        // Fall back to token-based auth with backend
         if (state?.accessToken) {
           // Set the token in API client
           api.setAuthToken(state.accessToken);

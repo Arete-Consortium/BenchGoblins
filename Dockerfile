@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY src/api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy all source code
+# Copy all source code - force rebuild 2026-02-02
 COPY src/ ./src/
 
 # Set Python path so imports work (core module is in /app/src)
