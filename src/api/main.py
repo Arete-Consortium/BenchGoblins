@@ -87,23 +87,26 @@ async def lifespan(app: FastAPI):
     else:
         print("WARNING: ANTHROPIC_API_KEY not set - Claude integration disabled")
 
-    # Connect to PostgreSQL
-    print("[STARTUP v3] Beginning database connection (psycopg driver)...")
+    # Connect to PostgreSQL (with connection timeout)
+    print("[STARTUP v4] Beginning database connection (psycopg driver)...")
     if db_service.is_configured:
+        import asyncio
         try:
-            await db_service.connect()
+            # Set a short timeout for startup - don't block forever
+            await asyncio.wait_for(db_service.connect(), timeout=10.0)
             # Test the connection with a simple query
             async with db_service._engine.begin() as conn:
-                await conn.execute(text("SELECT 1"))
+                await asyncio.wait_for(conn.execute(text("SELECT 1")), timeout=5.0)
             # Create tables if they don't exist
             from models.database import Base
             async with db_service._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("[STARTUP v3] PostgreSQL connected and tables created")
+            print("[STARTUP v4] PostgreSQL connected and tables created")
+        except asyncio.TimeoutError:
+            print("WARNING: PostgreSQL connection timed out - will retry on requests")
         except Exception as e:
-            import traceback
             print(f"WARNING: PostgreSQL connection failed: {e}")
-            traceback.print_exc()
+            # Don't print full traceback - just continue
     else:
         print("WARNING: DATABASE_URL not set - persistence disabled")
 
@@ -264,7 +267,7 @@ async def health_check():
     redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
     return {
         "status": "healthy",
-        "version": "0.4.1-psycopg",
+        "version": "0.4.2",
         "claude_available": claude_service.is_available,
         "espn_available": True,
         "postgres_connected": db_service.is_configured,
