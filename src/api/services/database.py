@@ -53,6 +53,9 @@ class DatabaseService:
         if not self._url:
             return
 
+        if self._engine is not None:
+            return  # Already connected
+
         print(f"[DB] Connecting with URL prefix: {self._url[:50]}...")
 
         self._engine = create_async_engine(
@@ -82,8 +85,11 @@ class DatabaseService:
             async with db.session() as session:
                 result = await session.execute(...)
         """
+        # Lazy connect if not yet connected
         if not self._session_factory:
-            raise RuntimeError("Database not connected. Call connect() first.")
+            await self.connect()
+        if not self._session_factory:
+            raise RuntimeError("Database not configured or connection failed.")
 
         async with self._session_factory() as session:
             try:
