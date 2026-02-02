@@ -87,11 +87,21 @@ async def lifespan(app: FastAPI):
     else:
         print("WARNING: ANTHROPIC_API_KEY not set - Claude integration disabled")
 
-    # Skip PostgreSQL connection at startup - connect lazily on first request
-    # Railway internal networking has issues, so we defer connection
-    print("[STARTUP v5] Skipping database connection at startup (will connect on demand)")
+    # Connect to PostgreSQL and create tables
+    print("[STARTUP v6] Connecting to PostgreSQL...")
     if db_service.is_configured:
-        print(f"  DATABASE_URL configured: {db_service._url[:50]}...")
+        try:
+            await db_service.connect()
+            # Test connection
+            async with db_service._engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            # Create tables if they don't exist
+            from models.database import Base
+            async with db_service._engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+            print("[STARTUP v6] PostgreSQL connected and tables created")
+        except Exception as e:
+            print(f"WARNING: PostgreSQL connection failed: {e}")
     else:
         print("WARNING: DATABASE_URL not set - persistence disabled")
 
@@ -252,7 +262,7 @@ async def health_check():
     redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
     return {
         "status": "healthy",
-        "version": "0.5.0",
+        "version": "0.6.0",
         "claude_available": claude_service.is_available,
         "espn_available": True,
         "postgres_connected": db_service.is_configured,
