@@ -29,4 +29,4 @@ WORKDIR /app/src/api
 
 # Use PORT env variable (Railway sets this), default to 8000
 ENV PORT=8000
-CMD ["sh", "-c", "echo 'Starting on port:' $PORT && python -c 'import sys; print(sys.path); from main import app; print(\"Imports OK\")' && exec uvicorn main:app --host 0.0.0.0 --port $PORT"]
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port $PORT"]
