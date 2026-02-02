@@ -88,10 +88,8 @@ async def lifespan(app: FastAPI):
         print("WARNING: ANTHROPIC_API_KEY not set - Claude integration disabled")
 
     # Connect to PostgreSQL
-    print("[STARTUP v2] Beginning database connection...")
+    print("[STARTUP v3] Beginning database connection (psycopg driver)...")
     if db_service.is_configured:
-        from services.database import IS_RAILWAY_INTERNAL
-        print(f"[STARTUP v2] IS_RAILWAY_INTERNAL: {IS_RAILWAY_INTERNAL}")
         try:
             await db_service.connect()
             # Test the connection with a simple query
@@ -101,7 +99,7 @@ async def lifespan(app: FastAPI):
             from models.database import Base
             async with db_service._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("[STARTUP v2] PostgreSQL connected and tables created")
+            print("[STARTUP v3] PostgreSQL connected and tables created")
         except Exception as e:
             import traceback
             print(f"WARNING: PostgreSQL connection failed: {e}")

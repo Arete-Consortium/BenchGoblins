@@ -1,11 +1,10 @@
 """
 Database Service — Async PostgreSQL session management.
 
-Provides async database sessions using SQLAlchemy 2.0 with asyncpg.
+Provides async database sessions using SQLAlchemy 2.0 with psycopg (psycopg3).
 """
 
 import os
-import ssl
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -15,15 +14,25 @@ from sqlalchemy.pool import NullPool
 # Database URL from environment
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
-# Convert postgres:// to postgresql+asyncpg://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+asyncpg://", 1)
-elif DATABASE_URL.startswith("postgresql://"):
-    DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
-
-# Detect Railway internal connection - will need SSL disabled via connect_args
+# Detect Railway internal connection - needs SSL disabled
 IS_RAILWAY_INTERNAL = DATABASE_URL and ".railway.internal" in DATABASE_URL
 
+# Convert to appropriate SQLAlchemy URL
+# For internal Railway: use psycopg with sslmode=disable
+# For external/public: use psycopg with SSL
+if DATABASE_URL:
+    if DATABASE_URL.startswith("postgres://"):
+        DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql+psycopg://", 1)
+    elif DATABASE_URL.startswith("postgresql://"):
+        DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg://", 1)
+
+    # For Railway internal, add sslmode=disable
+    if IS_RAILWAY_INTERNAL:
+        if "?" in DATABASE_URL:
+            DATABASE_URL = DATABASE_URL + "&sslmode=disable"
+        else:
+            DATABASE_URL = DATABASE_URL + "?sslmode=disable"
+        print(f"[DB] Using internal Railway URL with sslmode=disable")
 
 
 class DatabaseService:
@@ -44,17 +53,12 @@ class DatabaseService:
         if not self._url:
             return
 
-        # For Railway internal connections, disable SSL via connect_args
-        # asyncpg doesn't support ssl=disable in URL, must use connect_args
-        connect_args = {}
-        if IS_RAILWAY_INTERNAL:
-            connect_args["ssl"] = False
+        print(f"[DB] Connecting with URL prefix: {self._url[:50]}...")
 
         self._engine = create_async_engine(
             self._url,
             poolclass=NullPool,  # Better for async in web contexts
             echo=os.getenv("DB_ECHO", "false").lower() == "true",
-            connect_args=connect_args,
         )
         self._session_factory = async_sessionmaker(
             self._engine,
