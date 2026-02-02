@@ -7,8 +7,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
+# Force cache invalidation - this RUN command changes the layer
+RUN echo "CACHE_BUST_20260202_v1" > /tmp/build_version
+
 # Copy requirements first for better caching
-# Cache bust: psycopg v2 - force rebuild
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
