@@ -26,4 +26,6 @@ EXPOSE 8000
 
 # Run the application from the api directory
 WORKDIR /app/src/api
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+# Debug: print environment and test imports before starting
+CMD ["sh", "-c", "echo '=== Starting BenchGoblins API ===' && echo 'PYTHONPATH:' $PYTHONPATH && echo 'Working dir:' $(pwd) && ls -la && echo 'Testing imports...' && python -c 'import sys; print(sys.path); from main import app; print(\"Imports OK\")' && echo 'Starting uvicorn...' && exec uvicorn main:app --host 0.0.0.0 --port 8000"]
