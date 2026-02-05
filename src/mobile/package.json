@@ -42,5 +42,9 @@
     "@types/react": "~19.1.0",
     "typescript": "~5.9.2"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "tar": "^7.5.7",
+    "@isaacs/brace-expansion": "^5.0.1"
+  }
 }
