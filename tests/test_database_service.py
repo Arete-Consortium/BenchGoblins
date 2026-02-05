@@ -29,11 +29,14 @@ class TestDatabaseService:
 
     @pytest.mark.asyncio
     async def test_session_connection_fails(self, svc_configured):
-        """Test that session() raises when connection to invalid DB fails."""
-        # With asyncpg, this will attempt to connect and fail
+        """Test that session() raises when executing query against invalid DB."""
+        # SQLAlchemy lazy-loads connections, so we need to execute a query
+        # to trigger the actual connection attempt and failure
+        from sqlalchemy import text
+
         with pytest.raises(Exception):  # Could be OSError, ConnectionRefusedError, etc.
-            async with svc_configured.session() as _session:
-                pass
+            async with svc_configured.session() as session:
+                await session.execute(text("SELECT 1"))
 
     @pytest.mark.asyncio
     async def test_get_session_not_connected(self, svc_configured):
