@@ -210,8 +210,12 @@ def get_subscription_status(customer_id: str) -> dict[str, Any]:
             "tier": "pro" if sub.status == "active" else "free",
             "subscription_id": sub.id,
             "customer_id": customer_id,
-            "current_period_start": datetime.fromtimestamp(sub.current_period_start, tz=UTC).isoformat(),
-            "current_period_end": datetime.fromtimestamp(sub.current_period_end, tz=UTC).isoformat(),
+            "current_period_start": datetime.fromtimestamp(
+                sub.current_period_start, tz=UTC
+            ).isoformat(),
+            "current_period_end": datetime.fromtimestamp(
+                sub.current_period_end, tz=UTC
+            ).isoformat(),
             "cancel_at_period_end": sub.cancel_at_period_end,
         }
 
@@ -276,7 +280,11 @@ async def _handle_checkout_completed(data: dict) -> dict[str, Any]:
 
     if not user_id_str:
         logger.warning("Checkout completed without user_id in metadata")
-        return {"event_type": "checkout.session.completed", "processed": False, "reason": "no_user_id"}
+        return {
+            "event_type": "checkout.session.completed",
+            "processed": False,
+            "reason": "no_user_id",
+        }
 
     user_id = int(user_id_str)
 
@@ -317,11 +325,7 @@ async def _handle_subscription_updated(data: dict) -> dict[str, Any]:
     if user_id_str and db_service.is_configured:
         user_id = int(user_id_str)
         async with db_service.session() as session:
-            stmt = (
-                update(User)
-                .where(User.id == user_id)
-                .values(subscription_tier=tier)
-            )
+            stmt = update(User).where(User.id == user_id).values(subscription_tier=tier)
             await session.execute(stmt)
         logger.info(f"User {user_id} subscription updated: status={status}, tier={tier}")
     else:
