@@ -55,9 +55,7 @@ class User(Base):
     )
 
     __table_args__ = (
-        CheckConstraint(
-            "subscription_tier IN ('free', 'pro')", name="check_subscription_tier"
-        ),
+        CheckConstraint("subscription_tier IN ('free', 'pro')", name="check_subscription_tier"),
         Index("idx_users_google_id", "google_id"),
         Index("idx_users_email", "email"),
     )

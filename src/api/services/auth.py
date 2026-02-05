@@ -203,8 +203,7 @@ def create_jwt_token(user: User) -> str:
     """
     if not JWT_SECRET_KEY:
         raise ConfigurationError(
-            "JWT_SECRET_KEY environment variable not set. "
-            "JWT authentication is not configured."
+            "JWT_SECRET_KEY environment variable not set. JWT authentication is not configured."
         )
 
     now = datetime.now(UTC)
@@ -245,8 +244,7 @@ def verify_jwt_token(token: str) -> dict:
     """
     if not JWT_SECRET_KEY:
         raise ConfigurationError(
-            "JWT_SECRET_KEY environment variable not set. "
-            "JWT authentication is not configured."
+            "JWT_SECRET_KEY environment variable not set. JWT authentication is not configured."
         )
 
     try:

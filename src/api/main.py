@@ -96,6 +96,7 @@ async def lifespan(app: FastAPI):
                 await conn.execute(text("SELECT 1"))
             # Create tables if they don't exist
             from models.database import Base
+
             async with db_service._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             print("[STARTUP v6] PostgreSQL connected and tables created")
@@ -468,7 +469,9 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
             return True, 0, FREE_TIER_DAILY_LIMIT
 
         # Determine daily limit based on tier
-        daily_limit = PRO_TIER_DAILY_LIMIT if user.subscription_tier == "pro" else FREE_TIER_DAILY_LIMIT
+        daily_limit = (
+            PRO_TIER_DAILY_LIMIT if user.subscription_tier == "pro" else FREE_TIER_DAILY_LIMIT
+        )
 
         # Check if counter needs reset (new day)
         now = datetime.now(UTC)
