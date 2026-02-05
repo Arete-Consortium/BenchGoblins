@@ -10,7 +10,6 @@ Environment Variables:
 
 import os
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 import jwt
 from google.auth.transport import requests as google_requests
@@ -152,7 +151,7 @@ async def get_or_create_user(google_user_info: dict, db: AsyncSession) -> User:
     return user
 
 
-async def get_user_by_id(user_id: int, db: AsyncSession) -> Optional[User]:
+async def get_user_by_id(user_id: int, db: AsyncSession) -> User | None:
     """
     Get a user by their ID.
 
@@ -168,7 +167,7 @@ async def get_user_by_id(user_id: int, db: AsyncSession) -> Optional[User]:
     return result.scalar_one_or_none()
 
 
-async def get_user_by_email(email: str, db: AsyncSession) -> Optional[User]:
+async def get_user_by_email(email: str, db: AsyncSession) -> User | None:
     """
     Get a user by their email address.
 
