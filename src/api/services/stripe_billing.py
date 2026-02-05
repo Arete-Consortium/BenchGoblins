@@ -308,7 +308,6 @@ async def _handle_subscription_updated(data: dict) -> dict[str, Any]:
     Updates user's subscription tier based on subscription status.
     """
     subscription_id = data.get("id")
-    customer_id = data.get("customer")
     status = data.get("status")
     user_id_str = data.get("metadata", {}).get("user_id")
 
