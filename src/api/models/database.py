@@ -43,10 +43,10 @@ class User(Base):
     google_id: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(255))
-    picture_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    picture_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     subscription_tier: Mapped[str] = mapped_column(String(50), default="free")  # free, pro
-    stripe_customer_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    stripe_subscription_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     queries_today: Mapped[int] = mapped_column(default=0)
     queries_reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())

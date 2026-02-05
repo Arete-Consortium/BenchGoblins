@@ -22,15 +22,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import Integer as SAInteger
-from sqlalchemy import func, select, text, update
+from sqlalchemy import func, select, text
 
-from models.database import BudgetConfig
+from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
-from models.database import User
-from services import stripe_billing
 from monitoring import MetricsMiddleware, metrics_endpoint
 from routes.auth import router as auth_router
 from routes.sessions import router as sessions_router
+from services import stripe_billing
 from services.accuracy import AccuracyTracker, DecisionOutcome
 from services.budget_alerts import check_and_send_alerts, send_test_webhook
 from services.claude import claude_service

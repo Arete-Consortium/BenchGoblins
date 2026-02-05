@@ -32,7 +32,7 @@ if DATABASE_URL:
             DATABASE_URL = DATABASE_URL + "&sslmode=disable"
         else:
             DATABASE_URL = DATABASE_URL + "?sslmode=disable"
-        print(f"[DB] Using internal Railway URL with sslmode=disable")
+        print("[DB] Using internal Railway URL with sslmode=disable")
 
 
 class DatabaseService:
