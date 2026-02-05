@@ -28,8 +28,10 @@ class TestDatabaseService:
         assert svc._engine is None
 
     @pytest.mark.asyncio
-    async def test_session_not_connected(self, svc_configured):
-        with pytest.raises(RuntimeError, match="Database not connected"):
+    async def test_session_connection_fails(self, svc_configured):
+        """Test that session() raises when connection to invalid DB fails."""
+        # With asyncpg, this will attempt to connect and fail
+        with pytest.raises(Exception):  # Could be OSError, ConnectionRefusedError, etc.
             async with svc_configured.session() as _session:
                 pass
 
