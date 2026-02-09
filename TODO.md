@@ -175,7 +175,7 @@
 ## Backlog / Future Ideas
 
 - [ ] Voice input ("Who should I start at flex?")
-- [ ] Trade analyzer with multi-player evaluation
+- [x] Trade analyzer with multi-player evaluation
 - [ ] Draft assistant mode
 - [ ] Season-long tracking and analytics
 - [ ] Social features (share decisions, league chat)
