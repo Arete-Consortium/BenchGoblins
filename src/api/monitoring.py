@@ -135,6 +135,35 @@ SUBSCRIPTION_EVENTS = Counter(
 )
 
 # =============================================================================
+# Engagement Metrics
+# =============================================================================
+
+ENGAGEMENT_DAU = Gauge(
+    "benchgoblins_engagement_dau",
+    "Daily active users",
+)
+
+ENGAGEMENT_WAU = Gauge(
+    "benchgoblins_engagement_wau",
+    "Weekly active users",
+)
+
+ENGAGEMENT_MAU = Gauge(
+    "benchgoblins_engagement_mau",
+    "Monthly active users",
+)
+
+ENGAGEMENT_QUERIES_PER_DAY = Gauge(
+    "benchgoblins_engagement_queries_per_day",
+    "Average queries per day (7-day window)",
+)
+
+ENGAGEMENT_LOCAL_ROUTING_PCT = Gauge(
+    "benchgoblins_engagement_local_routing_pct",
+    "Local routing percentage",
+)
+
+# =============================================================================
 # Metrics Middleware
 # =============================================================================
 
@@ -315,3 +344,12 @@ def update_active_users(free_count: int, premium_count: int):
 def track_subscription_event(event_type: str):
     """Track subscription events."""
     SUBSCRIPTION_EVENTS.labels(event_type=event_type).inc()
+
+
+def update_engagement_metrics(metrics) -> None:
+    """Update engagement Prometheus gauges from EngagementMetrics."""
+    ENGAGEMENT_DAU.set(metrics.retention.dau)
+    ENGAGEMENT_WAU.set(metrics.retention.wau)
+    ENGAGEMENT_MAU.set(metrics.retention.mau)
+    ENGAGEMENT_QUERIES_PER_DAY.set(metrics.queries.avg_queries_per_day)
+    ENGAGEMENT_LOCAL_ROUTING_PCT.set(metrics.features.local_routing_pct)

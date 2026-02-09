@@ -26,7 +26,8 @@ from sqlalchemy import func, select, text
 
 from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
-from monitoring import MetricsMiddleware, metrics_endpoint
+from models.database import Session as SessionModel
+from monitoring import MetricsMiddleware, metrics_endpoint, update_engagement_metrics
 from routes.auth import router as auth_router
 from routes.sessions import router as sessions_router
 from services import stripe_billing
@@ -34,6 +35,7 @@ from services.accuracy import AccuracyTracker, DecisionOutcome
 from services.budget_alerts import check_and_send_alerts, send_test_webhook
 from services.claude import claude_service
 from services.database import db_service
+from services.engagement import engagement_tracker
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notifications import PushNotification, notification_service
@@ -2531,6 +2533,145 @@ async def end_experiment():
             "duration_hours": ended.duration_hours,
         },
     }
+
+
+# ---------------------------------------------------------------------------
+# User Engagement Metrics
+# ---------------------------------------------------------------------------
+
+
+@app.get("/engagement")
+async def get_engagement_metrics(
+    period: str = Query("month", pattern="^(today|week|month)$"),
+    sport: Sport | None = None,
+):
+    """Get user engagement analytics: sessions, queries, retention, features, depth."""
+    if not db_service.is_configured:
+        return {"error": "Database not configured"}
+
+    now = datetime.now(UTC)
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    if period == "today":
+        period_start = today_start
+    elif period == "week":
+        period_start = today_start - timedelta(days=now.weekday())
+    else:
+        period_start = today_start.replace(day=1)
+
+    try:
+        async with db_service.session() as session:
+            # Fetch decisions
+            dec_q = select(DecisionModel).where(DecisionModel.created_at >= period_start)
+            if sport:
+                dec_q = dec_q.where(DecisionModel.sport == sport.value)
+            dec_rows = (await session.execute(dec_q)).scalars().all()
+            decisions = [
+                {
+                    "id": str(d.id),
+                    "user_id": d.user_id,
+                    "session_id": d.session_id,
+                    "sport": d.sport,
+                    "risk_mode": d.risk_mode,
+                    "decision_type": d.decision_type,
+                    "source": d.source,
+                    "cache_hit": d.cache_hit,
+                    "created_at": d.created_at,
+                }
+                for d in dec_rows
+            ]
+
+            # Fetch sessions
+            sess_q = select(SessionModel).where(SessionModel.created_at >= period_start)
+            sess_rows = (await session.execute(sess_q)).scalars().all()
+            sessions_data = [
+                {
+                    "id": str(s.id),
+                    "session_id": str(s.id),
+                    "platform": s.platform,
+                    "status": s.status,
+                    "created_at": s.created_at,
+                    "last_active_at": s.last_active_at,
+                    "user_id": s.user_id,
+                }
+                for s in sess_rows
+            ]
+
+            # Fetch users active in period
+            user_ids = {d.user_id for d in dec_rows if d.user_id}
+            users_data: list[dict] = []
+            if user_ids:
+                user_q = select(User).where(User.id.in_([int(uid) for uid in user_ids if uid.isdigit()]))
+                user_rows = (await session.execute(user_q)).scalars().all()
+                users_data = [
+                    {
+                        "id": str(u.id),
+                        "created_at": u.created_at,
+                    }
+                    for u in user_rows
+                ]
+
+            metrics = engagement_tracker.compute_metrics(
+                decisions=decisions,
+                sessions=sessions_data,
+                users=users_data,
+                period_start=period_start,
+                period_end=now,
+            )
+
+            # Update Prometheus gauges
+            update_engagement_metrics(metrics)
+
+            return {
+                "period": period,
+                "period_start": period_start.isoformat(),
+                "period_end": now.isoformat(),
+                "sessions": {
+                    "active_count": metrics.sessions.active_count,
+                    "avg_duration_minutes": metrics.sessions.avg_duration_minutes,
+                    "by_platform": metrics.sessions.by_platform,
+                    "total": metrics.sessions.total,
+                },
+                "queries": {
+                    "total": metrics.queries.total_queries,
+                    "avg_per_day": metrics.queries.avg_queries_per_day,
+                    "by_date": metrics.queries.by_date,
+                    "popular_sports": metrics.queries.popular_sports,
+                    "popular_decision_types": metrics.queries.popular_decision_types,
+                    "popular_risk_modes": metrics.queries.popular_risk_modes,
+                },
+                "retention": {
+                    "new_users": metrics.retention.new_users,
+                    "returning_users": metrics.retention.returning_users,
+                    "dau": metrics.retention.dau,
+                    "wau": metrics.retention.wau,
+                    "mau": metrics.retention.mau,
+                },
+                "features": {
+                    "local_routing": {
+                        "count": metrics.features.local_routing_count,
+                        "pct": metrics.features.local_routing_pct,
+                    },
+                    "claude_routing": {
+                        "count": metrics.features.claude_routing_count,
+                        "pct": metrics.features.claude_routing_pct,
+                    },
+                    "cache": {
+                        "hits": metrics.features.cache_hits,
+                        "misses": metrics.features.cache_misses,
+                        "hit_rate": metrics.features.cache_hit_rate,
+                    },
+                },
+                "depth": {
+                    "avg_queries_per_session": metrics.depth.avg_queries_per_session,
+                    "avg_queries_per_user_per_day": metrics.depth.avg_queries_per_user_per_day,
+                    "active_users": metrics.depth.active_users,
+                    "active_sessions": metrics.depth.active_sessions,
+                },
+            }
+    except Exception as e:
+        print(f"Failed to fetch engagement metrics: {e}")
+        return {"error": str(e)}
 
 
 # ---------------------------------------------------------------------------
