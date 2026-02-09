@@ -136,3 +136,35 @@ def extract_players_from_query(query: str) -> tuple[str | None, str | None]:
         return vs_match.group(1).strip(), vs_match.group(2).strip()
 
     return None, None
+
+
+# Keywords that make a trade query too complex for local scoring
+_TRADE_COMPLEX_KEYWORDS = [
+    r"\bdynasty\b",
+    r"\bkeeper\b",
+    r"\brest of season\b",
+    r"\bros\b",
+    r"\binjur",  # injury, injured
+    r"\bexplain\b",
+    r"\bwhy\b",
+    r"\bplayoffs\b",
+    r"\blong.?term\b",
+]
+
+
+def classify_trade_query(query: str, trade_players_found: bool) -> QueryComplexity:
+    """
+    Classify a trade query as simple or complex.
+
+    Returns SIMPLE when trade_players_found is True and no complex keywords
+    are present. Returns COMPLEX otherwise (falls back to Claude).
+    """
+    if not trade_players_found:
+        return QueryComplexity.COMPLEX
+
+    query_lower = query.lower()
+    for pattern in _TRADE_COMPLEX_KEYWORDS:
+        if re.search(pattern, query_lower):
+            return QueryComplexity.COMPLEX
+
+    return QueryComplexity.SIMPLE

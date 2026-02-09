@@ -43,9 +43,15 @@ from services.query_classifier import QueryCategory
 from services.query_classifier import classify_query as classify_sports_query
 from services.rate_limiter import rate_limiter
 from services.redis import redis_service
-from services.router import QueryComplexity, classify_query, extract_players_from_query
+from services.router import (
+    QueryComplexity,
+    classify_query,
+    classify_trade_query,
+    extract_players_from_query,
+)
 from services.scoring_adapter import adapt_espn_to_core
 from services.sleeper import sleeper_service
+from services.trade_analyzer import extract_trade_players, trade_analyzer
 from services.variants import (
     assign_variant,
     experiment_registry,
@@ -547,6 +553,45 @@ async def make_decision(
     # Assign A/B prompt variant
     variant = assign_variant(session_id)
 
+    # --- Trade intercept: try local scoring for trade queries ---
+    if request.decision_type == DecisionType.TRADE:
+        trade_parsed = extract_trade_players(request.query)
+        if trade_parsed:
+            giving_names, receiving_names = trade_parsed
+            sport = request.sport.value
+
+            # Fetch ESPN data for all trade players
+            giving_data = [
+                await espn_service.find_player_by_name(name, sport)
+                for name in giving_names
+            ]
+            receiving_data = [
+                await espn_service.find_player_by_name(name, sport)
+                for name in receiving_names
+            ]
+
+            trade_complexity = classify_trade_query(
+                request.query, trade_players_found=True
+            )
+
+            if (
+                trade_complexity == QueryComplexity.SIMPLE
+                and trade_analyzer.can_analyze_locally(giving_data, receiving_data)
+            ):
+                response = await _local_trade_decision(
+                    request, giving_names, receiving_names, giving_data, receiving_data
+                )
+                await _store_decision(
+                    request,
+                    response,
+                    player_a_name=", ".join(giving_names),
+                    player_b_name=", ".join(receiving_names),
+                    prompt_variant=variant,
+                )
+                return response
+
+    # --- Standard start/sit flow ---
+
     # Extract players from query if not provided
     player_a = request.player_a
     player_b = request.player_b
@@ -771,6 +816,55 @@ async def _local_decision(
             "margin": result["margin"],
             "risk_mode": request.risk_mode.value,
         },
+        source="local",
+    )
+
+
+async def _local_trade_decision(
+    request: DecisionRequest,
+    giving_names: list[str],
+    receiving_names: list[str],
+    giving_data: list[tuple],
+    receiving_data: list[tuple],
+) -> DecisionResponse:
+    """
+    Handle trade decisions locally using the core scoring engine.
+    """
+    sport = request.sport.value
+    core_mode = CoreRiskMode(request.risk_mode.value)
+
+    # Convert ESPN data to core PlayerStats for each player
+    giving_core = []
+    for info, stats in giving_data:
+        game_logs = await espn_service.get_player_game_logs(info.id, sport)
+        trends = espn_service.calculate_trends(game_logs, sport)
+        opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+        matchup = await espn_service.get_team_defense(opp, sport) if opp else None
+        giving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup))
+
+    receiving_core = []
+    for info, stats in receiving_data:
+        game_logs = await espn_service.get_player_game_logs(info.id, sport)
+        trends = espn_service.calculate_trends(game_logs, sport)
+        opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+        matchup = await espn_service.get_team_defense(opp, sport) if opp else None
+        receiving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup))
+
+    # Run trade analysis
+    trade_result = trade_analyzer.analyze(giving_core, receiving_core, core_mode, sport)
+
+    # Map confidence
+    confidence_map = {
+        "low": Confidence.LOW,
+        "medium": Confidence.MEDIUM,
+        "high": Confidence.HIGH,
+    }
+
+    return DecisionResponse(
+        decision=trade_result.decision,
+        confidence=confidence_map.get(trade_result.confidence, Confidence.MEDIUM),
+        rationale=trade_result.rationale,
+        details=trade_result.to_details_dict(),
         source="local",
     )
 

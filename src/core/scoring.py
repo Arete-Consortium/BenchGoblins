@@ -723,3 +723,70 @@ def compare_players(
         "indices_a": indices_a,
         "indices_b": indices_b,
     }
+
+
+def evaluate_trade(
+    side_a: list[PlayerStats], side_b: list[PlayerStats], mode: RiskMode
+) -> dict:
+    """
+    Evaluate a multi-player trade.
+
+    Side A = players being given away.
+    Side B = players being received.
+    Positive net_value = trade favors accepting.
+
+    Returns dict with:
+    - decision: "Accept Trade" or "Reject Trade"
+    - confidence: "low" | "medium" | "high"
+    - side_a_total: float (total composite score of giving side)
+    - side_b_total: float (total composite score of receiving side)
+    - net_value: float (side_b_total - side_a_total)
+    - side_a_players: list of {name, score, indices}
+    - side_b_players: list of {name, score, indices}
+    """
+    side_a_players = []
+    side_a_total = 0.0
+    for player in side_a:
+        indices = calculate_indices(player)
+        score = composite_score(indices, mode)
+        side_a_total += score
+        side_a_players.append({
+            "name": player.name,
+            "score": round(score, 1),
+            "indices": indices,
+        })
+
+    side_b_players = []
+    side_b_total = 0.0
+    for player in side_b:
+        indices = calculate_indices(player)
+        score = composite_score(indices, mode)
+        side_b_total += score
+        side_b_players.append({
+            "name": player.name,
+            "score": round(score, 1),
+            "indices": indices,
+        })
+
+    net_value = side_b_total - side_a_total
+    player_count = len(side_a) + len(side_b)
+    avg_margin = abs(net_value) / max(player_count, 1)
+
+    if avg_margin < 3:
+        confidence = "low"
+    elif avg_margin < 8:
+        confidence = "medium"
+    else:
+        confidence = "high"
+
+    decision = "Accept Trade" if net_value > 0 else "Reject Trade"
+
+    return {
+        "decision": decision,
+        "confidence": confidence,
+        "side_a_total": round(side_a_total, 1),
+        "side_b_total": round(side_b_total, 1),
+        "net_value": round(net_value, 1),
+        "side_a_players": side_a_players,
+        "side_b_players": side_b_players,
+    }
