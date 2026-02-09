@@ -231,8 +231,9 @@ class TestRedisRateLimiting:
         mock_client = AsyncMock()
         mock_redis._client = mock_client
 
-        # Mock pipeline for check
-        mock_pipe = AsyncMock()
+        # Mock pipeline for check — pipeline methods are sync (queue commands),
+        # only execute() is async
+        mock_pipe = MagicMock()
         mock_pipe.execute = AsyncMock(
             return_value=[0, 0]
         )  # zremrangebyscore result, zcard result
@@ -257,8 +258,8 @@ class TestRedisRateLimiting:
         mock_client = AsyncMock()
         mock_redis._client = mock_client
 
-        # Mock pipeline returning count at limit
-        mock_pipe = AsyncMock()
+        # Mock pipeline returning count at limit — pipeline methods are sync
+        mock_pipe = MagicMock()
         mock_pipe.execute = AsyncMock(return_value=[0, 3])  # 3 requests already
         mock_client.pipeline = MagicMock(return_value=mock_pipe)
         mock_client.zrange = AsyncMock(return_value=[("ts", time.time() - 5)])

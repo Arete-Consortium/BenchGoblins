@@ -75,6 +75,7 @@ class TestCreateSession:
     @pytest.mark.asyncio
     async def test_creates_session(self, svc):
         db = AsyncMock()
+        db.add = MagicMock()  # SQLAlchemy add() is sync
         db.flush = AsyncMock()
 
         await svc.create_session(
@@ -96,6 +97,7 @@ class TestCreateSession:
     @pytest.mark.asyncio
     async def test_with_user_id(self, svc):
         db = AsyncMock()
+        db.add = MagicMock()  # SQLAlchemy add() is sync
         db.flush = AsyncMock()
 
         await svc.create_session(db, platform="ios", user_id="user-123")
@@ -105,6 +107,7 @@ class TestCreateSession:
     @pytest.mark.asyncio
     async def test_custom_expiry_env(self, svc):
         db = AsyncMock()
+        db.add = MagicMock()  # SQLAlchemy add() is sync
         db.flush = AsyncMock()
 
         with patch.dict("os.environ", {"SESSION_DEFAULT_EXPIRY_DAYS": "7"}):
@@ -410,6 +413,7 @@ class TestStoreCredential:
     async def test_new_credential(self, svc):
         session = make_session()
         db = AsyncMock()
+        db.add = MagicMock()  # SQLAlchemy add() is sync
         db.execute = AsyncMock(return_value=mock_db_result(None))  # No existing
         db.flush = AsyncMock()
 
@@ -433,6 +437,7 @@ class TestStoreCredential:
     async def test_with_expiry(self, svc):
         session = make_session()
         db = AsyncMock()
+        db.add = MagicMock()  # SQLAlchemy add() is sync
         db.execute = AsyncMock(return_value=mock_db_result(None))
         db.flush = AsyncMock()
 
