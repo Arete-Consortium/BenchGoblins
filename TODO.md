@@ -49,12 +49,12 @@
 - [x] Context enrichment: inject relevant player stats before calling Claude
 - [x] Response parser: extract structured decision from Claude output
 - [x] Streaming support for faster perceived response
-- [ ] Token usage tracking and cost monitoring
+- [x] Token usage tracking and cost monitoring
 
 ### Caching
 - [x] Cache Claude responses for identical queries (TTL: 1 hour)
 - [x] Cache common player comparisons
-- [ ] Implement cache invalidation on stat updates
+- [x] Implement cache invalidation on stat updates
 
 ---
 
@@ -160,8 +160,8 @@
 
 ### Analytics
 - [x] Track decision accuracy (did user follow advice? what happened?)
-- [ ] A/B test different prompt variations
-- [ ] User engagement metrics
+- [x] A/B test different prompt variations
+- [x] User engagement metrics
 
 ### Infrastructure
 - [x] Deploy backend to AWS/GCP/Railway (Railway config + docs)
@@ -191,12 +191,11 @@
 **Active:**
 - [ ] Set up RevenueCat account and configure products
 - [ ] Create App Store Connect app listing
-- [ ] Token usage tracking and cost monitoring
-- [ ] Cache invalidation on stat updates
-- [ ] A/B test different prompt variations
+- [x] User engagement metrics (session duration, feature usage, retention)
 
 **Blocked:**
-- *Nothing yet*
+- [ ] Configure in-app purchases in App Store Connect (needs RevenueCat + App Store Connect)
+- [ ] Submit for App Store review (needs IAP + listing)
 
 **Completed This Sprint:**
 - [x] Unified roster model (ESPN/Yahoo/Sleeper merge, conflict resolution, overrides)
@@ -207,7 +206,7 @@
 - [x] Fix missing deps in pyproject.toml (cryptography, cachetools, sentry-sdk, prometheus-client)
 - [x] Fix hatch build config for editable installs
 - [x] App Store review prep docs
-- [x] 161 tests passing (99 new)
+- [x] 778 tests passing
 - [x] iOS App Store configuration (bundle ID, entitlements, privacy manifests)
 - [x] RevenueCat SDK integration for subscriptions
 - [x] Subscription tiers and paywall UI
@@ -216,3 +215,6 @@
 - [x] Settings screen with subscription management
 - [x] Privacy Policy and Terms of Service screens
 - [x] App Store setup documentation
+- [x] Token usage tracking and cost monitoring (/usage, /budget, Prometheus)
+- [x] Cache invalidation on stat updates (sync_stats.py + versioned keys)
+- [x] A/B test different prompt variations (ExperimentRegistry, 4 endpoints, 2 prompts)
