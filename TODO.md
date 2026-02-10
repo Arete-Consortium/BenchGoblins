@@ -147,9 +147,11 @@
 - [x] Add premium feature gating logic
 - [x] Add privacy policy and terms of service screens
 - [x] Add settings screen with subscription management
-- [ ] Set up RevenueCat account and configure products
+- [ ] Set up RevenueCat account and configure products (see `scripts/setup_revenuecat.py`)
 - [ ] Create App Store Connect app listing
-- [ ] Configure in-app purchases in App Store Connect
+- [ ] Configure in-app purchases in App Store Connect (see `scripts/setup_appstore_subscriptions.py`)
+- [ ] Inject credentials into app.json/eas.json (see `scripts/inject_config.py`)
+- [ ] Verify store setup matches codebase (see `scripts/verify_store_setup.py`)
 - [ ] Submit for App Store review
 
 ### Usage Controls
@@ -176,7 +178,7 @@
 
 - [ ] Voice input ("Who should I start at flex?")
 - [x] Trade analyzer with multi-player evaluation
-- [ ] Draft assistant mode
+- [x] Draft assistant mode
 - [ ] Season-long tracking and analytics
 - [ ] Social features (share decisions, league chat)
 - [ ] Apple Watch companion app
@@ -189,12 +191,14 @@
 ## Current Sprint Focus
 
 **Active:**
-- [ ] Set up RevenueCat account and configure products
+- [ ] Set up RevenueCat account and configure products (`scripts/setup_revenuecat.py`)
 - [ ] Create App Store Connect app listing
 - [x] User engagement metrics (session duration, feature usage, retention)
+- [x] Store automation scripts (ASC subs, RevenueCat, config injection, verification)
 
 **Blocked:**
 - [ ] Configure in-app purchases in App Store Connect (needs RevenueCat + App Store Connect)
+- [ ] Inject credentials + verify setup (needs accounts created first)
 - [ ] Submit for App Store review (needs IAP + listing)
 
 **Completed This Sprint:**
