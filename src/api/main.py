@@ -35,6 +35,7 @@ from services.accuracy import AccuracyTracker, DecisionOutcome
 from services.budget_alerts import check_and_send_alerts, send_test_webhook
 from services.claude import claude_service
 from services.database import db_service
+from services.draft_assistant import draft_assistant, extract_draft_players
 from services.engagement import engagement_tracker
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
@@ -45,6 +46,7 @@ from services.rate_limiter import rate_limiter
 from services.redis import redis_service
 from services.router import (
     QueryComplexity,
+    classify_draft_query,
     classify_query,
     classify_trade_query,
     extract_players_from_query,
@@ -194,6 +196,7 @@ class DecisionType(str, Enum):
     TRADE = "trade"
     WAIVER = "waiver"
     EXPLAIN = "explain"
+    DRAFT = "draft"
 
 
 class Confidence(str, Enum):
@@ -221,6 +224,36 @@ class DecisionResponse(BaseModel):
     """Response from /decide endpoint"""
 
     decision: str
+    confidence: Confidence
+    rationale: str
+    details: dict | None = None
+    source: str = Field(..., description="'local' or 'claude'")
+
+
+class DraftRequest(BaseModel):
+    """Request body for /draft endpoint"""
+
+    sport: Sport
+    risk_mode: RiskMode = RiskMode.MEDIAN
+    query: str = Field(
+        ...,
+        description="Natural language query, e.g., 'draft Jalen Brunson or Tyrese Maxey?'",
+    )
+    players: list[str] | None = Field(
+        None, description="Explicit list of player names to rank"
+    )
+    position_needs: list[str] | None = Field(
+        None, description="Positions to boost, e.g., ['PG', 'C']"
+    )
+    league_type: str | None = Field(
+        None, description="e.g., 'points', 'categories', 'half-ppr'"
+    )
+
+
+class DraftResponse(BaseModel):
+    """Response from /draft endpoint"""
+
+    recommended_pick: str
     confidence: Confidence
     rationale: str
     details: dict | None = None
@@ -923,6 +956,209 @@ async def _claude_decision(
             status_code=500,
             detail=f"Error processing request: {str(e)}",
         )
+
+
+@app.post("/draft", response_model=DraftResponse)
+async def draft_decision(
+    request: DraftRequest,
+    session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
+    user_id: int | None = Query(default=None, description="User ID for tier-based rate limiting"),
+):
+    """
+    Rank a pool of players for draft pick recommendations.
+
+    Players can be provided explicitly via the `players` field or
+    extracted from the `query` via natural language parsing.
+    Optionally boost players matching `position_needs`.
+
+    Rate limits:
+    - Free tier: 5 queries per day
+    - Pro tier: unlimited queries
+    """
+    # Check rate limit
+    effective_session = session_id or "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Check tier-based daily limit
+    if user_id is not None:
+        tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
+        if not tier_allowed:
+            raise HTTPException(
+                status_code=402,
+                detail={
+                    "message": f"Daily query limit reached ({queries_today}/{daily_limit}). Upgrade to Pro for unlimited queries.",
+                    "queries_today": queries_today,
+                    "daily_limit": daily_limit,
+                    "upgrade_url": "/billing/create-checkout",
+                },
+            )
+
+    # Check if query is sports-related
+    is_allowed, rejection_reason = _is_sports_query(request.query)
+    if not is_allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+        )
+
+    # Determine player names: explicit list takes priority over query parsing
+    player_names: list[str] | None = request.players
+    if not player_names:
+        player_names = extract_draft_players(request.query)
+
+    # < 2 players → fall back to Claude
+    if not player_names or len(player_names) < 2:
+        return await _claude_draft_fallback(request, session_id)
+
+    # Fetch ESPN data for all draft players
+    sport = request.sport.value
+    player_data = [
+        await espn_service.find_player_by_name(name, sport)
+        for name in player_names
+    ]
+
+    # Classify complexity
+    draft_complexity = classify_draft_query(
+        request.query, draft_players_found=True
+    )
+
+    # Route to local or Claude
+    if (
+        draft_complexity == QueryComplexity.SIMPLE
+        and draft_assistant.can_analyze_locally(player_data)
+    ):
+        response = await _local_draft_decision(request, player_names, player_data)
+        await _store_draft_decision(request, response, player_names)
+        return response
+
+    # Fall back to Claude for complex queries or missing ESPN data
+    return await _claude_draft_fallback(request, session_id)
+
+
+async def _local_draft_decision(
+    request: DraftRequest,
+    player_names: list[str],
+    player_data: list[tuple],
+) -> DraftResponse:
+    """Handle draft decisions locally using the core scoring engine."""
+    sport = request.sport.value
+    core_mode = CoreRiskMode(request.risk_mode.value)
+
+    # Convert ESPN data to core PlayerStats
+    core_players = []
+    for info, stats in player_data:
+        game_logs = await espn_service.get_player_game_logs(info.id, sport)
+        trends = espn_service.calculate_trends(game_logs, sport)
+        opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+        matchup = await espn_service.get_team_defense(opp, sport) if opp else None
+        core_players.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup))
+
+    # Run draft analysis
+    draft_result = draft_assistant.analyze(
+        core_players, core_mode, sport, position_needs=request.position_needs
+    )
+
+    confidence_map = {
+        "low": Confidence.LOW,
+        "medium": Confidence.MEDIUM,
+        "high": Confidence.HIGH,
+    }
+
+    return DraftResponse(
+        recommended_pick=draft_result.recommended_pick.name if draft_result.recommended_pick else "",
+        confidence=confidence_map.get(draft_result.confidence, Confidence.MEDIUM),
+        rationale=draft_result.rationale,
+        details=draft_result.to_details_dict(),
+        source="local",
+    )
+
+
+async def _store_draft_decision(
+    request: DraftRequest,
+    response: DraftResponse,
+    player_names: list[str],
+) -> None:
+    """Store draft decision in database for history and analytics."""
+    if not db_service.is_configured:
+        return
+
+    try:
+        # Get scores from details for storage
+        ranked = (response.details or {}).get("ranked_players", [])
+        score_a = ranked[0]["score"] if len(ranked) >= 1 else None
+        score_b = ranked[1]["score"] if len(ranked) >= 2 else None
+        margin = round(score_a - score_b, 1) if score_a is not None and score_b is not None else None
+
+        async with db_service.session() as session:
+            decision = DecisionModel(
+                sport=request.sport.value,
+                risk_mode=request.risk_mode.value,
+                decision_type="draft",
+                query=request.query,
+                player_a_name=", ".join(player_names),
+                player_b_name=response.recommended_pick,
+                decision=f"Draft {response.recommended_pick}",
+                confidence=response.confidence.value,
+                rationale=response.rationale,
+                source=response.source,
+                score_a=score_a,
+                score_b=score_b,
+                margin=margin,
+                league_type=request.league_type,
+            )
+            session.add(decision)
+    except Exception as e:
+        print(f"Failed to store draft decision: {e}")
+
+
+async def _claude_draft_fallback(
+    request: DraftRequest,
+    session_id: str | None,
+) -> DraftResponse:
+    """Fall back to Claude for draft decisions that can't be handled locally."""
+    budget_exceeded, budget_msg = await _check_budget_exceeded()
+    if budget_exceeded:
+        raise HTTPException(
+            status_code=402,
+            detail=budget_msg or "Monthly API budget exceeded",
+        )
+
+    # Build a DecisionRequest to reuse _claude_decision
+    decide_req = DecisionRequest(
+        sport=request.sport,
+        risk_mode=request.risk_mode,
+        decision_type=DecisionType.DRAFT,
+        query=request.query,
+        league_type=request.league_type,
+    )
+
+    variant = assign_variant(session_id)
+    player_names = request.players or []
+    player_context = f"Draft pool: {', '.join(player_names)}" if player_names else None
+
+    response, _, _ = await _claude_decision(
+        decide_req,
+        player_a=", ".join(player_names) if player_names else None,
+        player_b=None,
+        player_context=player_context,
+        prompt_variant=variant,
+    )
+
+    await check_and_send_alerts()
+
+    return DraftResponse(
+        recommended_pick=response.decision,
+        confidence=response.confidence,
+        rationale=response.rationale,
+        details=response.details,
+        source="claude",
+    )
 
 
 @app.post("/decide/stream")
