@@ -790,3 +790,45 @@ def evaluate_trade(
         "side_a_players": side_a_players,
         "side_b_players": side_b_players,
     }
+
+
+def rank_players(
+    players: list[PlayerStats],
+    mode: RiskMode,
+    position_needs: list[str] | None = None,
+    position_boost: float = 5.0,
+) -> list[dict]:
+    """
+    Rank a pool of players by composite score for draft recommendations.
+
+    Optionally boosts players whose position matches a need list.
+    Boost is additive on the 0-100 scale, clamped at 100.
+
+    Returns list sorted by score desc, each:
+    {rank, name, team, position, score, base_score, indices, position_boosted}
+    """
+    needs_upper = {p.upper() for p in position_needs} if position_needs else set()
+    scored = []
+
+    for player in players:
+        indices = calculate_indices(player)
+        base_score = composite_score(indices, mode)
+        boosted = bool(needs_upper and player.position.upper() in needs_upper)
+        score = min(base_score + position_boost, 100.0) if boosted else base_score
+
+        scored.append({
+            "name": player.name,
+            "team": player.team,
+            "position": player.position,
+            "base_score": round(base_score, 1),
+            "score": round(score, 1),
+            "indices": indices,
+            "position_boosted": boosted,
+        })
+
+    scored.sort(key=lambda x: x["score"], reverse=True)
+
+    for i, entry in enumerate(scored, start=1):
+        entry["rank"] = i
+
+    return scored

@@ -80,7 +80,7 @@ def classify_query(
     query_lower = query.lower()
 
     # Explicit decision types that require Claude
-    if decision_type in ("trade", "waiver", "explain"):
+    if decision_type in ("trade", "waiver", "explain", "draft"):
         return QueryComplexity.COMPLEX
 
     # Check for complex patterns
@@ -164,6 +164,37 @@ def classify_trade_query(query: str, trade_players_found: bool) -> QueryComplexi
 
     query_lower = query.lower()
     for pattern in _TRADE_COMPLEX_KEYWORDS:
+        if re.search(pattern, query_lower):
+            return QueryComplexity.COMPLEX
+
+    return QueryComplexity.SIMPLE
+
+
+# Keywords that make a draft query too complex for local scoring
+_DRAFT_COMPLEX_KEYWORDS = [
+    r"\bdynasty\b",
+    r"\bkeeper\b",
+    r"\brest of season\b",
+    r"\bros\b",
+    r"\binjur",  # injury, injured
+    r"\bexplain\b",
+    r"\bauction\b",
+    r"\bupside\b",
+]
+
+
+def classify_draft_query(query: str, draft_players_found: bool) -> QueryComplexity:
+    """
+    Classify a draft query as simple or complex.
+
+    Returns SIMPLE when draft_players_found is True and no complex keywords
+    are present. Returns COMPLEX otherwise (falls back to Claude).
+    """
+    if not draft_players_found:
+        return QueryComplexity.COMPLEX
+
+    query_lower = query.lower()
+    for pattern in _DRAFT_COMPLEX_KEYWORDS:
         if re.search(pattern, query_lower):
             return QueryComplexity.COMPLEX
 
