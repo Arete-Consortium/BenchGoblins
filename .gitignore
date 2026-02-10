@@ -76,6 +76,10 @@ htmlcov/
 .pytest_cache/
 .tox/
 
+# Store credentials
+scripts/config/store_credentials.json
+scripts/config/*.p8
+
 # Misc
 *.log
 *.sqlite3
