@@ -117,19 +117,38 @@ async def get_current_user_token(
 async def get_optional_user(
     authorization: Annotated[str | None, Header()] = None,
 ) -> dict | None:
-    """Return current user if JWT provided, None otherwise."""
+    """Return current user if JWT provided, None if no header.
+
+    Raises 401 if a token IS provided but is invalid/expired/blacklisted,
+    so the client gets a clear signal to re-authenticate rather than
+    silently falling back to anonymous.
+    """
     if not authorization:
         return None
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        return None
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid authorization header format. Use: Bearer <token>",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     token = parts[1]
     if is_token_blacklisted(token):
-        return None
+        raise HTTPException(
+            status_code=401,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
     try:
         return verify_jwt_token(token)
-    except (ConfigurationError, InvalidTokenError):
-        return None
+    except ConfigurationError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except InvalidTokenError as e:
+        raise HTTPException(
+            status_code=401,
+            detail=str(e),
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 async def get_current_user(token: str = Depends(get_current_user_token)) -> dict:
