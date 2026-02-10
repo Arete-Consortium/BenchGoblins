@@ -17,10 +17,10 @@ import sentry_sdk
 from core.scoring import RiskMode as CoreRiskMode
 from core.scoring import compare_players
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, constr
 from sqlalchemy import Integer as SAInteger
 from sqlalchemy import func, select, text
 
@@ -28,6 +28,7 @@ from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
 from models.database import Session as SessionModel
 from monitoring import MetricsMiddleware, metrics_endpoint, update_engagement_metrics
+from routes.auth import get_current_user, get_optional_user
 from routes.auth import router as auth_router
 from routes.sessions import router as sessions_router
 from services import stripe_billing
@@ -152,9 +153,13 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001"
+).split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Tighten in production
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -213,11 +218,18 @@ class DecisionRequest(BaseModel):
     decision_type: DecisionType = DecisionType.START_SIT
     query: str = Field(
         ...,
+        max_length=1000,
         description="Natural language query, e.g., 'Should I start Jalen Brunson or Tyrese Maxey?'",
     )
-    player_a: str | None = Field(None, description="First player name (optional if in query)")
-    player_b: str | None = Field(None, description="Second player name (optional if in query)")
-    league_type: str | None = Field(None, description="e.g., 'points', 'categories', 'half-ppr'")
+    player_a: str | None = Field(
+        None, max_length=100, description="First player name (optional if in query)"
+    )
+    player_b: str | None = Field(
+        None, max_length=100, description="Second player name (optional if in query)"
+    )
+    league_type: str | None = Field(
+        None, max_length=50, description="e.g., 'points', 'categories', 'half-ppr'"
+    )
 
 
 class DecisionResponse(BaseModel):
@@ -237,16 +249,17 @@ class DraftRequest(BaseModel):
     risk_mode: RiskMode = RiskMode.MEDIAN
     query: str = Field(
         ...,
+        max_length=1000,
         description="Natural language query, e.g., 'draft Jalen Brunson or Tyrese Maxey?'",
     )
-    players: list[str] | None = Field(
-        None, description="Explicit list of player names to rank"
+    players: list[constr(max_length=100)] | None = Field(
+        None, max_length=20, description="Explicit list of player names to rank"
     )
-    position_needs: list[str] | None = Field(
-        None, description="Positions to boost, e.g., ['PG', 'C']"
+    position_needs: list[constr(max_length=10)] | None = Field(
+        None, max_length=10, description="Positions to boost, e.g., ['PG', 'C']"
     )
     league_type: str | None = Field(
-        None, description="e.g., 'points', 'categories', 'half-ppr'"
+        None, max_length=50, description="e.g., 'points', 'categories', 'half-ppr'"
     )
 
 
@@ -539,7 +552,7 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
 async def make_decision(
     request: DecisionRequest,
     session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
-    user_id: int | None = Query(default=None, description="User ID for tier-based rate limiting"),
+    current_user: dict | None = Depends(get_optional_user),
 ):
     """
     Make a fantasy sports decision.
@@ -561,7 +574,8 @@ async def make_decision(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check tier-based daily limit if user_id provided
+    # Check tier-based daily limit if authenticated
+    user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
         tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
@@ -595,21 +609,16 @@ async def make_decision(
 
             # Fetch ESPN data for all trade players
             giving_data = [
-                await espn_service.find_player_by_name(name, sport)
-                for name in giving_names
+                await espn_service.find_player_by_name(name, sport) for name in giving_names
             ]
             receiving_data = [
-                await espn_service.find_player_by_name(name, sport)
-                for name in receiving_names
+                await espn_service.find_player_by_name(name, sport) for name in receiving_names
             ]
 
-            trade_complexity = classify_trade_query(
-                request.query, trade_players_found=True
-            )
+            trade_complexity = classify_trade_query(request.query, trade_players_found=True)
 
-            if (
-                trade_complexity == QueryComplexity.SIMPLE
-                and trade_analyzer.can_analyze_locally(giving_data, receiving_data)
+            if trade_complexity == QueryComplexity.SIMPLE and trade_analyzer.can_analyze_locally(
+                giving_data, receiving_data
             ):
                 response = await _local_trade_decision(
                     request, giving_names, receiving_names, giving_data, receiving_data
@@ -962,7 +971,7 @@ async def _claude_decision(
 async def draft_decision(
     request: DraftRequest,
     session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
-    user_id: int | None = Query(default=None, description="User ID for tier-based rate limiting"),
+    current_user: dict | None = Depends(get_optional_user),
 ):
     """
     Rank a pool of players for draft pick recommendations.
@@ -985,7 +994,8 @@ async def draft_decision(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check tier-based daily limit
+    # Check tier-based daily limit if authenticated
+    user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
         tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
@@ -1018,20 +1028,14 @@ async def draft_decision(
 
     # Fetch ESPN data for all draft players
     sport = request.sport.value
-    player_data = [
-        await espn_service.find_player_by_name(name, sport)
-        for name in player_names
-    ]
+    player_data = [await espn_service.find_player_by_name(name, sport) for name in player_names]
 
     # Classify complexity
-    draft_complexity = classify_draft_query(
-        request.query, draft_players_found=True
-    )
+    draft_complexity = classify_draft_query(request.query, draft_players_found=True)
 
     # Route to local or Claude
-    if (
-        draft_complexity == QueryComplexity.SIMPLE
-        and draft_assistant.can_analyze_locally(player_data)
+    if draft_complexity == QueryComplexity.SIMPLE and draft_assistant.can_analyze_locally(
+        player_data
     ):
         response = await _local_draft_decision(request, player_names, player_data)
         await _store_draft_decision(request, response, player_names)
@@ -1071,7 +1075,9 @@ async def _local_draft_decision(
     }
 
     return DraftResponse(
-        recommended_pick=draft_result.recommended_pick.name if draft_result.recommended_pick else "",
+        recommended_pick=draft_result.recommended_pick.name
+        if draft_result.recommended_pick
+        else "",
         confidence=confidence_map.get(draft_result.confidence, Confidence.MEDIUM),
         rationale=draft_result.rationale,
         details=draft_result.to_details_dict(),
@@ -1093,7 +1099,9 @@ async def _store_draft_decision(
         ranked = (response.details or {}).get("ranked_players", [])
         score_a = ranked[0]["score"] if len(ranked) >= 1 else None
         score_b = ranked[1]["score"] if len(ranked) >= 2 else None
-        margin = round(score_a - score_b, 1) if score_a is not None and score_b is not None else None
+        margin = (
+            round(score_a - score_b, 1) if score_a is not None and score_b is not None else None
+        )
 
         async with db_service.session() as session:
             decision = DecisionModel(
@@ -1165,7 +1173,7 @@ async def _claude_draft_fallback(
 async def make_decision_stream(
     request: DecisionRequest,
     session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
-    user_id: int | None = Query(default=None, description="User ID for tier-based rate limiting"),
+    current_user: dict | None = Depends(get_optional_user),
 ):
     """
     Stream a fantasy sports decision (Server-Sent Events).
@@ -1187,7 +1195,8 @@ async def make_decision_stream(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check tier-based daily limit if user_id provided
+    # Check tier-based daily limit if authenticated
+    user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
         tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
@@ -2931,7 +2940,9 @@ async def get_engagement_metrics(
             user_ids = {d.user_id for d in dec_rows if d.user_id}
             users_data: list[dict] = []
             if user_ids:
-                user_q = select(User).where(User.id.in_([int(uid) for uid in user_ids if uid.isdigit()]))
+                user_q = select(User).where(
+                    User.id.in_([int(uid) for uid in user_ids if uid.isdigit()])
+                )
                 user_rows = (await session.execute(user_q)).scalars().all()
                 users_data = [
                     {
@@ -3016,8 +3027,12 @@ class CheckoutRequest(BaseModel):
         default=stripe_billing.PRICE_IDS["pro_monthly"],
         description="Stripe Price ID for the subscription",
     )
-    success_url: str = Field(..., description="URL to redirect to after successful checkout")
-    cancel_url: str = Field(..., description="URL to redirect to if checkout is cancelled")
+    success_url: str = Field(
+        ..., max_length=500, description="URL to redirect to after successful checkout"
+    )
+    cancel_url: str = Field(
+        ..., max_length=500, description="URL to redirect to if checkout is cancelled"
+    )
 
 
 class CheckoutResponse(BaseModel):
@@ -3029,7 +3044,9 @@ class CheckoutResponse(BaseModel):
 class PortalRequest(BaseModel):
     """Request to create a Stripe billing portal session."""
 
-    return_url: str = Field(..., description="URL to return to after portal session")
+    return_url: str = Field(
+        ..., max_length=500, description="URL to return to after portal session"
+    )
 
 
 class PortalResponse(BaseModel):
@@ -3064,19 +3081,21 @@ async def _get_user_by_id(user_id: int) -> User | None:
 @app.post("/billing/create-checkout", response_model=CheckoutResponse)
 async def create_checkout(
     request: CheckoutRequest,
-    user_id: int = Query(..., description="User ID for the subscription"),
-    user_email: str = Query(..., description="User email for Stripe customer"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Create a Stripe Checkout session for Pro subscription upgrade.
 
-    Redirects user to Stripe-hosted checkout page.
+    Redirects user to Stripe-hosted checkout page. Requires authentication.
     """
     if not stripe_billing.is_configured():
         raise HTTPException(
             status_code=503,
             detail="Stripe billing is not configured. Set STRIPE_SECRET_KEY.",
         )
+
+    user_id = current_user["user_id"]
+    user_email = current_user["email"]
 
     try:
         checkout_url = await stripe_billing.create_checkout_session(
@@ -3096,12 +3115,12 @@ async def create_checkout(
 @app.post("/billing/create-portal", response_model=PortalResponse)
 async def create_portal(
     request: PortalRequest,
-    user_id: int = Query(..., description="User ID to get Stripe customer"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Create a Stripe Billing Portal session for subscription management.
 
-    Allows users to update payment method, cancel subscription, etc.
+    Allows users to update payment method, cancel subscription, etc. Requires authentication.
     """
     if not stripe_billing.is_configured():
         raise HTTPException(
@@ -3110,7 +3129,7 @@ async def create_portal(
         )
 
     # Get user's Stripe customer ID
-    user = await _get_user_by_id(user_id)
+    user = await _get_user_by_id(current_user["user_id"])
     if not user or not user.stripe_customer_id:
         raise HTTPException(
             status_code=404,
@@ -3155,14 +3174,14 @@ async def handle_stripe_webhook(request: Request):
 
 @app.get("/billing/status", response_model=BillingStatusResponse)
 async def get_billing_status(
-    user_id: int = Query(..., description="User ID to check billing status"),
+    current_user: dict = Depends(get_current_user),
 ):
     """
     Get current billing status for a user.
 
-    Returns subscription tier, usage, and limits.
+    Returns subscription tier, usage, and limits. Requires authentication.
     """
-    user = await _get_user_by_id(user_id)
+    user = await _get_user_by_id(current_user["user_id"])
 
     if not user:
         return BillingStatusResponse(

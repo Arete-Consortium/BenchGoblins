@@ -21,7 +21,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-__all__ = ["router", "get_current_user", "get_current_user_token"]
+__all__ = ["router", "get_current_user", "get_current_user_token", "get_optional_user"]
 
 from services.auth import (
     ConfigurationError,
@@ -112,6 +112,24 @@ async def get_current_user_token(
         )
 
     return parts[1]
+
+
+async def get_optional_user(
+    authorization: Annotated[str | None, Header()] = None,
+) -> dict | None:
+    """Return current user if JWT provided, None otherwise."""
+    if not authorization:
+        return None
+    parts = authorization.split()
+    if len(parts) != 2 or parts[0].lower() != "bearer":
+        return None
+    token = parts[1]
+    if is_token_blacklisted(token):
+        return None
+    try:
+        return verify_jwt_token(token)
+    except (ConfigurationError, InvalidTokenError):
+        return None
 
 
 async def get_current_user(token: str = Depends(get_current_user_token)) -> dict:
