@@ -72,8 +72,7 @@ class DraftResult:
             return "No players to evaluate."
         top = self.ranked_players[0]
         parts = [
-            f"Recommended pick: {top.name} ({top.position}, {top.team}) "
-            f"with score {top.score:.1f}"
+            f"Recommended pick: {top.name} ({top.position}, {top.team}) with score {top.score:.1f}"
         ]
         if top.position_boosted:
             parts.append(" (boosted for position need)")
@@ -141,9 +140,7 @@ _DRAFT_PATTERNS = [
 
 def _split_draft_names(raw: str) -> list[str]:
     """Split a comma/and/or/+/&-separated string into individual player names."""
-    normalized = re.sub(
-        r"\s+and\s+|\s+or\s+|\s*\+\s*|\s*&\s*", ",", raw, flags=re.IGNORECASE
-    )
+    normalized = re.sub(r"\s+and\s+|\s+or\s+|\s*\+\s*|\s*&\s*", ",", raw, flags=re.IGNORECASE)
     names = [name.strip() for name in normalized.split(",")]
     return [n for n in names if n]
 

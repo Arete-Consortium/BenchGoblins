@@ -694,7 +694,11 @@ class TestDecideTradeEndpoint:
             ),
             patch(
                 "api.main.espn_service.calculate_trends",
-                return_value={"minutes_trend": 0.0, "usage_trend": 0.0, "points_trend": 0.0},
+                return_value={
+                    "minutes_trend": 0.0,
+                    "usage_trend": 0.0,
+                    "points_trend": 0.0,
+                },
             ),
             patch(
                 "api.main.espn_service.get_next_opponent",

@@ -750,11 +750,13 @@ def evaluate_trade(
         indices = calculate_indices(player)
         score = composite_score(indices, mode)
         side_a_total += score
-        side_a_players.append({
-            "name": player.name,
-            "score": round(score, 1),
-            "indices": indices,
-        })
+        side_a_players.append(
+            {
+                "name": player.name,
+                "score": round(score, 1),
+                "indices": indices,
+            }
+        )
 
     side_b_players = []
     side_b_total = 0.0
@@ -762,11 +764,13 @@ def evaluate_trade(
         indices = calculate_indices(player)
         score = composite_score(indices, mode)
         side_b_total += score
-        side_b_players.append({
-            "name": player.name,
-            "score": round(score, 1),
-            "indices": indices,
-        })
+        side_b_players.append(
+            {
+                "name": player.name,
+                "score": round(score, 1),
+                "indices": indices,
+            }
+        )
 
     net_value = side_b_total - side_a_total
     player_count = len(side_a) + len(side_b)
@@ -816,15 +820,17 @@ def rank_players(
         boosted = bool(needs_upper and player.position.upper() in needs_upper)
         score = min(base_score + position_boost, 100.0) if boosted else base_score
 
-        scored.append({
-            "name": player.name,
-            "team": player.team,
-            "position": player.position,
-            "base_score": round(base_score, 1),
-            "score": round(score, 1),
-            "indices": indices,
-            "position_boosted": boosted,
-        })
+        scored.append(
+            {
+                "name": player.name,
+                "team": player.team,
+                "position": player.position,
+                "base_score": round(base_score, 1),
+                "score": round(score, 1),
+                "indices": indices,
+                "position_boosted": boosted,
+            }
+        )
 
     scored.sort(key=lambda x: x["score"], reverse=True)
 
