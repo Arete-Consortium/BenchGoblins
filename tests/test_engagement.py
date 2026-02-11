@@ -186,8 +186,11 @@ class TestEngagementTracker:
     def test_empty_data(self):
         tracker = EngagementTracker()
         metrics = tracker.compute_metrics(
-            decisions=[], sessions=[], users=[],
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=[],
+            sessions=[],
+            users=[],
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.sessions.active_count == 0
         assert metrics.queries.total_queries == 0
@@ -203,8 +206,11 @@ class TestEngagementTracker:
             _make_session("s3", platform="ios", status="expired"),
         ]
         metrics = tracker.compute_metrics(
-            decisions=[], sessions=sessions, users=[],
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=[],
+            sessions=sessions,
+            users=[],
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.sessions.active_count == 2
         assert metrics.sessions.by_platform == {"ios": 2, "android": 1}
@@ -215,13 +221,34 @@ class TestEngagementTracker:
         day1 = datetime(2026, 2, 5, 10, 0, tzinfo=timezone.utc)
         day2 = datetime(2026, 2, 6, 10, 0, tzinfo=timezone.utc)
         decisions = [
-            _make_decision("d1", sport="nba", decision_type="start_sit", risk_mode="floor", created_at=day1),
-            _make_decision("d2", sport="nba", decision_type="start_sit", risk_mode="median", created_at=day1),
-            _make_decision("d3", sport="nfl", decision_type="trade", risk_mode="ceiling", created_at=day2),
+            _make_decision(
+                "d1",
+                sport="nba",
+                decision_type="start_sit",
+                risk_mode="floor",
+                created_at=day1,
+            ),
+            _make_decision(
+                "d2",
+                sport="nba",
+                decision_type="start_sit",
+                risk_mode="median",
+                created_at=day1,
+            ),
+            _make_decision(
+                "d3",
+                sport="nfl",
+                decision_type="trade",
+                risk_mode="ceiling",
+                created_at=day2,
+            ),
         ]
         metrics = tracker.compute_metrics(
-            decisions=decisions, sessions=[], users=[],
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=decisions,
+            sessions=[],
+            users=[],
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.queries.total_queries == 3
         assert metrics.queries.avg_queries_per_day == 1.5
@@ -233,8 +260,8 @@ class TestEngagementTracker:
         tracker = EngagementTracker()
         users = [
             _make_user("1", created_at=_PERIOD_START - timedelta(days=30)),  # returning
-            _make_user("2", created_at=_PERIOD_START + timedelta(days=1)),   # new
-            _make_user("3", created_at=_PERIOD_START + timedelta(days=5)),   # new
+            _make_user("2", created_at=_PERIOD_START + timedelta(days=1)),  # new
+            _make_user("3", created_at=_PERIOD_START + timedelta(days=5)),  # new
         ]
         day1 = datetime(2026, 2, 5, 10, 0, tzinfo=timezone.utc)
         day2 = datetime(2026, 2, 6, 10, 0, tzinfo=timezone.utc)
@@ -245,8 +272,11 @@ class TestEngagementTracker:
             _make_decision("d4", user_id="3", created_at=day2),
         ]
         metrics = tracker.compute_metrics(
-            decisions=decisions, sessions=[], users=users,
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=decisions,
+            sessions=[],
+            users=users,
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.retention.new_users == 2
         assert metrics.retention.returning_users == 1
@@ -262,8 +292,11 @@ class TestEngagementTracker:
             _make_decision("d4", source="claude", cache_hit=True),
         ]
         metrics = tracker.compute_metrics(
-            decisions=decisions, sessions=[], users=[],
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=decisions,
+            sessions=[],
+            users=[],
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.features.local_routing_count == 2
         assert metrics.features.claude_routing_count == 2
@@ -281,8 +314,11 @@ class TestEngagementTracker:
         ]
         sessions = [_make_session("s1"), _make_session("s2")]
         metrics = tracker.compute_metrics(
-            decisions=decisions, sessions=sessions, users=[],
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=decisions,
+            sessions=sessions,
+            users=[],
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.depth.active_sessions == 2
         assert metrics.depth.active_users == 2
@@ -314,8 +350,11 @@ class TestEngagementTracker:
             _make_user("3", created_at=_PERIOD_START + timedelta(days=3)),
         ]
         metrics = tracker.compute_metrics(
-            decisions=decisions, sessions=sessions, users=users,
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=decisions,
+            sessions=sessions,
+            users=users,
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.queries.total_queries == 6
         assert metrics.retention.new_users == 2
@@ -328,8 +367,11 @@ class TestEngagementTracker:
     def test_period_timestamps(self):
         tracker = EngagementTracker()
         metrics = tracker.compute_metrics(
-            decisions=[], sessions=[], users=[],
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=[],
+            sessions=[],
+            users=[],
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         assert metrics.period_start == _PERIOD_START
         assert metrics.period_end == _NOW
@@ -350,8 +392,11 @@ class TestEngagementTracker:
             _make_user("2"),
         ]
         metrics = tracker.compute_metrics(
-            decisions=decisions, sessions=[], users=users,
-            period_start=_PERIOD_START, period_end=_NOW,
+            decisions=decisions,
+            sessions=[],
+            users=users,
+            period_start=_PERIOD_START,
+            period_end=_NOW,
         )
         # (2 + 1) / 2 = 1.5 → rounds to 2
         assert metrics.retention.dau == 2
@@ -397,8 +442,10 @@ class TestEngagementEndpoint:
             side_effect=[mock_dec_result, mock_sess_result]
         )
 
-        with patch("main.db_service") as mock_db, \
-             patch("main.update_engagement_metrics"):
+        with (
+            patch("main.db_service") as mock_db,
+            patch("main.update_engagement_metrics"),
+        ):
             mock_db.is_configured = True
             mock_db.session.return_value = mock_db_session
 
@@ -460,8 +507,10 @@ class TestEngagementEndpoint:
             side_effect=[mock_dec_result, mock_sess_result, mock_user_result]
         )
 
-        with patch("main.db_service") as mock_db, \
-             patch("main.update_engagement_metrics"):
+        with (
+            patch("main.db_service") as mock_db,
+            patch("main.update_engagement_metrics"),
+        ):
             mock_db.is_configured = True
             mock_db.session.return_value = mock_db_session
 
@@ -486,8 +535,10 @@ class TestEngagementEndpoint:
             side_effect=[mock_dec_result, mock_sess_result]
         )
 
-        with patch("main.db_service") as mock_db, \
-             patch("main.update_engagement_metrics") as mock_update:
+        with (
+            patch("main.db_service") as mock_db,
+            patch("main.update_engagement_metrics") as mock_update,
+        ):
             mock_db.is_configured = True
             mock_db.session.return_value = mock_db_session
 

@@ -111,9 +111,7 @@ class TestRankPlayers:
 
     def test_three_player_ordering(self, star_player, role_player, bench_player):
         """Three players ranked in correct order."""
-        result = rank_players(
-            [bench_player, star_player, role_player], RiskMode.MEDIAN
-        )
+        result = rank_players([bench_player, star_player, role_player], RiskMode.MEDIAN)
 
         assert len(result) == 3
         assert result[0]["rank"] == 1
@@ -193,14 +191,10 @@ class TestRankPlayers:
 
     def test_position_boost_case_insensitive(self, role_player):
         """Position needs matching is case-insensitive."""
-        result = rank_players(
-            [role_player], RiskMode.MEDIAN, position_needs=["sg"]
-        )
+        result = rank_players([role_player], RiskMode.MEDIAN, position_needs=["sg"])
         assert result[0]["position_boosted"] is True
 
-        result = rank_players(
-            [role_player], RiskMode.MEDIAN, position_needs=["Sg"]
-        )
+        result = rank_players([role_player], RiskMode.MEDIAN, position_needs=["Sg"])
         assert result[0]["position_boosted"] is True
 
 
@@ -244,8 +238,26 @@ class TestDraftResult:
         # Create two picks with nearly identical scores
         idx = IndexScores(sci=50.0, rmi=50.0, gis=50.0, od=0.0, msf=50.0)
         picks = [
-            DraftPick(rank=1, name="A", team="T1", position="PG", score=50.0, base_score=50.0, indices=idx, position_boosted=False),
-            DraftPick(rank=2, name="B", team="T2", position="SG", score=49.5, base_score=49.5, indices=idx, position_boosted=False),
+            DraftPick(
+                rank=1,
+                name="A",
+                team="T1",
+                position="PG",
+                score=50.0,
+                base_score=50.0,
+                indices=idx,
+                position_boosted=False,
+            ),
+            DraftPick(
+                rank=2,
+                name="B",
+                team="T2",
+                position="SG",
+                score=49.5,
+                base_score=49.5,
+                indices=idx,
+                position_boosted=False,
+            ),
         ]
         result = DraftResult(ranked_players=picks, risk_mode="median", sport="nba")
         assert result.confidence == "low"
@@ -257,8 +269,26 @@ class TestDraftResult:
 
         idx = IndexScores(sci=50.0, rmi=50.0, gis=50.0, od=0.0, msf=50.0)
         picks = [
-            DraftPick(rank=1, name="A", team="T1", position="PG", score=60.0, base_score=60.0, indices=idx, position_boosted=False),
-            DraftPick(rank=2, name="B", team="T2", position="SG", score=55.0, base_score=55.0, indices=idx, position_boosted=False),
+            DraftPick(
+                rank=1,
+                name="A",
+                team="T1",
+                position="PG",
+                score=60.0,
+                base_score=60.0,
+                indices=idx,
+                position_boosted=False,
+            ),
+            DraftPick(
+                rank=2,
+                name="B",
+                team="T2",
+                position="SG",
+                score=55.0,
+                base_score=55.0,
+                indices=idx,
+                position_boosted=False,
+            ),
         ]
         result = DraftResult(ranked_players=picks, risk_mode="median", sport="nba")
         assert result.confidence == "medium"
@@ -648,7 +678,11 @@ class TestDraftEndpoint:
             ),
             patch(
                 "api.main.espn_service.calculate_trends",
-                return_value={"minutes_trend": 0.0, "usage_trend": 0.0, "points_trend": 0.0},
+                return_value={
+                    "minutes_trend": 0.0,
+                    "usage_trend": 0.0,
+                    "points_trend": 0.0,
+                },
             ),
             patch(
                 "api.main.espn_service.get_next_opponent",
@@ -697,7 +731,11 @@ class TestDraftEndpoint:
             ),
             patch(
                 "api.main.espn_service.calculate_trends",
-                return_value={"minutes_trend": 0.0, "usage_trend": 0.0, "points_trend": 0.0},
+                return_value={
+                    "minutes_trend": 0.0,
+                    "usage_trend": 0.0,
+                    "points_trend": 0.0,
+                },
             ),
             patch(
                 "api.main.espn_service.get_next_opponent",
@@ -746,7 +784,11 @@ class TestDraftEndpoint:
             ),
             patch(
                 "api.main.espn_service.calculate_trends",
-                return_value={"minutes_trend": 0.0, "usage_trend": 0.0, "points_trend": 0.0},
+                return_value={
+                    "minutes_trend": 0.0,
+                    "usage_trend": 0.0,
+                    "points_trend": 0.0,
+                },
             ),
             patch(
                 "api.main.espn_service.get_next_opponent",
