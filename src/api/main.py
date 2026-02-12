@@ -53,6 +53,7 @@ from services.router import (
     extract_players_from_query,
 )
 from services.scoring_adapter import adapt_espn_to_core
+from services.session import session_service
 from services.sleeper import sleeper_service
 from services.trade_analyzer import extract_trade_players, trade_analyzer
 from services.variants import (
@@ -1862,9 +1863,31 @@ class RosterPlayerResponse(BaseModel):
     projected_points: float | None
 
 
-# In-memory credential storage (per session)
-# TODO: Move to Redis or database with encryption for production
-_espn_credentials: dict[str, ESPNCredentials] = {}
+# Ephemeral OAuth state (consumed in seconds, OK to lose on restart)
+_yahoo_oauth_states: dict[str, str] = {}
+
+
+@asynccontextmanager
+async def _resolve_session(session_id: str):
+    """Resolve a session_id string to a (db, Session) tuple.
+
+    Auto-creates a "default" session for backward compatibility.
+    Raises 503 if the database is not configured.
+    """
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    async with db_service.session() as db:
+        session = await session_service.get_session_by_token(db, session_id)
+
+        if not session and session_id == "default":
+            session = await session_service.create_session(db, platform="web")
+            await db.commit()
+
+        if not session:
+            raise HTTPException(status_code=401, detail="Invalid session")
+
+        yield db, session
 
 
 @app.post("/integrations/espn/connect", response_model=ESPNConnectResponse)
@@ -1888,8 +1911,12 @@ async def connect_espn_account(
             detail="Invalid ESPN credentials. Please check your SWID and espn_s2 values.",
         )
 
-    # Store credentials for this session
-    _espn_credentials[session_id] = creds
+    # Store credentials in encrypted DB
+    async with _resolve_session(session_id) as (db, session):
+        await session_service.store_credential(
+            db, session, "espn", {"swid": request.swid, "espn_s2": request.espn_s2}
+        )
+        await db.commit()
 
     # Get user ID and count leagues
     user_id = await espn_fantasy_service.get_user_id(creds)
@@ -1912,14 +1939,16 @@ async def get_espn_leagues(
 
     Optionally filter by sport.
     """
-    creds = _espn_credentials.get(session_id)
+    async with _resolve_session(session_id) as (db, session):
+        cred_data = await session_service.get_credential(db, session, "espn")
 
-    if not creds:
+    if not cred_data:
         raise HTTPException(
             status_code=401,
             detail="ESPN account not connected. Call /integrations/espn/connect first.",
         )
 
+    creds = ESPNCredentials(swid=cred_data["swid"], espn_s2=cred_data["espn_s2"])
     leagues = await espn_fantasy_service.get_user_leagues(
         creds,
         sport=sport.value if sport else None,
@@ -1948,14 +1977,16 @@ async def get_espn_roster(
     """
     Get the roster for a specific team in an ESPN Fantasy league.
     """
-    creds = _espn_credentials.get(session_id)
+    async with _resolve_session(session_id) as (db, session):
+        cred_data = await session_service.get_credential(db, session, "espn")
 
-    if not creds:
+    if not cred_data:
         raise HTTPException(
             status_code=401,
             detail="ESPN account not connected. Call /integrations/espn/connect first.",
         )
 
+    creds = ESPNCredentials(swid=cred_data["swid"], espn_s2=cred_data["espn_s2"])
     roster = await espn_fantasy_service.get_roster(
         creds=creds,
         league_id=league_id,
@@ -1982,8 +2013,12 @@ async def disconnect_espn_account(session_id: str = Query(default="default")):
     """
     Disconnect ESPN Fantasy account and clear stored credentials.
     """
-    if session_id in _espn_credentials:
-        del _espn_credentials[session_id]
+    try:
+        async with _resolve_session(session_id) as (db, session):
+            await session_service.delete_credential(db, session, "espn")
+            await db.commit()
+    except HTTPException:
+        pass  # Already disconnected or DB unavailable — idempotent
 
     return {"status": "disconnected"}
 
@@ -1993,10 +2028,14 @@ async def get_espn_status(session_id: str = Query(default="default")):
     """
     Check if ESPN Fantasy account is connected.
     """
-    creds = _espn_credentials.get(session_id)
-    connected = creds is not None
+    try:
+        async with _resolve_session(session_id) as (db, session):
+            cred_data = await session_service.get_credential(db, session, "espn")
+    except HTTPException:
+        return {"connected": False, "user_id": None}
 
-    if connected:
+    if cred_data:
+        creds = ESPNCredentials(swid=cred_data["swid"], espn_s2=cred_data["espn_s2"])
         user_id = await espn_fantasy_service.get_user_id(creds)
         return {"connected": True, "user_id": user_id}
 
@@ -2228,11 +2267,6 @@ class YahooPlayerResponse(BaseModel):
     injury_status: str | None
 
 
-# In-memory token storage (per session)
-# TODO: Move to database with encryption for production
-_yahoo_tokens: dict[str, dict] = {}
-
-
 @app.get("/integrations/yahoo/auth", response_model=YahooAuthResponse)
 async def get_yahoo_auth_url(
     redirect_uri: str = Query(..., description="OAuth redirect URI"),
@@ -2246,8 +2280,8 @@ async def get_yahoo_auth_url(
     """
     state = secrets.token_urlsafe(16)
 
-    # Store state for verification
-    _yahoo_tokens[f"{session_id}_state"] = state
+    # Ephemeral state — consumed in seconds, OK to lose on restart
+    _yahoo_oauth_states[f"{session_id}_state"] = state
 
     auth_url = yahoo_service.get_auth_url(redirect_uri, state)
 
@@ -2266,7 +2300,7 @@ async def exchange_yahoo_code(
     with an authorization code.
     """
     # Verify state if provided
-    stored_state = _yahoo_tokens.get(f"{session_id}_state")
+    stored_state = _yahoo_oauth_states.get(f"{session_id}_state")
     if request.state and stored_state and request.state != stored_state:
         raise HTTPException(status_code=400, detail="Invalid state parameter")
 
@@ -2278,12 +2312,22 @@ async def exchange_yahoo_code(
             detail="Failed to exchange code for tokens. Code may be expired or invalid.",
         )
 
-    # Store tokens for this session
-    _yahoo_tokens[session_id] = {
-        "access_token": tokens.access_token,
-        "refresh_token": tokens.refresh_token,
-        "expires_at": tokens.expires_at,
-    }
+    # Store tokens in encrypted DB
+    async with _resolve_session(session_id) as (db, session):
+        await session_service.store_credential(
+            db,
+            session,
+            "yahoo",
+            {
+                "access_token": tokens.access_token,
+                "refresh_token": tokens.refresh_token,
+                "expires_at": tokens.expires_at,
+            },
+        )
+        await db.commit()
+
+    # Clean up ephemeral state
+    _yahoo_oauth_states.pop(f"{session_id}_state", None)
 
     return YahooTokenResponse(
         access_token=tokens.access_token,
@@ -2302,28 +2346,35 @@ async def refresh_yahoo_token(
 
     Uses the stored refresh token to get a new access token.
     """
-    stored = _yahoo_tokens.get(session_id)
+    async with _resolve_session(session_id) as (db, session):
+        stored = await session_service.get_credential(db, session, "yahoo")
 
-    if not stored or "refresh_token" not in stored:
-        raise HTTPException(
-            status_code=401,
-            detail="No Yahoo refresh token found. Complete OAuth flow first.",
+        if not stored or "refresh_token" not in stored:
+            raise HTTPException(
+                status_code=401,
+                detail="No Yahoo refresh token found. Complete OAuth flow first.",
+            )
+
+        tokens = await yahoo_service.refresh_token(stored["refresh_token"])
+
+        if not tokens:
+            raise HTTPException(
+                status_code=401,
+                detail="Failed to refresh token. User may need to re-authorize.",
+            )
+
+        # Update stored tokens
+        await session_service.store_credential(
+            db,
+            session,
+            "yahoo",
+            {
+                "access_token": tokens.access_token,
+                "refresh_token": tokens.refresh_token,
+                "expires_at": tokens.expires_at,
+            },
         )
-
-    tokens = await yahoo_service.refresh_token(stored["refresh_token"])
-
-    if not tokens:
-        raise HTTPException(
-            status_code=401,
-            detail="Failed to refresh token. User may need to re-authorize.",
-        )
-
-    # Update stored tokens
-    _yahoo_tokens[session_id] = {
-        "access_token": tokens.access_token,
-        "refresh_token": tokens.refresh_token,
-        "expires_at": tokens.expires_at,
-    }
+        await db.commit()
 
     return YahooTokenResponse(
         access_token=tokens.access_token,
@@ -2335,31 +2386,38 @@ async def refresh_yahoo_token(
 
 async def _get_yahoo_token(session_id: str) -> str:
     """Get valid Yahoo access token, refreshing if needed."""
-    stored = _yahoo_tokens.get(session_id)
+    async with _resolve_session(session_id) as (db, session):
+        stored = await session_service.get_credential(db, session, "yahoo")
 
-    if not stored:
-        raise HTTPException(
-            status_code=401,
-            detail="Yahoo account not connected. Complete OAuth flow first.",
-        )
-
-    # Refresh if expired (with 60s buffer)
-    if stored.get("expires_at", 0) < time.time() + 60:
-        tokens = await yahoo_service.refresh_token(stored["refresh_token"])
-        if tokens:
-            _yahoo_tokens[session_id] = {
-                "access_token": tokens.access_token,
-                "refresh_token": tokens.refresh_token,
-                "expires_at": tokens.expires_at,
-            }
-            return tokens.access_token
-        else:
+        if not stored:
             raise HTTPException(
                 status_code=401,
-                detail="Failed to refresh Yahoo token. Please re-authorize.",
+                detail="Yahoo account not connected. Complete OAuth flow first.",
             )
 
-    return stored["access_token"]
+        # Refresh if expired (with 60s buffer)
+        if stored.get("expires_at", 0) < time.time() + 60:
+            tokens = await yahoo_service.refresh_token(stored["refresh_token"])
+            if tokens:
+                await session_service.store_credential(
+                    db,
+                    session,
+                    "yahoo",
+                    {
+                        "access_token": tokens.access_token,
+                        "refresh_token": tokens.refresh_token,
+                        "expires_at": tokens.expires_at,
+                    },
+                )
+                await db.commit()
+                return tokens.access_token
+            else:
+                raise HTTPException(
+                    status_code=401,
+                    detail="Failed to refresh Yahoo token. Please re-authorize.",
+                )
+
+        return stored["access_token"]
 
 
 @app.get("/integrations/yahoo/leagues", response_model=list[YahooLeagueResponse])
@@ -2454,12 +2512,15 @@ async def disconnect_yahoo_account(session_id: str = Query(default="default")):
     """
     Disconnect Yahoo Fantasy account and clear stored tokens.
     """
-    if session_id in _yahoo_tokens:
-        del _yahoo_tokens[session_id]
+    try:
+        async with _resolve_session(session_id) as (db, session):
+            await session_service.delete_credential(db, session, "yahoo")
+            await db.commit()
+    except HTTPException:
+        pass  # Already disconnected or DB unavailable — idempotent
 
-    state_key = f"{session_id}_state"
-    if state_key in _yahoo_tokens:
-        del _yahoo_tokens[state_key]
+    # Clean up ephemeral OAuth state
+    _yahoo_oauth_states.pop(f"{session_id}_state", None)
 
     return {"status": "disconnected"}
 
@@ -2469,10 +2530,13 @@ async def get_yahoo_status(session_id: str = Query(default="default")):
     """
     Check if Yahoo Fantasy account is connected.
     """
-    stored = _yahoo_tokens.get(session_id)
-    connected = stored is not None and "access_token" in stored
+    try:
+        async with _resolve_session(session_id) as (db, session):
+            stored = await session_service.get_credential(db, session, "yahoo")
+    except HTTPException:
+        return {"connected": False}
 
-    if connected:
+    if stored and "access_token" in stored:
         expires_at = stored.get("expires_at", 0)
         return {
             "connected": True,
