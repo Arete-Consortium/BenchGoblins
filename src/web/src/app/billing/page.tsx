@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
-import { presentPaywall } from '@/lib/revenuecat';
+import { presentPaywall, RC_ENTITLEMENT_ID } from '@/lib/revenuecat';
 
 const FREE_FEATURES = [
   '5 queries per day',
@@ -93,7 +93,7 @@ export default function BillingPage() {
   }, [offerings, purchase, user?.email]);
 
   // Active subscription details from customer info
-  const activeEntitlement = customerInfo?.entitlements.active['Bench Goblins Pro'];
+  const activeEntitlement = customerInfo?.entitlements.active[RC_ENTITLEMENT_ID];
   const expiresDate = activeEntitlement?.expirationDate
     ? new Date(activeEntitlement.expirationDate).toLocaleDateString()
     : null;

@@ -2,13 +2,13 @@ import { Purchases, type Package, type CustomerInfo, type Offerings, type Paywal
 
 // RevenueCat configuration
 const RC_API_KEY = process.env.NEXT_PUBLIC_REVENUECAT_API_KEY || '';
-const RC_ENTITLEMENT_ID = 'Bench Goblins Pro';
+const RC_ENTITLEMENT_ID = 'pro';
 
-// Product identifiers (configured in RevenueCat dashboard)
+// Product identifiers (must match mobile + RevenueCat dashboard)
 export const PRODUCT_IDS = {
-  monthly: 'monthly',
-  yearly: 'yearly',
-  lifetime: 'lifetime',
+  weekly: 'benchgoblins_pro_weekly',
+  monthly: 'benchgoblins_pro_monthly',
+  annual: 'benchgoblins_pro_annual',
 } as const;
 
 /**
@@ -67,7 +67,7 @@ export async function getCustomerInfo(): Promise<CustomerInfo> {
 }
 
 /**
- * Check if the current user has the "Bench Goblins Pro" entitlement.
+ * Check if the current user has the "pro" entitlement.
  */
 export async function isProUser(): Promise<boolean> {
   return getPurchases().isEntitledTo(RC_ENTITLEMENT_ID);

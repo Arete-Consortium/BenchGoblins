@@ -3,7 +3,7 @@
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
 /**
- * Hook to gate features behind the "Bench Goblins Pro" entitlement.
+ * Hook to gate features behind the "pro" entitlement.
  *
  * Usage:
  *   const { isPro, isLoading, requirePro } = useEntitlement();
@@ -13,7 +13,7 @@ export function useEntitlement() {
   const { isPro, isLoading, customerInfo, refreshCustomerInfo } = useSubscriptionStore();
 
   return {
-    /** Whether the user has the "Bench Goblins Pro" entitlement */
+    /** Whether the user has the "pro" entitlement */
     isPro,
     /** Whether subscription state is still loading */
     isLoading,
