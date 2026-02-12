@@ -3,6 +3,7 @@ import { Inter } from 'next/font/google';
 import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { GoogleAuthProviderWrapper } from '@/components/providers/GoogleAuthProvider';
+import { RevenueCatProvider } from '@/components/providers/RevenueCatProvider';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import './globals.css';
 
@@ -37,10 +38,12 @@ export default function RootLayout({
         >
           <GoogleAuthProviderWrapper>
             <QueryProvider>
-              <ToastProvider>
-                {children}
-                <ToastViewport />
-              </ToastProvider>
+              <RevenueCatProvider>
+                <ToastProvider>
+                  {children}
+                  <ToastViewport />
+                </ToastProvider>
+              </RevenueCatProvider>
             </QueryProvider>
           </GoogleAuthProviderWrapper>
         </ThemeProvider>
