@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/stores/authStore';
+import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
 const navItems = [
   { href: '/ask', label: 'Ask', icon: MessageSquare },
@@ -59,6 +60,7 @@ export function Header() {
   const pathname = usePathname();
   const router = useRouter();
   const { user, isAuthenticated, signOut } = useAuthStore();
+  const { isPro } = useSubscriptionStore();
 
   const handleSignOut = async () => {
     await signOut();
@@ -137,12 +139,12 @@ export function Header() {
                         <span
                           className={cn(
                             'text-xs font-medium px-2 py-0.5 rounded-full',
-                            user.subscription_tier === 'pro'
+                            isPro
                               ? 'bg-primary-500/20 text-primary-400'
                               : 'bg-dark-700 text-dark-400'
                           )}
                         >
-                          {user.subscription_tier === 'pro' ? 'Pro' : 'Free'}
+                          {isPro ? 'Pro' : 'Free'}
                         </span>
                       </div>
                     </div>
