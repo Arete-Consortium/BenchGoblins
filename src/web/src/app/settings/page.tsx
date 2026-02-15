@@ -1,16 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useTheme } from 'next-themes';
 import { Header } from '@/components/layout/Header';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import {
-  Settings,
-  User,
   Bell,
-  Palette,
   Shield,
   CreditCard,
   ExternalLink,
@@ -38,8 +37,10 @@ function SettingsSection({
 }
 
 export default function SettingsPage() {
+  const router = useRouter();
+  const { theme, setTheme } = useTheme();
   const { sport, riskMode, setSport, setRiskMode, clearMessages } = useAppStore();
-  const [darkMode, setDarkMode] = useState(true);
+  const darkMode = theme === 'dark';
   const [notifications, setNotifications] = useState(true);
 
   return (
@@ -87,7 +88,7 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <button
-                  onClick={() => setDarkMode(!darkMode)}
+                  onClick={() => setTheme(darkMode ? 'light' : 'dark')}
                   className={cn(
                     'w-12 h-7 rounded-full transition-all relative',
                     darkMode ? 'bg-primary-600' : 'bg-dark-600'
@@ -143,7 +144,10 @@ export default function SettingsPage() {
                   Current Plan
                 </span>
               </div>
-              <button className="w-full py-3 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-500 transition-all flex items-center justify-center gap-2">
+              <button
+                onClick={() => router.push('/billing')}
+                className="w-full py-3 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
+              >
                 <CreditCard className="w-5 h-5" />
                 Upgrade to Pro
               </button>
