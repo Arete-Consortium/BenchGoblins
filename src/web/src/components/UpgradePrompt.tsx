@@ -71,7 +71,7 @@ export function UpgradePrompt({ open, onOpenChange }: UpgradePromptProps) {
     }
 
     try {
-      const result = await presentPaywall(paywallRef.current);
+      await presentPaywall(paywallRef.current);
       await refreshCustomerInfo();
       onOpenChange(false);
     } catch {

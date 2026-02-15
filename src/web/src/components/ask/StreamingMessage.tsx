@@ -10,21 +10,20 @@ interface StreamingMessageProps {
 }
 
 export function StreamingMessage({ content, isStreaming }: StreamingMessageProps) {
-  const [showCursor, setShowCursor] = useState(true);
+  const [cursorVisible, setCursorVisible] = useState(true);
 
   // Blinking cursor effect while streaming
   useEffect(() => {
-    if (!isStreaming) {
-      setShowCursor(false);
-      return;
-    }
+    if (!isStreaming) return;
 
     const interval = setInterval(() => {
-      setShowCursor((prev) => !prev);
+      setCursorVisible((prev) => !prev);
     }, 500);
 
     return () => clearInterval(interval);
   }, [isStreaming]);
+
+  const showCursor = isStreaming && cursorVisible;
 
   return (
     <div className="flex gap-3">

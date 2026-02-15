@@ -27,13 +27,6 @@ export interface User {
   queries_limit: number; // 5 for free, unlimited for pro
 }
 
-// Auth response from backend
-interface AuthResponse {
-  access_token: string;
-  token_type: string;
-  user: User;
-}
-
 // Auth state interface
 interface AuthState {
   user: User | null;
