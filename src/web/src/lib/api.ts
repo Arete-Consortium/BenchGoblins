@@ -270,7 +270,6 @@ class APIClient {
     if (!reader) throw new Error('No response body');
 
     const decoder = new TextDecoder();
-    let fullContent = '';
 
     while (true) {
       const { done, value } = await reader.read();
@@ -288,14 +287,12 @@ class APIClient {
         try {
           const parsed = JSON.parse(event);
           if (parsed.type === 'content') {
-            fullContent += parsed.text;
             onChunk(parsed.text);
           } else if (parsed.type === 'done' && onComplete) {
             onComplete(parsed.response);
           }
         } catch {
           // Plain text chunk
-          fullContent += event;
           onChunk(event);
         }
       }

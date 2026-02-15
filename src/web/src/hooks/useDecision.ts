@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '@/lib/api';
-import type { DecisionRequest, DecisionResponse, DecisionHistoryItem, Sport } from '@/types';
+import type { DecisionRequest, DecisionResponse, Sport } from '@/types';
 
 /**
  * Hook for making decisions with streaming support

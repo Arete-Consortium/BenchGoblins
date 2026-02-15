@@ -12,7 +12,6 @@ import {
   TrendingUp,
   Zap,
   Activity,
-  Database,
   Server,
   CheckCircle,
   XCircle,

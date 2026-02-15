@@ -57,7 +57,7 @@ export default function BillingPage() {
     setError(null);
 
     try {
-      const result = await presentPaywall(paywallRef.current);
+      await presentPaywall(paywallRef.current);
       // Paywall completed — refresh entitlement status
       await refreshCustomerInfo();
       setShowPaywall(false);
