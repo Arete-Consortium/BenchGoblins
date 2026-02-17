@@ -14,6 +14,7 @@ const EXAMPLE_QUERIES = [
   'Trade Tyreek Hill for Justin Jefferson?',
   "Is De'Aaron Fox a good waiver pickup?",
   "Explain Luka Doncic's scoring volatility",
+  'Should I start Haaland or Salah in my FPL squad this gameweek?',
 ];
 
 function WelcomeScreen() {
