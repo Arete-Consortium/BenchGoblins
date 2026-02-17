@@ -89,7 +89,7 @@ class ClaudeService:
     ) -> str:
         """Build the user message with context enrichment."""
         parts = [
-            f"Sport: {sport.upper()}",
+            f"Sport (user-selected hint, may not match query — always infer the correct sport from the players mentioned): {sport.upper()}",
             f"Risk Mode: {risk_mode.upper()}",
             f"Decision Type: {decision_type.replace('_', '/')}",
         ]
