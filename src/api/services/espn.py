@@ -337,18 +337,24 @@ class ESPNService:
                 stats.shots = stat_map.get("shots", 0)
                 stats.save_pct = stat_map.get("savepct", stat_map.get("svpct", 0))
             elif sport == "soccer":
-                stats.games_played = int(stat_map.get("gamesplayed", stat_map.get("appearances", 0)))
+                stats.games_played = int(
+                    stat_map.get("gamesplayed", stat_map.get("appearances", 0))
+                )
                 stats.soccer_goals = stat_map.get("goals", stat_map.get("totalgoals", 0))
                 stats.soccer_assists = stat_map.get("assists", stat_map.get("goalassists", 0))
                 stats.soccer_minutes = stat_map.get("minutesplayed", stat_map.get("minutes", 0))
                 stats.soccer_shots = stat_map.get("totalshots", stat_map.get("shotsontarget", 0))
-                stats.soccer_shots_on_target = stat_map.get("shotsontarget", stat_map.get("shotsongoal", 0))
+                stats.soccer_shots_on_target = stat_map.get(
+                    "shotsontarget", stat_map.get("shotsongoal", 0)
+                )
                 stats.soccer_key_passes = stat_map.get("keypasses", 0)
                 stats.soccer_tackles = stat_map.get("tackles", stat_map.get("totalTackles", 0))
                 stats.soccer_interceptions = stat_map.get("interceptions", 0)
                 stats.soccer_clean_sheets = stat_map.get("cleansheets", 0)
                 stats.soccer_saves = stat_map.get("saves", 0)
-                stats.soccer_goals_conceded = stat_map.get("goalsconceded", stat_map.get("goalagainst", 0))
+                stats.soccer_goals_conceded = stat_map.get(
+                    "goalsconceded", stat_map.get("goalagainst", 0)
+                )
 
             return stats
 
@@ -1017,7 +1023,9 @@ class ESPNService:
 
             # Goal involvement (goals + assists) as points proxy
             recent_gi = sum(g.get("goals", 0) + g.get("assists", 0) for g in recent) / len(recent)
-            baseline_gi = sum(g.get("goals", 0) + g.get("assists", 0) for g in baseline) / len(baseline)
+            baseline_gi = sum(g.get("goals", 0) + g.get("assists", 0) for g in baseline) / len(
+                baseline
+            )
             trends["points_trend"] = recent_gi - baseline_gi
 
             # Shots as usage proxy

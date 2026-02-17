@@ -369,7 +369,9 @@ class TeamDefense(Base):
 
     __table_args__ = (
         UniqueConstraint("team_abbrev", "sport", "season", name="uq_team_defense"),
-        CheckConstraint("sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')", name="check_defense_sport"),
+        CheckConstraint(
+            "sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')", name="check_defense_sport"
+        ),
         Index("idx_team_defense_team", "team_abbrev"),
         Index("idx_team_defense_sport", "sport"),
     )
