@@ -98,14 +98,14 @@ https://aretedriver.github.io/BenchGoblins/legal/privacy-policy.html
 2. **Decision Chat** — "Ask any start/sit question in plain English"
 3. **Decision Result** — "Clear recommendations with real reasoning"
 4. **Roster Manager** — "Sync your league roster in one tap"
-5. **Subscription** — "Go Pro for unlimited decisions across 4 sports"
+5. **Subscription** — "Go Pro for unlimited decisions across 5 sports"
 
 ## App Review Notes (for Apple reviewers)
 
 BenchGoblins is a fantasy sports decision tool. Users type questions about their fantasy sports lineups ("Should I start Player A or Player B?") and receive analysis-backed recommendations.
 
-Free tier: 5 decisions/day, NBA only.
-Pro tier: Unlimited decisions, all sports.
+Free tier: 5 decisions/day, all 5 sports (NBA, NFL, MLB, NHL, Soccer).
+Pro tier: Unlimited decisions, advanced AI analysis, all sports.
 
 Demo credentials are not required — the app works without login for free-tier usage.
 

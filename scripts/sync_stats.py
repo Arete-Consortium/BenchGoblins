@@ -45,7 +45,7 @@ from services.espn import espn_service  # noqa: E402
 from services.redis import redis_service  # noqa: E402
 
 # Sports to sync
-SPORTS = ["nba", "nfl", "mlb", "nhl"]
+SPORTS = ["nba", "nfl", "mlb", "nhl", "soccer"]
 
 # How recently a player must have been updated to skip
 SKIP_IF_UPDATED_WITHIN_HOURS = 20

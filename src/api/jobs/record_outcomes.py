@@ -144,7 +144,7 @@ async def main():
     parser.add_argument(
         "--sport",
         type=str,
-        choices=["nba", "nfl", "mlb", "nhl"],
+        choices=["nba", "nfl", "mlb", "nhl", "soccer"],
         default=None,
         help="Filter by sport (default: all)",
     )
