@@ -12,14 +12,14 @@ import { presentPaywall, RC_ENTITLEMENT_ID } from '@/lib/revenuecat';
 
 const FREE_FEATURES = [
   '5 queries per day',
-  'All sports (NBA, NFL, MLB, NHL)',
+  'All sports (NBA, NFL, MLB, NHL, Soccer)',
   'Basic AI recommendations',
   'Start/sit decisions',
 ];
 
 const PRO_FEATURES = [
   'Unlimited queries',
-  'All sports (NBA, NFL, MLB, NHL)',
+  'All sports (NBA, NFL, MLB, NHL, Soccer)',
   'Advanced AI analysis',
   'Trade & waiver recommendations',
   'Priority response time',

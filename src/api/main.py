@@ -189,6 +189,7 @@ class Sport(str, Enum):
     NFL = "nfl"
     MLB = "mlb"
     NHL = "nhl"
+    SOCCER = "soccer"
 
 
 class RiskMode(str, Enum):
