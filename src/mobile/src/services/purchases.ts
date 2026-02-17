@@ -12,7 +12,8 @@ export const ENTITLEMENT_ID = 'pro';
 export const PRODUCT_IDS = {
   WEEKLY: 'benchgoblins_pro_weekly',
   MONTHLY: 'benchgoblins_pro_monthly',
-  ANNUAL: 'benchgoblins_pro_annual',
+  SEASONAL: 'benchgoblins_pro_seasonal',
+  LEAGUE_SEASONAL: 'benchgoblins_league_seasonal',
 } as const;
 
 // Subscription tier limits

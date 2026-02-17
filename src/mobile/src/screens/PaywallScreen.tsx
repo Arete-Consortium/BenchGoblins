@@ -108,8 +108,8 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
         return `${price}/week`;
       case 'MONTHLY':
         return `${price}/month`;
-      case 'ANNUAL':
-        return `${price}/year`;
+      case 'THREE_MONTH':
+        return `${price}/3 months`;
       default:
         return price;
     }
@@ -121,16 +121,16 @@ export default function PaywallScreen({ navigation }: PaywallScreenProps) {
         return 'Weekly';
       case 'MONTHLY':
         return 'Monthly';
-      case 'ANNUAL':
-        return 'Annual';
+      case 'THREE_MONTH':
+        return 'Seasonal';
       default:
         return pkg.identifier;
     }
   };
 
   const getSavingsLabel = (pkg: PurchasesPackage) => {
-    if (pkg.packageType === 'ANNUAL') {
-      return 'BEST VALUE - Save 50%';
+    if (pkg.packageType === 'THREE_MONTH') {
+      return 'BEST VALUE';
     }
     return null;
   };

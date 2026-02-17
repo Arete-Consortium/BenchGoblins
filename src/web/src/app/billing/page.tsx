@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { CreditCard, Check, Zap, Crown, ArrowLeft, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
-import { presentPaywall, RC_ENTITLEMENT_ID } from '@/lib/revenuecat';
+import { RC_ENTITLEMENT_ID } from '@/lib/revenuecat';
 
 const FREE_FEATURES = [
   '5 queries per week',
@@ -39,34 +39,14 @@ export default function BillingPage() {
     purchase,
   } = useSubscriptionStore();
 
-  const [showPaywall, setShowPaywall] = useState(false);
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const paywallRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
       router.push('/auth/login');
     }
   }, [isAuthenticated, router]);
-
-  const handleShowPaywall = useCallback(async () => {
-    if (!paywallRef.current) return;
-
-    setShowPaywall(true);
-    setError(null);
-
-    try {
-      await presentPaywall(paywallRef.current);
-      // Paywall completed — refresh entitlement status
-      await refreshCustomerInfo();
-      setShowPaywall(false);
-    } catch (err) {
-      console.error('Paywall error:', err);
-      setError('Something went wrong. Please try again.');
-      setShowPaywall(false);
-    }
-  }, [refreshCustomerInfo]);
 
   const handleManualPurchase = useCallback(async (packageId: string) => {
     if (!offerings?.current) return;
@@ -127,13 +107,7 @@ export default function BillingPage() {
           </div>
         )}
 
-        {/* RevenueCat Paywall Container (hidden until triggered) */}
-        <div
-          ref={paywallRef}
-          className={showPaywall ? 'mb-8' : 'hidden'}
-        />
-
-        {!showPaywall && (
+        {(
           <>
             <div className="grid md:grid-cols-2 gap-6">
               {/* Free Plan */}
@@ -231,7 +205,7 @@ export default function BillingPage() {
                     </div>
                   ) : (
                     <Button
-                      onClick={handleShowPaywall}
+                      onClick={() => handleManualPurchase('$rc_monthly')}
                       className="w-full gap-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500"
                       disabled={purchaseLoading || subscriptionLoading}
                     >
