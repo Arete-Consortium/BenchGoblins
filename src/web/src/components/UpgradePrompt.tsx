@@ -1,8 +1,8 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Sparkles, Zap, Check, Loader2 } from 'lucide-react';
+import { Sparkles, Zap, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -12,8 +12,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { useAuthStore } from '@/stores/authStore';
-import { useSubscriptionStore } from '@/stores/subscriptionStore';
-import { presentPaywall } from '@/lib/revenuecat';
 
 interface UpgradePromptProps {
   open: boolean;
@@ -38,84 +36,24 @@ const PRO_FEATURES = [
 export function UpgradePrompt({ open, onOpenChange }: UpgradePromptProps) {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const { refreshCustomerInfo, isInitialized } = useSubscriptionStore();
-  const [showPaywall, setShowPaywall] = useState(false);
-  const [paywallLoading, setPaywallLoading] = useState(false);
-  const paywallRef = useRef<HTMLDivElement>(null);
 
-  const handleUpgrade = useCallback(async () => {
+  const handleUpgrade = useCallback(() => {
     if (!isAuthenticated) {
       router.push('/auth/login?redirect=/billing');
-      onOpenChange(false);
-      return;
-    }
-
-    // If RevenueCat isn't initialized, fall back to billing page
-    if (!isInitialized) {
+    } else {
       router.push('/billing');
-      onOpenChange(false);
-      return;
     }
-
-    // Show paywall inline in the dialog
-    setShowPaywall(true);
-    setPaywallLoading(true);
-
-    // Wait for the DOM to update with the paywall container
-    await new Promise((resolve) => setTimeout(resolve, 50));
-
-    if (!paywallRef.current) {
-      router.push('/billing');
-      onOpenChange(false);
-      return;
-    }
-
-    try {
-      await presentPaywall(paywallRef.current);
-      await refreshCustomerInfo();
-      onOpenChange(false);
-    } catch {
-      // User cancelled or error — just close the paywall view
-    } finally {
-      setShowPaywall(false);
-      setPaywallLoading(false);
-    }
-  }, [isAuthenticated, isInitialized, router, onOpenChange, refreshCustomerInfo]);
+    onOpenChange(false);
+  }, [isAuthenticated, router, onOpenChange]);
 
   const handleSignIn = () => {
     router.push('/auth/login');
     onOpenChange(false);
   };
 
-  const handleClose = (isOpen: boolean) => {
-    if (!isOpen) {
-      setShowPaywall(false);
-      setPaywallLoading(false);
-    }
-    onOpenChange(isOpen);
-  };
-
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className={showPaywall ? 'sm:max-w-2xl' : 'sm:max-w-md'}>
-        {showPaywall ? (
-          <>
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2 text-xl">
-                <Sparkles className="h-5 w-5 text-primary-400" />
-                Complete Your Upgrade
-              </DialogTitle>
-            </DialogHeader>
-            <div ref={paywallRef} className="min-h-[300px]">
-              {paywallLoading && (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-                </div>
-              )}
-            </div>
-          </>
-        ) : (
-          <>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 <Zap className="h-5 w-5 text-yellow-400" />
@@ -190,8 +128,6 @@ export function UpgradePrompt({ open, onOpenChange }: UpgradePromptProps) {
                 )}
               </div>
             </div>
-          </>
-        )}
       </DialogContent>
     </Dialog>
   );
