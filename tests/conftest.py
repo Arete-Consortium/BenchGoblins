@@ -472,6 +472,184 @@ def nhl_goalie_stats():
 
 
 @pytest.fixture
+def soccer_forward_stats():
+    """Sample Soccer forward stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="50001",
+        name="Test Forward",
+        team="ARS",
+        position="FW",
+        sport="soccer",
+        soccer_goals=15.0,
+        soccer_assists=8.0,
+        soccer_minutes=2800.0,
+        soccer_shots=85.0,
+        soccer_shots_on_target=42.0,
+        soccer_key_passes=35.0,
+        soccer_tackles=12.0,
+        soccer_interceptions=5.0,
+        soccer_clean_sheets=0.0,
+        soccer_saves=0.0,
+        soccer_goals_conceded=0.0,
+        soccer_xg=14.5,
+        soccer_xa=7.2,
+        is_starter=True,
+        games_started_pct=0.95,
+        games_played=33,
+        minutes_trend=2.0,
+        usage_trend=0.5,
+        points_trend=0.3,
+    )
+
+
+@pytest.fixture
+def soccer_midfielder_stats():
+    """Sample Soccer midfielder stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="50002",
+        name="Test Midfielder",
+        team="MCI",
+        position="MF",
+        sport="soccer",
+        soccer_goals=5.0,
+        soccer_assists=12.0,
+        soccer_minutes=2600.0,
+        soccer_shots=40.0,
+        soccer_shots_on_target=18.0,
+        soccer_key_passes=65.0,
+        soccer_tackles=45.0,
+        soccer_interceptions=30.0,
+        soccer_clean_sheets=0.0,
+        soccer_saves=0.0,
+        soccer_goals_conceded=0.0,
+        soccer_xg=4.8,
+        soccer_xa=11.0,
+        is_starter=True,
+        games_started_pct=0.90,
+        games_played=35,
+        minutes_trend=0.0,
+        usage_trend=0.3,
+        points_trend=0.1,
+    )
+
+
+@pytest.fixture
+def soccer_goalkeeper_stats():
+    """Sample Soccer goalkeeper stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="50003",
+        name="Test Goalkeeper",
+        team="LIV",
+        position="GK",
+        sport="soccer",
+        soccer_goals=0.0,
+        soccer_assists=1.0,
+        soccer_minutes=3060.0,
+        soccer_shots=0.0,
+        soccer_shots_on_target=0.0,
+        soccer_key_passes=2.0,
+        soccer_tackles=0.0,
+        soccer_interceptions=3.0,
+        soccer_clean_sheets=14.0,
+        soccer_saves=95.0,
+        soccer_goals_conceded=28.0,
+        soccer_xg=0.0,
+        soccer_xa=0.0,
+        is_starter=True,
+        games_started_pct=0.97,
+        games_played=34,
+        minutes_trend=0.0,
+        usage_trend=0.0,
+        points_trend=0.2,
+    )
+
+
+@pytest.fixture
+def soccer_defender_stats():
+    """Sample Soccer defender stats."""
+    from core.scoring import PlayerStats
+
+    return PlayerStats(
+        player_id="50004",
+        name="Test Defender",
+        team="CHE",
+        position="CB",
+        sport="soccer",
+        soccer_goals=3.0,
+        soccer_assists=2.0,
+        soccer_minutes=2700.0,
+        soccer_shots=15.0,
+        soccer_shots_on_target=8.0,
+        soccer_key_passes=10.0,
+        soccer_tackles=70.0,
+        soccer_interceptions=50.0,
+        soccer_clean_sheets=12.0,
+        soccer_saves=0.0,
+        soccer_goals_conceded=30.0,
+        soccer_xg=2.5,
+        soccer_xa=1.8,
+        is_starter=True,
+        games_started_pct=0.92,
+        games_played=36,
+        minutes_trend=0.0,
+        usage_trend=-0.2,
+        points_trend=0.0,
+    )
+
+
+@pytest.fixture
+def espn_soccer_forward_info():
+    """ESPN PlayerInfo for a Soccer forward."""
+    from services.espn import PlayerInfo
+
+    return PlayerInfo(
+        id="50001",
+        name="Test Forward",
+        team="Arsenal",
+        team_abbrev="ARS",
+        position="FW",
+        jersey="7",
+        height="5'10\"",
+        weight="154 lbs",
+        age=25,
+        experience=6,
+        headshot_url=None,
+    )
+
+
+@pytest.fixture
+def espn_soccer_forward_stats():
+    """ESPN PlayerStats for a Soccer forward."""
+    from services.espn import PlayerStats
+
+    return PlayerStats(
+        player_id="50001",
+        sport="soccer",
+        games_played=33,
+        games_started=31,
+        soccer_goals=15.0,
+        soccer_assists=8.0,
+        soccer_minutes=2800.0,
+        soccer_shots=85.0,
+        soccer_shots_on_target=42.0,
+        soccer_key_passes=35.0,
+        soccer_tackles=12.0,
+        soccer_interceptions=5.0,
+        soccer_clean_sheets=0.0,
+        soccer_saves=0.0,
+        soccer_goals_conceded=0.0,
+        soccer_xg=14.5,
+        soccer_xa=7.2,
+    )
+
+
+@pytest.fixture
 def espn_mlb_hitter_info():
     """ESPN PlayerInfo for an MLB hitter."""
     from services.espn import PlayerInfo

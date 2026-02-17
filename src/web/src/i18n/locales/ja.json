@@ -23,7 +23,7 @@
     "featureRealTime": "リアルタイム分析",
     "featureRealTimeDesc": "ESPN、Yahoo、Sleeperからのライブ選手データを全ての判断に統合。",
     "featureMultiSport": "マルチスポーツ対応",
-    "featureMultiSportDesc": "NBA、NFL、MLB、NHLをスポーツ別のスコアリングと分析でカバー。",
+    "featureMultiSportDesc": "NBA、NFL、MLB、NHL、サッカーをスポーツ別のスコアリングと分析でカバー。",
     "riskTitle": "3つのリスクモード",
     "riskSubtitle": "マッチアップ状況とリスク許容度に合わせて推奨をカスタマイズ。",
     "floorMode": "フロアモード",

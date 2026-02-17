@@ -75,6 +75,21 @@ class PlayerStats:
     shots: float = 0.0
     save_pct: float = 0.0  # Goalies
 
+    # Soccer-specific
+    soccer_goals: float = 0.0
+    soccer_assists: float = 0.0
+    soccer_minutes: float = 0.0
+    soccer_shots: float = 0.0
+    soccer_shots_on_target: float = 0.0
+    soccer_key_passes: float = 0.0
+    soccer_tackles: float = 0.0
+    soccer_interceptions: float = 0.0
+    soccer_clean_sheets: float = 0.0
+    soccer_saves: float = 0.0
+    soccer_goals_conceded: float = 0.0
+    soccer_xg: float = 0.0
+    soccer_xa: float = 0.0
+
     # Matchup context (populated per-game)
     opponent_def_rating: Optional[float] = None
     opponent_pace: Optional[float] = None
@@ -502,6 +517,123 @@ def calculate_gis_nhl(stats: PlayerStats) -> float:
 
 
 # =============================================================================
+# INDEX CALCULATIONS - SOCCER
+# =============================================================================
+
+
+def calculate_sci_soccer(stats: PlayerStats) -> float:
+    """
+    Space Creation Index (Soccer).
+
+    Outfield: Goals + xG + key passes + shots on target.
+    Goalkeepers: Save-based.
+    """
+    position = stats.position.upper() if stats.position else ""
+
+    is_goalkeeper = position in ("GK", "G", "GOALKEEPER")
+
+    if is_goalkeeper:
+        sv_score = min(80, stats.soccer_saves * 1.5)
+        cs_score = min(20, stats.soccer_clean_sheets * 2.0)
+        return max(0, min(100, sv_score + cs_score))
+
+    # Outfield player
+    # Goal scoring ability (0-35)
+    goal_score = min(35, stats.soccer_goals * 2.5)
+
+    # xG quality (0-20) — measures shot quality independent of conversion
+    xg_score = min(20, stats.soccer_xg * 2.0)
+
+    # Creative output: key passes + xA (0-25)
+    creative_score = min(15, stats.soccer_key_passes * 1.5)
+    xa_score = min(10, stats.soccer_xa * 1.5)
+
+    # Shot volume (0-15) — willingness to shoot
+    shot_score = min(15, stats.soccer_shots_on_target * 1.0)
+
+    # Assist output (0-15)
+    assist_score = min(15, stats.soccer_assists * 2.0)
+
+    raw_sci = goal_score + xg_score + creative_score + xa_score + shot_score + assist_score
+
+    # Position boost for defenders who contribute offensively
+    if position in ("CB", "LB", "RB", "DEF", "D"):
+        raw_sci *= 1.3  # Offensive defenders are more valuable in fantasy
+
+    return max(0, min(100, raw_sci))
+
+
+def calculate_rmi_soccer(stats: PlayerStats) -> float:
+    """
+    Role Motion Index (Soccer).
+
+    Minutes played consistency, starter status.
+    Soccer has fewer substitutions, so starters are more stable.
+    """
+    base_score = 50.0
+
+    if stats.is_starter:
+        base_score -= 15
+    else:
+        base_score += 15
+
+    if stats.games_started_pct > 0.9:
+        base_score -= 10
+    elif stats.games_started_pct < 0.5:
+        base_score += 10
+
+    # Minutes consistency (out of ~90 per game, ~38 matches per season)
+    if stats.soccer_minutes > 0:
+        avg_mins = stats.soccer_minutes / max(stats.games_played, 1)
+        if avg_mins > 80:
+            base_score -= 5  # Plays nearly full matches
+        elif avg_mins < 45:
+            base_score += 15  # Substitute / rotation player
+
+    # Games played consistency (out of ~38 league matches)
+    if stats.games_played > 32:
+        base_score -= 5
+    elif stats.games_played < 15:
+        base_score += 10
+
+    return max(0, min(100, base_score))
+
+
+def calculate_gis_soccer(stats: PlayerStats) -> float:
+    """
+    Gravity Impact Score (Soccer).
+
+    How much defensive attention a player draws.
+    Goals + assists + shot volume + key passes.
+    """
+    position = stats.position.upper() if stats.position else ""
+
+    is_goalkeeper = position in ("GK", "G", "GOALKEEPER")
+
+    if is_goalkeeper:
+        sv_gravity = min(70, stats.soccer_saves * 1.5)
+        cs_gravity = min(30, stats.soccer_clean_sheets * 3.0)
+        return max(0, min(100, sv_gravity + cs_gravity))
+
+    # Goal threat gravity (0-35)
+    goal_gravity = min(35, stats.soccer_goals * 2.5)
+
+    # Shot volume (0-25) — teams must defend against prolific shooters
+    shot_gravity = min(25, stats.soccer_shots * 0.8)
+
+    # Playmaking gravity (0-25) — assists + key passes draw defensive pressure
+    assist_gravity = min(15, stats.soccer_assists * 2.0)
+    kp_gravity = min(10, stats.soccer_key_passes * 1.0)
+
+    # Defensive contribution for defenders/midfielders (0-15)
+    def_gravity = 0.0
+    if position in ("CB", "LB", "RB", "DEF", "D", "CDM", "CM", "MID", "M"):
+        def_gravity = min(15, (stats.soccer_tackles + stats.soccer_interceptions) * 0.5)
+
+    return max(0, min(100, goal_gravity + shot_gravity + assist_gravity + kp_gravity + def_gravity))
+
+
+# =============================================================================
 # OPPORTUNITY DELTA (All Sports)
 # =============================================================================
 
@@ -536,6 +668,11 @@ def calculate_od(stats: PlayerStats) -> float:
         raw_od = minutes_delta + usage_delta + points_delta
     elif stats.sport == "nhl":
         # TOI trend and shot trend
+        usage_delta = stats.usage_trend * 1.5
+        points_delta = stats.points_trend * 1.0
+        raw_od = minutes_delta + usage_delta + points_delta
+    elif stats.sport == "soccer":
+        # Minutes trend and goal involvement trend
         usage_delta = stats.usage_trend * 1.5
         points_delta = stats.points_trend * 1.0
         raw_od = minutes_delta + usage_delta + points_delta
@@ -581,6 +718,10 @@ def calculate_msf(stats: PlayerStats) -> float:
             # NHL: goals allowed per game, higher = worse defense
             rating_boost = (stats.opponent_def_rating - 3.0) * 10
             base_msf += max(-25, min(25, rating_boost))
+        elif stats.sport == "soccer":
+            # Soccer: goals conceded per game, higher = worse defense
+            rating_boost = (stats.opponent_def_rating - 1.3) * 15
+            base_msf += max(-25, min(25, rating_boost))
         else:
             # NFL: points allowed, higher = worse defense
             rating_boost = (stats.opponent_def_rating - 25) * 1.5
@@ -594,6 +735,8 @@ def calculate_msf(stats: PlayerStats) -> float:
             avg_fp = 10.0
         elif stats.sport == "nhl":
             avg_fp = 8.0
+        elif stats.sport == "soccer":
+            avg_fp = 5.0
         else:
             avg_fp = 15.0  # NFL
 
@@ -622,6 +765,8 @@ def calculate_sci(stats: PlayerStats) -> float:
         return calculate_sci_mlb(stats)
     if stats.sport == "nhl":
         return calculate_sci_nhl(stats)
+    if stats.sport == "soccer":
+        return calculate_sci_soccer(stats)
     return calculate_sci_nba(stats)
 
 
@@ -633,6 +778,8 @@ def calculate_rmi(stats: PlayerStats) -> float:
         return calculate_rmi_mlb(stats)
     if stats.sport == "nhl":
         return calculate_rmi_nhl(stats)
+    if stats.sport == "soccer":
+        return calculate_rmi_soccer(stats)
     return calculate_rmi_nba(stats)
 
 
@@ -644,6 +791,8 @@ def calculate_gis(stats: PlayerStats) -> float:
         return calculate_gis_mlb(stats)
     if stats.sport == "nhl":
         return calculate_gis_nhl(stats)
+    if stats.sport == "soccer":
+        return calculate_gis_soccer(stats)
     return calculate_gis_nba(stats)
 
 

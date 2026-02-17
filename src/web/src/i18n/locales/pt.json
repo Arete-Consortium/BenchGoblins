@@ -23,7 +23,7 @@
     "featureRealTime": "Análise em Tempo Real",
     "featureRealTimeDesc": "Dados de jogadores ao vivo da ESPN, Yahoo e Sleeper integrados em cada decisão.",
     "featureMultiSport": "Suporte Multi-Esporte",
-    "featureMultiSportDesc": "Cobertura de NBA, NFL, MLB e NHL com pontuação e análise específicas por esporte.",
+    "featureMultiSportDesc": "Cobertura de NBA, NFL, MLB, NHL e Futebol com pontuação e análise específicas por esporte.",
     "riskTitle": "Três Modos de Risco",
     "riskSubtitle": "Adapte as recomendações à sua situação de confronto e tolerância ao risco.",
     "floorMode": "Modo Piso",
