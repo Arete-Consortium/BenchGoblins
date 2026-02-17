@@ -749,12 +749,6 @@ def calculate_msf(stats: PlayerStats) -> float:
             pace_boost = (stats.opponent_pace - 100) * 0.5
             base_msf += max(-10, min(10, pace_boost))
 
-    # Soccer: fixture difficulty rating (FDR) adjustment
-    # FDR 1-2 = easy, 3 = neutral, 4-5 = hard
-    if stats.sport == "soccer":
-        fdr_boost = (3.0 - stats.fixture_difficulty) * 8
-        base_msf += max(-15, min(15, fdr_boost))
-
     return max(0, min(100, base_msf))
 
 
