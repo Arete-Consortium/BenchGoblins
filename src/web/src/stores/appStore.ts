@@ -81,12 +81,11 @@ export const useAppStore = create<AppState>()(
               decision_type: decisionType,
               query: content,
             },
-            // On each chunk, update streaming content
+            // Accumulate chunks silently (Claude returns JSON, not display text)
             (chunk) => {
               fullContent += chunk;
-              set({ streamingContent: fullContent });
             },
-            // On complete, get the full response
+            // On complete, get the parsed response
             (response) => {
               responseHolder.value = response;
             }
