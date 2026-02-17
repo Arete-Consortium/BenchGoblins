@@ -2,6 +2,7 @@
 BenchGoblin API — Fantasy Sports Decision Engine
 """
 
+import json
 import os
 import secrets
 import sys
@@ -1290,14 +1291,12 @@ async def make_decision_stream(
                 if isinstance(chunk, dict) and chunk.get("_metadata"):
                     stream_metadata = chunk
                     continue
-                # Format as SSE
-                yield f"data: {chunk}\n\n"
-            yield "data: [DONE]\n\n"
+                # Format as structured SSE event
+                yield f"data: {json.dumps({'type': 'content', 'text': chunk})}\n\n"
 
-            # Persist decision to database after stream completes
+            # Parse the full response and send structured 'done' event
             if stream_metadata:
                 try:
-                    # Parse the response to build a DecisionResponse
                     parsed = claude_service._parse_response(
                         stream_metadata.get("full_response", "")
                     )
@@ -1315,6 +1314,10 @@ async def make_decision_stream(
                         details=parsed.get("details"),
                         source="claude",
                     )
+                    # Send the parsed response to the client
+                    yield f"data: {json.dumps({'type': 'done', 'response': response.model_dump(mode='json')})}\n\n"
+
+                    # Persist decision to database
                     await _store_decision(
                         request,
                         response,
@@ -1325,11 +1328,11 @@ async def make_decision_stream(
                         output_tokens=stream_metadata.get("output_tokens"),
                         prompt_variant=variant,
                     )
-                    # Check and send budget alerts after streaming completes
                     await check_and_send_alerts()
                 except Exception as e:
-                    # Don't fail the stream if persistence fails
                     print(f"Failed to persist streaming decision: {e}")
+
+            yield "data: [DONE]\n\n"
         except Exception as e:
             yield f"data: [ERROR] {str(e)}\n\n"
 
