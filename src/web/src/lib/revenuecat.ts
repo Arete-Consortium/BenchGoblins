@@ -1,15 +1,14 @@
-import { Purchases, type Package, type CustomerInfo, type Offerings, type PaywallPurchaseResult, ErrorCode, PurchasesError } from '@revenuecat/purchases-js';
+import type { Package, CustomerInfo, Offerings } from '@revenuecat/purchases-js';
 
 // RevenueCat configuration
 const RC_API_KEY = process.env.NEXT_PUBLIC_REVENUECAT_API_KEY || '';
 const RC_ENTITLEMENT_ID = 'pro';
 
 /**
- * Check if RevenueCat API key is configured.
- * When false, all RC operations should be skipped gracefully.
+ * Check if RevenueCat can be used (client-side + API key configured).
  */
 export function isRevenueCatAvailable(): boolean {
-  return !!RC_API_KEY;
+  return typeof window !== 'undefined' && !!RC_API_KEY;
 }
 
 // Product identifiers (must match mobile + RevenueCat dashboard)
@@ -21,35 +20,47 @@ export const PRODUCT_IDS = {
 } as const;
 
 /**
+ * Lazily load the Purchases SDK (only works client-side).
+ */
+async function getPurchasesClass() {
+  const { Purchases } = await import('@revenuecat/purchases-js');
+  return Purchases;
+}
+
+/**
  * Initialize RevenueCat SDK for a given user.
  * Call once when the user is identified (after login or as anonymous).
  */
-export function configureRevenueCat(appUserId: string): Purchases {
+export async function configureRevenueCat(appUserId: string) {
   if (!RC_API_KEY) {
     throw new Error('NEXT_PUBLIC_REVENUECAT_API_KEY is not set');
   }
 
+  const Purchases = await getPurchasesClass();
   return Purchases.configure(RC_API_KEY, appUserId);
 }
 
 /**
  * Generate an anonymous user ID for users who haven't signed in.
  */
-export function generateAnonymousUserId(): string {
+export async function generateAnonymousUserId(): Promise<string> {
+  const Purchases = await getPurchasesClass();
   return Purchases.generateRevenueCatAnonymousAppUserId();
 }
 
 /**
  * Get the shared Purchases instance. Throws if not yet configured.
  */
-export function getPurchases(): Purchases {
+export async function getPurchases() {
+  const Purchases = await getPurchasesClass();
   return Purchases.getSharedInstance();
 }
 
 /**
  * Check if the SDK has been configured.
  */
-export function isRevenueCatConfigured(): boolean {
+export async function isRevenueCatConfigured(): Promise<boolean> {
+  const Purchases = await getPurchasesClass();
   return Purchases.isConfigured();
 }
 
@@ -57,29 +68,33 @@ export function isRevenueCatConfigured(): boolean {
  * Switch the active user (e.g., after login/logout).
  */
 export async function changeUser(newAppUserId: string): Promise<CustomerInfo> {
-  return getPurchases().changeUser(newAppUserId);
+  const purchases = await getPurchases();
+  return purchases.changeUser(newAppUserId);
 }
 
 /**
  * Fetch all available offerings (product packages).
  */
 export async function getOfferings(currency?: string): Promise<Offerings> {
+  const purchases = await getPurchases();
   const params = currency ? { currency } : undefined;
-  return getPurchases().getOfferings(params);
+  return purchases.getOfferings(params);
 }
 
 /**
  * Get the current customer info (subscriptions, entitlements).
  */
 export async function getCustomerInfo(): Promise<CustomerInfo> {
-  return getPurchases().getCustomerInfo();
+  const purchases = await getPurchases();
+  return purchases.getCustomerInfo();
 }
 
 /**
  * Check if the current user has the "pro" entitlement.
  */
 export async function isProUser(): Promise<boolean> {
-  return getPurchases().isEntitledTo(RC_ENTITLEMENT_ID);
+  const purchases = await getPurchases();
+  return purchases.isEntitledTo(RC_ENTITLEMENT_ID);
 }
 
 /**
@@ -99,8 +114,11 @@ export async function purchasePackage(
     htmlTarget?: HTMLElement;
   }
 ): Promise<{ customerInfo: CustomerInfo }> {
+  const { PurchasesError, ErrorCode } = await import('@revenuecat/purchases-js');
+  const purchases = await getPurchases();
+
   try {
-    const result = await getPurchases().purchase({
+    const result = await purchases.purchase({
       rcPackage,
       customerEmail: options?.customerEmail,
       htmlTarget: options?.htmlTarget,
@@ -114,26 +132,6 @@ export async function purchasePackage(
     }
     throw error;
   }
-}
-
-/**
- * Present the RevenueCat managed paywall UI.
- */
-export async function presentPaywall(
-  htmlTarget: HTMLElement,
-  offeringId?: string
-): Promise<PaywallPurchaseResult> {
-  const purchases = getPurchases();
-
-  if (offeringId) {
-    const offerings = await purchases.getOfferings();
-    const offering = offerings.all[offeringId];
-    if (offering) {
-      return purchases.presentPaywall({ htmlTarget, offering });
-    }
-  }
-
-  return purchases.presentPaywall({ htmlTarget });
 }
 
 /**

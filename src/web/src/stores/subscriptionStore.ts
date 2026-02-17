@@ -45,25 +45,20 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   offerings: null,
   error: null,
 
-  /**
-   * Initialize RevenueCat SDK.
-   * If appUserId is provided (authenticated user), use it.
-   * Otherwise, generate/retrieve an anonymous user ID.
-   */
   initialize: async (appUserId?: string) => {
-    // Skip entirely if RevenueCat API key isn't configured
+    // Skip entirely if not client-side or API key isn't configured
     if (!isRevenueCatAvailable()) {
       set({ isInitialized: false, isLoading: false });
       return;
     }
 
-    if (get().isInitialized && isRevenueCatConfigured()) return;
+    if (get().isInitialized && await isRevenueCatConfigured()) return;
 
     set({ isLoading: true, error: null });
 
     try {
-      const userId = appUserId || getOrCreateAnonymousUserId();
-      configureRevenueCat(userId);
+      const userId = appUserId || await getOrCreateAnonymousUserId();
+      await configureRevenueCat(userId);
 
       // Fetch customer info and offerings in parallel
       const [customerInfo, offerings] = await Promise.all([
@@ -88,18 +83,14 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     }
   },
 
-  /**
-   * Switch to an identified user (after login).
-   * Transfers any anonymous purchases to the identified user.
-   */
   switchUser: async (appUserId: string) => {
     if (!isRevenueCatAvailable()) return;
 
     set({ isLoading: true, error: null });
 
     try {
-      if (!isRevenueCatConfigured()) {
-        configureRevenueCat(appUserId);
+      if (!await isRevenueCatConfigured()) {
+        await configureRevenueCat(appUserId);
       } else {
         await changeUser(appUserId);
       }
@@ -125,9 +116,6 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     }
   },
 
-  /**
-   * Refresh customer info (e.g., after a purchase or to check status).
-   */
   refreshCustomerInfo: async () => {
     try {
       const customerInfo = await getCustomerInfo();
@@ -140,9 +128,6 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     }
   },
 
-  /**
-   * Refresh available offerings.
-   */
   refreshOfferings: async () => {
     try {
       const offerings = await getOfferings();
@@ -152,9 +137,6 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     }
   },
 
-  /**
-   * Purchase a package. Returns true if successful, false if cancelled.
-   */
   purchase: async (rcPackage: Package, email?: string, htmlTarget?: HTMLElement) => {
     set({ isLoading: true, error: null });
 
@@ -186,9 +168,6 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     }
   },
 
-  /**
-   * Reset subscription state (on logout).
-   */
   reset: () => {
     set({
       isInitialized: false,
@@ -205,12 +184,12 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
  * Get or create an anonymous RevenueCat user ID.
  * Persisted in localStorage so it survives page refreshes.
  */
-function getOrCreateAnonymousUserId(): string {
-  if (typeof window === 'undefined') return generateAnonymousUserId();
+async function getOrCreateAnonymousUserId(): Promise<string> {
+  if (typeof window === 'undefined') return await generateAnonymousUserId();
 
   let userId = localStorage.getItem(RC_ANON_USER_KEY);
   if (!userId) {
-    userId = generateAnonymousUserId();
+    userId = await generateAnonymousUserId();
     localStorage.setItem(RC_ANON_USER_KEY, userId);
   }
   return userId;
