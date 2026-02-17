@@ -11,15 +11,49 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Bench Goblins - Fantasy Sports Decision Engine',
+  title: {
+    default: 'Bench Goblins — AI Fantasy Sports Start/Sit, Trade & Waiver Decisions',
+    template: '%s | Bench Goblins',
+  },
   description:
-    'Make smarter fantasy sports decisions with AI-powered analysis. Start/sit, trade, and waiver recommendations for NBA, NFL, MLB, and NHL.',
-  keywords: ['fantasy sports', 'NBA', 'NFL', 'MLB', 'NHL', 'start sit', 'trade analyzer'],
+    'AI-powered fantasy sports decisions for NBA, NFL, MLB, NHL, and Soccer. Start/sit, trade, and waiver recommendations with Five-Index scoring. Available in 9 languages.',
+  keywords: [
+    'fantasy sports',
+    'AI fantasy advice',
+    'NBA',
+    'NFL',
+    'MLB',
+    'NHL',
+    'soccer',
+    'FPL',
+    'start sit',
+    'trade analyzer',
+    'waiver wire',
+    'fantasy football',
+    'fantasy basketball',
+    'fantasy baseball',
+    'fantasy hockey',
+    'fantasy soccer',
+  ],
   authors: [{ name: 'Bench Goblins' }],
+  metadataBase: new URL('https://benchgoblins.com'),
   openGraph: {
-    title: 'Bench Goblins - Fantasy Sports Decision Engine',
-    description: 'Make smarter fantasy sports decisions with AI-powered analysis.',
+    title: 'Bench Goblins — AI Fantasy Sports Start/Sit, Trade & Waiver Decisions',
+    description:
+      'The only AI fantasy engine with transparent Five-Index scoring, situational risk modes, and five-sport coverage across 9 languages.',
     type: 'website',
+    siteName: 'Bench Goblins',
+    url: 'https://benchgoblins.com',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Bench Goblins — AI Fantasy Sports Decision Engine',
+    description:
+      'AI-powered start/sit, trade, and waiver decisions for NBA, NFL, MLB, NHL, and Soccer.',
+  },
+  robots: {
+    index: true,
+    follow: true,
   },
 };
 

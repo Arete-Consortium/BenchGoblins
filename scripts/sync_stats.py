@@ -44,7 +44,8 @@ from services.database import db_service  # noqa: E402
 from services.espn import espn_service  # noqa: E402
 from services.redis import redis_service  # noqa: E402
 
-# Sports to sync
+# Sports to sync (ESPN-sourced)
+# Soccer uses FPL/external APIs — not ESPN — so it's excluded here.
 SPORTS = ["nba", "nfl", "mlb", "nhl"]
 
 # How recently a player must have been updated to skip

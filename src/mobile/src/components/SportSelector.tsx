@@ -9,6 +9,7 @@ const sports: { key: Sport; label: string; icon: string }[] = [
   { key: 'nfl', label: 'NFL', icon: '🏈' },
   { key: 'mlb', label: 'MLB', icon: '⚾' },
   { key: 'nhl', label: 'NHL', icon: '🏒' },
+  { key: 'soccer', label: 'Soccer', icon: '⚽' },
 ];
 
 interface SportSelectorProps {

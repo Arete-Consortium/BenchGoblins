@@ -67,7 +67,7 @@ export default function HistoryPage() {
             <Filter className="w-5 h-5 text-dark-400" />
             <span className="text-dark-400 text-sm">Filter by sport:</span>
             <div className="flex gap-2">
-              {(['nba', 'nfl', 'mlb', 'nhl'] as Sport[]).map((s) => (
+              {(['nba', 'nfl', 'mlb', 'nhl', 'soccer'] as Sport[]).map((s) => (
                 <button
                   key={s}
                   onClick={() => handleFilterChange(s)}
