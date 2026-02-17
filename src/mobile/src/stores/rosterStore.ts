@@ -19,6 +19,7 @@ const initialRoster: Record<Sport, Player[]> = {
   nfl: [],
   mlb: [],
   nhl: [],
+  soccer: [],
 };
 
 export const useRosterStore = create<RosterState>()(

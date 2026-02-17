@@ -19,6 +19,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useTranslation } from '@/i18n/I18nProvider';
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Bench Goblins',
+  applicationCategory: 'SportsApplication',
+  operatingSystem: 'Web',
+  description:
+    'AI-powered fantasy sports decision engine with Five-Index scoring for NBA, NFL, MLB, NHL, and Soccer.',
+  url: 'https://benchgoblins.com',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+};
+
 export default function LandingPage() {
   const { t } = useTranslation();
 
@@ -78,6 +94,10 @@ export default function LandingPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       {/* Header */}
       <header className="border-b border-dark-800/50">
         <div className="container mx-auto px-4">
@@ -156,7 +176,7 @@ export default function LandingPage() {
             {t('landing.whySubtitle')}
           </p>
         </div>
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {features.map((feature) => (
             <Card key={feature.title} className="bg-dark-800/50 border-dark-700">
               <CardContent className="pt-6">

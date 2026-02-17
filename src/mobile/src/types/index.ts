@@ -1,4 +1,4 @@
-export type Sport = 'nba' | 'nfl' | 'mlb' | 'nhl';
+export type Sport = 'nba' | 'nfl' | 'mlb' | 'nhl' | 'soccer';
 export type RiskMode = 'floor' | 'median' | 'ceiling';
 export type DecisionType = 'start_sit' | 'trade' | 'waiver' | 'explain';
 export type Confidence = 'low' | 'medium' | 'high';
