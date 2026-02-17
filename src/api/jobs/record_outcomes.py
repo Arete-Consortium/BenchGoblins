@@ -144,9 +144,9 @@ async def main():
     parser.add_argument(
         "--sport",
         type=str,
-        choices=["nba", "nfl", "mlb", "nhl", "soccer"],
+        choices=["nba", "nfl", "mlb", "nhl"],
         default=None,
-        help="Filter by sport (default: all)",
+        help="Filter by sport (default: all). Soccer excluded — uses FPL, not ESPN.",
     )
     parser.add_argument(
         "--backfill-start",
