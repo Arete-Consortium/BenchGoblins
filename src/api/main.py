@@ -2653,7 +2653,7 @@ async def websocket_endpoint(websocket: WebSocket):
     Topics:
     - player:{sport}:{player_id} — Updates for a specific player
     - game:{sport}:{game_id} — Updates for a specific game
-    - sport:{sport} — All updates for a sport (nba, nfl, mlb, nhl)
+    - sport:{sport} — All updates for a sport (nba, nfl, mlb, nhl, soccer)
     - injuries — All injury alerts
     """
     connection_id = await connection_manager.connect(websocket)
@@ -2784,7 +2784,7 @@ class SyncOutcomesRequest(BaseModel):
     """Request to sync outcomes from ESPN box scores."""
 
     days_back: int = Field(default=2, ge=1, le=14, description="Days back to process")
-    sport: str | None = Field(default=None, description="Filter by sport (nba, nfl, mlb, nhl)")
+    sport: str | None = Field(default=None, description="Filter by sport (nba, nfl, mlb, nhl, soccer)")
 
 
 @app.post("/accuracy/sync")
@@ -2801,8 +2801,8 @@ async def sync_outcomes(request: SyncOutcomesRequest | None = None):
     sport = request.sport if request else None
 
     # Validate sport if provided
-    if sport and sport not in ("nba", "nfl", "mlb", "nhl"):
-        raise HTTPException(status_code=400, detail="Invalid sport. Must be nba, nfl, mlb, or nhl.")
+    if sport and sport not in ("nba", "nfl", "mlb", "nhl", "soccer"):
+        raise HTTPException(status_code=400, detail="Invalid sport. Must be nba, nfl, mlb, nhl, or soccer.")
 
     try:
         result = await sync_recent_outcomes(days_back=days_back, sport=sport)

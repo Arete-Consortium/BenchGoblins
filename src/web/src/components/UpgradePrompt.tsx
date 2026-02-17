@@ -23,7 +23,7 @@ interface UpgradePromptProps {
 const FREE_FEATURES = [
   '5 queries per day',
   'Basic fantasy analysis',
-  'NBA, NFL, MLB, NHL support',
+  'NBA, NFL, MLB, NHL, Soccer support',
 ];
 
 const PRO_FEATURES = [
