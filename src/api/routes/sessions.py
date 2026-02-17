@@ -109,28 +109,31 @@ async def create_session(request: CreateSessionRequest, req: Request):
     ip_address = req.client.host if req.client else None
     user_agent = req.headers.get("user-agent")
 
-    async with db_service.session() as db:
-        session = await session_service.create_session(
-            db=db,
-            platform=request.platform,
-            device_id=request.device_id,
-            device_name=request.device_name,
-            ip_address=ip_address,
-            user_agent=user_agent,
-        )
+    try:
+        async with db_service.session() as db:
+            session = await session_service.create_session(
+                db=db,
+                platform=request.platform,
+                device_id=request.device_id,
+                device_name=request.device_name,
+                ip_address=ip_address,
+                user_agent=user_agent,
+            )
 
-        return SessionCreatedResponse(
-            session_id=str(session.id),
-            session_token=session.session_token,
-            platform=session.platform,
-            device_id=session.device_id,
-            device_name=session.device_name,
-            status=session.status,
-            created_at=session.created_at.isoformat(),
-            expires_at=session.expires_at.isoformat(),
-            last_active_at=session.last_active_at.isoformat(),
-            credentials={},
-        )
+            return SessionCreatedResponse(
+                session_id=str(session.id),
+                session_token=session.session_token,
+                platform=session.platform,
+                device_id=session.device_id,
+                device_name=session.device_name,
+                status=session.status,
+                created_at=session.created_at.isoformat(),
+                expires_at=session.expires_at.isoformat(),
+                last_active_at=session.last_active_at.isoformat(),
+                credentials={},
+            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Session creation failed: {e}")
 
 
 @router.get("/current", response_model=SessionResponse)
