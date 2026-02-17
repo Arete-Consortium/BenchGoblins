@@ -11,8 +11,11 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-# Database URL from environment (strip whitespace — Railway env vars sometimes have trailing newlines)
-DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+# Database URL from environment — remove all embedded whitespace (newlines, spaces)
+# that Railway env var references can sometimes inject.
+import re
+
+DATABASE_URL = re.sub(r"\s+", "", os.getenv("DATABASE_URL", ""))
 
 # Detect Railway internal connection - needs SSL disabled
 IS_RAILWAY_INTERNAL = DATABASE_URL and ".railway.internal" in DATABASE_URL
