@@ -9,6 +9,7 @@ import {
   getCustomerInfo,
   getOfferings,
   hasProEntitlement,
+  isRevenueCatAvailable,
   isRevenueCatConfigured,
   purchasePackage,
   UserCancelledError,
@@ -50,6 +51,12 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
    * Otherwise, generate/retrieve an anonymous user ID.
    */
   initialize: async (appUserId?: string) => {
+    // Skip entirely if RevenueCat API key isn't configured
+    if (!isRevenueCatAvailable()) {
+      set({ isInitialized: false, isLoading: false });
+      return;
+    }
+
     if (get().isInitialized && isRevenueCatConfigured()) return;
 
     set({ isLoading: true, error: null });
@@ -86,6 +93,8 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
    * Transfers any anonymous purchases to the identified user.
    */
   switchUser: async (appUserId: string) => {
+    if (!isRevenueCatAvailable()) return;
+
     set({ isLoading: true, error: null });
 
     try {
