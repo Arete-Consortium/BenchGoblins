@@ -19,6 +19,22 @@ import { Card, CardContent } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useTranslation } from '@/i18n/I18nProvider';
 
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Bench Goblins',
+  applicationCategory: 'SportsApplication',
+  operatingSystem: 'Web',
+  description:
+    'AI-powered fantasy sports decision engine with Five-Index scoring for NBA, NFL, MLB, NHL, and Soccer.',
+  url: 'https://benchgoblins.com',
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'USD',
+  },
+};
+
 export default function LandingPage() {
   const { t } = useTranslation();
 
