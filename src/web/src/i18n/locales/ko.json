@@ -23,7 +23,7 @@
     "featureRealTime": "실시간 분석",
     "featureRealTimeDesc": "ESPN, Yahoo, Sleeper의 실시간 선수 데이터를 모든 결정에 통합.",
     "featureMultiSport": "멀티 스포츠 지원",
-    "featureMultiSportDesc": "NBA, NFL, MLB, NHL을 종목별 스코어링과 분석으로 커버.",
+    "featureMultiSportDesc": "NBA, NFL, MLB, NHL, 축구를 종목별 스코어링과 분석으로 커버.",
     "riskTitle": "세 가지 리스크 모드",
     "riskSubtitle": "매치업 상황과 리스크 허용도에 맞게 추천을 조정하세요.",
     "floorMode": "플로어 모드",

@@ -22,6 +22,7 @@ FANTASY_SPORT_KEYS = {
     "nfl": "ffl",  # Fantasy Football
     "mlb": "flb",  # Fantasy Baseball
     "nhl": "fhl",  # Fantasy Hockey
+    "soccer": "fsc",  # Fantasy Soccer
 }
 
 
