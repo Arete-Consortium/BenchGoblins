@@ -10,7 +10,6 @@ import {
   Zap,
   BarChart3,
   Users,
-  Globe,
   ArrowRight,
   CheckCircle,
   LogIn,
