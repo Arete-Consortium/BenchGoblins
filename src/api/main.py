@@ -2784,7 +2784,9 @@ class SyncOutcomesRequest(BaseModel):
     """Request to sync outcomes from ESPN box scores."""
 
     days_back: int = Field(default=2, ge=1, le=14, description="Days back to process")
-    sport: str | None = Field(default=None, description="Filter by sport (nba, nfl, mlb, nhl, soccer)")
+    sport: str | None = Field(
+        default=None, description="Filter by sport (nba, nfl, mlb, nhl, soccer)"
+    )
 
 
 @app.post("/accuracy/sync")
@@ -2802,7 +2804,9 @@ async def sync_outcomes(request: SyncOutcomesRequest | None = None):
 
     # Validate sport if provided
     if sport and sport not in ("nba", "nfl", "mlb", "nhl", "soccer"):
-        raise HTTPException(status_code=400, detail="Invalid sport. Must be nba, nfl, mlb, nhl, or soccer.")
+        raise HTTPException(
+            status_code=400, detail="Invalid sport. Must be nba, nfl, mlb, nhl, or soccer."
+        )
 
     try:
         result = await sync_recent_outcomes(days_back=days_back, sport=sport)
