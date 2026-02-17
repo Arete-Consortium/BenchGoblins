@@ -4,6 +4,14 @@ import { Purchases, type Package, type CustomerInfo, type Offerings, type Paywal
 const RC_API_KEY = process.env.NEXT_PUBLIC_REVENUECAT_API_KEY || '';
 const RC_ENTITLEMENT_ID = 'pro';
 
+/**
+ * Check if RevenueCat API key is configured.
+ * When false, all RC operations should be skipped gracefully.
+ */
+export function isRevenueCatAvailable(): boolean {
+  return !!RC_API_KEY;
+}
+
 // Product identifiers (must match mobile + RevenueCat dashboard)
 export const PRODUCT_IDS = {
   weekly: 'benchgoblins_pro_weekly',
