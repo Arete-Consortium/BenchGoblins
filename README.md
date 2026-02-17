@@ -20,6 +20,7 @@ BenchGoblins is **not** a prediction model. It produces probabilistic decisions 
 | NFL | Supported |
 | MLB | Beta |
 | NHL | Beta |
+| Soccer | Beta (FPL, La Liga, UCL, MLS) |
 
 **Not supported:** Betting picks, gambling odds, proprietary tracking data, deterministic predictions.
 

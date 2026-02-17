@@ -20,7 +20,7 @@
 - [x] Build Matchup Space Fit (MSF) calculator
 - [x] Create composite scoring function with risk mode weights
 - [x] Write unit tests for each index calculation
-- [x] Add MLB/NHL sport-specific scoring (SCI, RMI, GIS for all 4 sports)
+- [x] Add MLB/NHL sport-specific scoring (SCI, RMI, GIS for all 5 sports)
 - [x] Wire ESPN game log trends into OD calculation
 - [x] Wire opponent defensive stats into MSF calculation
 
@@ -206,7 +206,7 @@
 - [x] Decision accuracy tracking (outcomes, metrics by confidence/source/sport)
 - [x] Basketball Reference + Pro Football Reference scrapers
 - [x] Wire trends + matchup data into scoring engine (OD/MSF now live)
-- [x] MLB/NHL scoring functions (SCI, RMI, GIS for all 4 sports)
+- [x] MLB/NHL scoring functions (SCI, RMI, GIS for all 5 sports)
 - [x] Fix missing deps in pyproject.toml (cryptography, cachetools, sentry-sdk, prometheus-client)
 - [x] Fix hatch build config for editable installs
 - [x] App Store review prep docs
