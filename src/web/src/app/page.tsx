@@ -1,3 +1,5 @@
+'use client';
+
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -10,67 +12,70 @@ import {
   Users,
   ArrowRight,
   CheckCircle,
+  LogIn,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-
-const features = [
-  {
-    icon: Sparkles,
-    title: 'AI-Powered Decisions',
-    description:
-      'Get instant recommendations powered by Claude AI with deep understanding of fantasy sports strategy.',
-  },
-  {
-    icon: BarChart3,
-    title: 'Five-Index Scoring',
-    description:
-      'Proprietary scoring system analyzing Space Creation, Role Motion, Gravity Impact, Opportunity Delta, and Matchup Fit.',
-  },
-  {
-    icon: Zap,
-    title: 'Real-Time Analysis',
-    description: 'Live player data from ESPN, Yahoo, and Sleeper integrated into every decision.',
-  },
-  {
-    icon: Users,
-    title: 'Multi-Sport Support',
-    description: 'NBA, NFL, MLB, and NHL coverage with sport-specific scoring and analysis.',
-  },
-];
-
-const riskModes = [
-  {
-    icon: Shield,
-    name: 'Floor Mode',
-    description: 'Prioritize consistent, safe players. Minimize variance and protect your lead.',
-    color: 'text-green-400',
-    bg: 'bg-green-400/10',
-  },
-  {
-    icon: Target,
-    name: 'Median Mode',
-    description: 'Balanced approach weighing floor and ceiling equally. Best for most matchups.',
-    color: 'text-blue-400',
-    bg: 'bg-blue-400/10',
-  },
-  {
-    icon: TrendingUp,
-    name: 'Ceiling Mode',
-    description: 'Chase upside and boom potential. When you need a big week to come back.',
-    color: 'text-orange-400',
-    bg: 'bg-orange-400/10',
-  },
-];
-
-const decisionTypes = [
-  { name: 'Start/Sit', description: 'Who to play this week' },
-  { name: 'Trade Analysis', description: 'Fair value and upside' },
-  { name: 'Waiver Wire', description: 'Pickup priorities' },
-  { name: 'Explanations', description: 'Deep dives on players' },
-];
+import { LanguageSelector } from '@/components/LanguageSelector';
+import { useTranslation } from '@/i18n/I18nProvider';
 
 export default function LandingPage() {
+  const { t } = useTranslation();
+
+  const features = [
+    {
+      icon: Sparkles,
+      title: t('landing.featureAI'),
+      description: t('landing.featureAIDesc'),
+    },
+    {
+      icon: BarChart3,
+      title: t('landing.featureScoring'),
+      description: t('landing.featureScoringDesc'),
+    },
+    {
+      icon: Zap,
+      title: t('landing.featureRealTime'),
+      description: t('landing.featureRealTimeDesc'),
+    },
+    {
+      icon: Users,
+      title: t('landing.featureMultiSport'),
+      description: t('landing.featureMultiSportDesc'),
+    },
+  ];
+
+  const riskModes = [
+    {
+      icon: Shield,
+      name: t('landing.floorMode'),
+      description: t('landing.floorDesc'),
+      color: 'text-green-400',
+      bg: 'bg-green-400/10',
+    },
+    {
+      icon: Target,
+      name: t('landing.medianMode'),
+      description: t('landing.medianDesc'),
+      color: 'text-blue-400',
+      bg: 'bg-blue-400/10',
+    },
+    {
+      icon: TrendingUp,
+      name: t('landing.ceilingMode'),
+      description: t('landing.ceilingDesc'),
+      color: 'text-orange-400',
+      bg: 'bg-orange-400/10',
+    },
+  ];
+
+  const decisionTypes = [
+    { name: t('landing.startSit'), description: t('landing.startSitDesc') },
+    { name: t('landing.tradeAnalysis'), description: t('landing.tradeAnalysisDesc') },
+    { name: t('landing.waiverWire'), description: t('landing.waiverWireDesc') },
+    { name: t('landing.explanations'), description: t('landing.explanationsDesc') },
+  ];
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950">
       {/* Header */}
@@ -81,14 +86,21 @@ export default function LandingPage() {
               <Image src="/logo.png" alt="Bench Goblins" width={40} height={40} className="rounded" />
               <span className="text-xl font-bold gradient-text">Bench Goblins</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2">
+              <LanguageSelector />
               <Link href="/history">
-                <Button variant="ghost">History</Button>
+                <Button variant="ghost" size="sm">{t('common.history')}</Button>
+              </Link>
+              <Link href="/auth/login">
+                <Button variant="outline" size="sm" className="gap-1.5 border-dark-700">
+                  <LogIn className="h-4 w-4" />
+                  {t('common.signIn')}
+                </Button>
               </Link>
               <Link href="/ask">
-                <Button className="shadow-lg shadow-primary-500/20">
-                  Get Started
-                  <ArrowRight className="ml-2 h-4 w-4" />
+                <Button size="sm" className="shadow-lg shadow-primary-500/20">
+                  {t('common.getStarted')}
+                  <ArrowRight className="ml-1.5 h-4 w-4" />
                 </Button>
               </Link>
             </div>
@@ -112,24 +124,24 @@ export default function LandingPage() {
           </div>
 
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            <span className="gradient-text">Fantasy Sports Decisions,</span>
+            <span className="gradient-text">{t('landing.heroTitle1')}</span>
             <br />
-            <span className="text-dark-100">Powered by AI</span>
+            <span className="text-dark-100">{t('landing.heroTitle2')}</span>
           </h1>
           <p className="mt-6 text-lg text-dark-400">
-            Stop second-guessing your lineups. Bench Goblins analyzes player data, matchups, and trends
-            to give you confident start/sit, trade, and waiver recommendations in seconds.
+            {t('landing.heroSubtitle')}
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/ask">
               <Button size="lg" className="gap-2 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-shadow">
                 <Sparkles className="h-5 w-5" />
-                Start Asking Questions
+                {t('landing.startAsking')}
               </Button>
             </Link>
-            <Link href="/history">
-              <Button size="lg" variant="outline" className="gap-2">
-                View History
+            <Link href="/auth/login">
+              <Button size="lg" variant="outline" className="gap-2 border-dark-700">
+                <LogIn className="h-5 w-5" />
+                {t('common.signIn')}
               </Button>
             </Link>
           </div>
@@ -139,9 +151,9 @@ export default function LandingPage() {
       {/* Features */}
       <section className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold">Why Bench Goblins?</h2>
+          <h2 className="text-3xl font-bold">{t('landing.whyTitle')}</h2>
           <p className="mt-4 text-dark-400">
-            More than just rankings. Personalized analysis for your specific situation.
+            {t('landing.whySubtitle')}
           </p>
         </div>
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -160,9 +172,9 @@ export default function LandingPage() {
       {/* Risk Modes */}
       <section className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
-          <h2 className="text-3xl font-bold">Three Risk Modes</h2>
+          <h2 className="text-3xl font-bold">{t('landing.riskTitle')}</h2>
           <p className="mt-4 text-dark-400">
-            Tailor recommendations to your matchup situation and risk tolerance.
+            {t('landing.riskSubtitle')}
           </p>
         </div>
         <div className="grid gap-6 md:grid-cols-3">
@@ -186,9 +198,9 @@ export default function LandingPage() {
       <section className="container mx-auto px-4 py-16">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold">Ask Anything</h2>
+            <h2 className="text-3xl font-bold">{t('landing.askTitle')}</h2>
             <p className="mt-4 text-dark-400">
-              Bench Goblins understands natural language questions about your fantasy team.
+              {t('landing.askSubtitle')}
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -207,11 +219,10 @@ export default function LandingPage() {
           </div>
           <div className="mt-8 p-4 rounded-lg bg-dark-800/50 border border-dark-700">
             <p className="text-dark-300 italic">
-              &ldquo;Should I start Jayson Tatum or Anthony Edwards this week? I&apos;m projected to
-              lose by 10 points.&rdquo;
+              {t('landing.exampleQuery')}
             </p>
             <p className="mt-2 text-dark-500 text-sm">
-              Bench Goblins will factor in your situation when making recommendations.
+              {t('landing.exampleNote')}
             </p>
           </div>
         </div>
@@ -220,14 +231,14 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="container mx-auto px-4 py-24 text-center">
         <div className="mx-auto max-w-2xl">
-          <h2 className="text-3xl font-bold mb-4">Ready to win your league?</h2>
+          <h2 className="text-3xl font-bold mb-4">{t('landing.ctaTitle')}</h2>
           <p className="text-dark-400 mb-8">
-            Join thousands of fantasy managers making smarter decisions with Bench Goblins.
+            {t('landing.ctaSubtitle')}
           </p>
           <Link href="/ask">
             <Button size="lg" className="gap-2">
               <Sparkles className="h-5 w-5" />
-              Start Free
+              {t('common.startFree')}
             </Button>
           </Link>
         </div>
@@ -242,7 +253,7 @@ export default function LandingPage() {
               <span className="font-semibold">Bench Goblins</span>
             </div>
             <p className="text-dark-500 text-sm">
-              Built by fantasy sports enthusiasts, for fantasy sports enthusiasts.
+              {t('landing.footerTagline')}
             </p>
           </div>
         </div>

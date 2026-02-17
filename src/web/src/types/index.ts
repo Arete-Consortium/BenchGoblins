@@ -1,5 +1,5 @@
 // Sport types
-export type Sport = 'nba' | 'nfl' | 'mlb' | 'nhl';
+export type Sport = 'nba' | 'nfl' | 'mlb' | 'nhl' | 'soccer';
 
 // Risk modes for decision making
 export type RiskMode = 'floor' | 'median' | 'ceiling';

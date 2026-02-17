@@ -94,7 +94,7 @@ class Player(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("sport IN ('nba', 'nfl', 'mlb', 'nhl')", name="check_sport"),
+        CheckConstraint("sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')", name="check_sport"),
         Index("idx_players_espn_id", "espn_id"),
         Index("idx_players_sport", "sport"),
         Index("idx_players_name", "name"),
@@ -160,6 +160,21 @@ class PlayerStats(Base):
     shots: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     save_pct: Mapped[Decimal | None] = mapped_column(Numeric(4, 3))
     goals_against_avg: Mapped[Decimal | None] = mapped_column(Numeric(4, 2))
+
+    # Soccer stats
+    soccer_goals: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_assists: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_minutes: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    soccer_shots: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_shots_on_target: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_key_passes: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_tackles: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_interceptions: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_clean_sheets: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_saves: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_goals_conceded: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
+    soccer_xg: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    soccer_xa: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=datetime.utcnow)
@@ -235,6 +250,21 @@ class GameLog(Base):
     time_on_ice: Mapped[int | None] = mapped_column(Integer)  # in seconds
     saves: Mapped[int | None] = mapped_column(Integer)
     goals_against: Mapped[int | None] = mapped_column(Integer)
+
+    # Soccer game stats
+    soccer_goals_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_assists_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_minutes_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_shots_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_shots_on_target_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_key_passes_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_tackles_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_interceptions_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_clean_sheet: Mapped[bool | None] = mapped_column(Boolean)
+    soccer_saves_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_goals_conceded_game: Mapped[int | None] = mapped_column(Integer)
+    soccer_xg_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
+    soccer_xa_game: Mapped[Decimal | None] = mapped_column(Numeric(5, 3))
 
     # Fantasy points (calculated)
     fantasy_points: Mapped[Decimal | None] = mapped_column(Numeric(8, 2))
@@ -325,6 +355,12 @@ class TeamDefense(Base):
     vs_wr: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
     vs_te: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
 
+    # Soccer position-specific
+    vs_fwd: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_mid: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_def: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+    vs_gk: Mapped[Decimal | None] = mapped_column(Numeric(6, 2))
+
     # Additional metrics
     turnovers_forced: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
     sacks: Mapped[Decimal | None] = mapped_column(Numeric(5, 2))
@@ -333,7 +369,9 @@ class TeamDefense(Base):
 
     __table_args__ = (
         UniqueConstraint("team_abbrev", "sport", "season", name="uq_team_defense"),
-        CheckConstraint("sport IN ('nba', 'nfl', 'mlb', 'nhl')", name="check_defense_sport"),
+        CheckConstraint(
+            "sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')", name="check_defense_sport"
+        ),
         Index("idx_team_defense_team", "team_abbrev"),
         Index("idx_team_defense_sport", "sport"),
     )

@@ -13,9 +13,35 @@ from services.espn import PlayerInfo, TeamDefense
 from services.espn import PlayerStats as ESPNPlayerStats
 
 
-def _position_matchup_field(matchup: TeamDefense, position: str) -> float | None:
+def _position_matchup_field(matchup: TeamDefense, position: str, sport: str = "") -> float | None:
     """Look up position-specific fantasy points allowed from TeamDefense."""
     pos = position.upper()
+    if sport == "soccer":
+        soccer_map = {
+            "FW": matchup.vs_fwd,
+            "FWD": matchup.vs_fwd,
+            "F": matchup.vs_fwd,
+            "ST": matchup.vs_fwd,
+            "CF": matchup.vs_fwd,
+            "LW": matchup.vs_fwd,
+            "RW": matchup.vs_fwd,
+            "MF": matchup.vs_mid,
+            "MID": matchup.vs_mid,
+            "M": matchup.vs_mid,
+            "CM": matchup.vs_mid,
+            "CAM": matchup.vs_mid,
+            "CDM": matchup.vs_mid,
+            "DF": matchup.vs_def,
+            "DEF": matchup.vs_def,
+            "D": matchup.vs_def,
+            "CB": matchup.vs_def,
+            "LB": matchup.vs_def,
+            "RB": matchup.vs_def,
+            "GK": matchup.vs_gk,
+            "G": matchup.vs_gk,
+            "GOALKEEPER": matchup.vs_gk,
+        }
+        return soccer_map.get(pos)
     field_map = {
         "PG": matchup.vs_pg,
         "SG": matchup.vs_sg,
@@ -52,13 +78,13 @@ def adapt_espn_to_core(
     opponent_pace = None
     opponent_vs_position = None
     if matchup:
-        # NBA uses defensive_rating; NFL uses points_allowed
+        # NBA uses defensive_rating; NFL uses points_allowed; soccer uses goals conceded
         if stats.sport == "nba":
             opponent_def_rating = matchup.defensive_rating
         else:
             opponent_def_rating = matchup.points_allowed
         opponent_pace = matchup.pace
-        opponent_vs_position = _position_matchup_field(matchup, info.position)
+        opponent_vs_position = _position_matchup_field(matchup, info.position, stats.sport)
 
     return CorePlayerStats(
         player_id=info.id,
@@ -106,6 +132,20 @@ def adapt_espn_to_core(
         plus_minus=stats.plus_minus or 0.0,
         shots=stats.shots or 0.0,
         save_pct=stats.save_pct or 0.0,
+        # Soccer-specific
+        soccer_goals=stats.soccer_goals or 0.0,
+        soccer_assists=stats.soccer_assists or 0.0,
+        soccer_minutes=stats.soccer_minutes or 0.0,
+        soccer_shots=stats.soccer_shots or 0.0,
+        soccer_shots_on_target=stats.soccer_shots_on_target or 0.0,
+        soccer_key_passes=stats.soccer_key_passes or 0.0,
+        soccer_tackles=stats.soccer_tackles or 0.0,
+        soccer_interceptions=stats.soccer_interceptions or 0.0,
+        soccer_clean_sheets=stats.soccer_clean_sheets or 0.0,
+        soccer_saves=stats.soccer_saves or 0.0,
+        soccer_goals_conceded=stats.soccer_goals_conceded or 0.0,
+        soccer_xg=stats.soccer_xg or 0.0,
+        soccer_xa=stats.soccer_xa or 0.0,
         # Matchup
         opponent_def_rating=opponent_def_rating,
         opponent_pace=opponent_pace,

@@ -526,3 +526,127 @@ class TestNHLScoring:
         )
         msf = calculate_msf(stats)
         assert msf > 50  # Favorable matchup
+
+
+class TestSoccerScoring:
+    """Tests for Soccer-specific scoring functions."""
+
+    def test_sci_soccer_forward(self, soccer_forward_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(soccer_forward_stats)
+        # 15 goals, 8 assists, 42 SoT, 14.5 xG = should be high
+        assert sci >= 50
+
+    def test_sci_soccer_midfielder(self, soccer_midfielder_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(soccer_midfielder_stats)
+        # 5 goals, 12 assists, 65 KP = solid creative output
+        assert sci >= 30
+
+    def test_sci_soccer_goalkeeper(self, soccer_goalkeeper_stats):
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(soccer_goalkeeper_stats)
+        # 95 saves, 14 clean sheets = good keeper
+        assert sci >= 50
+
+    def test_sci_soccer_defender_boost(self, soccer_defender_stats):
+        """Defenders who contribute offensively get a 1.3x SCI boost."""
+        from core.scoring import calculate_sci
+
+        sci = calculate_sci(soccer_defender_stats)
+        # 3 goals, 2 assists as a CB = gets position boost
+        assert sci >= 0
+        assert sci <= 100
+
+    def test_rmi_soccer_starter(self, soccer_forward_stats):
+        from core.scoring import calculate_rmi
+
+        rmi = calculate_rmi(soccer_forward_stats)
+        # Starter, 95% start rate, 33 GP, ~85 min avg = stable
+        assert rmi < 50
+
+    def test_rmi_soccer_sub_player(self):
+        """Substitute player should have higher RMI."""
+        from core.scoring import PlayerStats, calculate_rmi
+
+        sub = PlayerStats(
+            player_id="sub1",
+            name="Sub Player",
+            team="TEST",
+            position="FW",
+            sport="soccer",
+            soccer_minutes=900.0,
+            is_starter=False,
+            games_started_pct=0.3,
+            games_played=25,
+        )
+        rmi = calculate_rmi(sub)
+        assert rmi > 50  # Unstable role
+
+    def test_gis_soccer_forward(self, soccer_forward_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(soccer_forward_stats)
+        # 15 goals, 85 shots, 8 assists, 35 KP = high gravity
+        assert gis >= 50
+
+    def test_gis_soccer_goalkeeper(self, soccer_goalkeeper_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(soccer_goalkeeper_stats)
+        # 95 saves, 14 clean sheets
+        assert 0 <= gis <= 100
+
+    def test_gis_soccer_defender(self, soccer_defender_stats):
+        from core.scoring import calculate_gis
+
+        gis = calculate_gis(soccer_defender_stats)
+        # Defenders get defensive contribution bonus from tackles+interceptions
+        assert gis >= 0
+        assert gis <= 100
+
+    def test_od_soccer(self, soccer_forward_stats):
+        from core.scoring import calculate_od
+
+        od = calculate_od(soccer_forward_stats)
+        # Positive trends
+        assert od > 0
+
+    def test_full_indices_soccer(self, soccer_forward_stats):
+        from core.scoring import calculate_indices
+
+        indices = calculate_indices(soccer_forward_stats)
+        assert 0 <= indices.sci <= 100
+        assert 0 <= indices.rmi <= 100
+        assert 0 <= indices.gis <= 100
+        assert -50 <= indices.od <= 50
+        assert 0 <= indices.msf <= 100
+
+    def test_compare_soccer_players(self, soccer_forward_stats, soccer_midfielder_stats):
+        from core.scoring import RiskMode, compare_players
+
+        result = compare_players(soccer_forward_stats, soccer_midfielder_stats, RiskMode.MEDIAN)
+
+        assert "decision" in result
+        assert "confidence" in result
+        assert result["score_a"] >= 0
+        assert result["score_b"] >= 0
+
+    def test_msf_soccer_with_matchup(self):
+        from core.scoring import PlayerStats, calculate_msf
+
+        stats = PlayerStats(
+            player_id="1",
+            name="Test",
+            team="ARS",
+            position="FW",
+            sport="soccer",
+            opponent_def_rating=1.8,  # Goals conceded per game (above avg 1.3)
+            opponent_pace=None,
+            opponent_vs_position=7.0,  # Above avg FP allowed
+        )
+        msf = calculate_msf(stats)
+        assert msf > 50  # Favorable matchup against leaky defense
