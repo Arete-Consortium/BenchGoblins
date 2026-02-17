@@ -4,7 +4,10 @@ const nextConfig = {
   async rewrites() {
     return [
       {
-        source: '/api/:path*',
+        // Proxy backend API calls through same-origin to avoid CORS.
+        // /bapi/* is rewritten to the backend; /api/* is reserved for
+        // Next.js API routes (OAuth callback, etc.).
+        source: '/bapi/:path*',
         destination: process.env.NEXT_PUBLIC_API_URL
           ? `${process.env.NEXT_PUBLIC_API_URL}/:path*`
           : 'http://localhost:8000/:path*',

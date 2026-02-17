@@ -155,7 +155,8 @@ app = FastAPI(
 )
 
 ALLOWED_ORIGINS = os.getenv(
-    "CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001"
+    "CORS_ALLOWED_ORIGINS",
+    "http://localhost:3000,http://localhost:3001,https://benchgoblins.com",
 ).split(",")
 
 app.add_middleware(
