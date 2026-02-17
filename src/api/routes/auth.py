@@ -72,6 +72,7 @@ class UserResponse(BaseModel):
     picture_url: str | None
     subscription_tier: str
     queries_today: int
+    queries_limit: int
     created_at: str
 
 
@@ -81,6 +82,11 @@ class AuthStatusResponse(BaseModel):
     google_oauth_configured: bool
     jwt_configured: bool
     fully_configured: bool
+
+
+def _queries_limit_for_tier(tier: str) -> int:
+    """Return the weekly query limit for a subscription tier."""
+    return -1 if tier == "pro" else 5
 
 
 # ---------------------------------------------------------------------------
@@ -238,6 +244,8 @@ async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
     # Get or create user in database
     async with db_service.session() as db:
         user = await get_or_create_user(google_user_info, db)
+        # Flush to assign auto-generated id before reading it
+        await db.flush()
 
         # Create JWT token
         try:
@@ -259,6 +267,7 @@ async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
                 picture_url=user.picture_url,
                 subscription_tier=user.subscription_tier,
                 queries_today=user.queries_today,
+                queries_limit=_queries_limit_for_tier(user.subscription_tier),
                 created_at=user.created_at.isoformat(),
             ),
         )
@@ -293,6 +302,7 @@ async def get_current_user_info(current_user: dict = Depends(get_current_user)):
             picture_url=user.picture_url,
             subscription_tier=user.subscription_tier,
             queries_today=user.queries_today,
+            queries_limit=_queries_limit_for_tier(user.subscription_tier),
             created_at=user.created_at.isoformat(),
         )
 
@@ -358,6 +368,7 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
                 picture_url=user.picture_url,
                 subscription_tier=user.subscription_tier,
                 queries_today=user.queries_today,
+                queries_limit=_queries_limit_for_tier(user.subscription_tier),
                 created_at=user.created_at.isoformat(),
             ),
         )
