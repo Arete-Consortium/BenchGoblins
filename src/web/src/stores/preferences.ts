@@ -1,10 +1,12 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { Sport, RiskMode } from '@/types';
+import type { Locale } from '@/i18n';
 
 interface PreferencesState {
   // Display preferences
   theme: 'light' | 'dark' | 'system';
+  language: Locale;
 
   // Default settings for decisions
   defaultSport: Sport;
@@ -16,6 +18,7 @@ interface PreferencesState {
 
   // Actions
   setTheme: (theme: 'light' | 'dark' | 'system') => void;
+  setLanguage: (language: Locale) => void;
   setDefaultSport: (sport: Sport) => void;
   setDefaultRiskMode: (riskMode: RiskMode) => void;
   setShowIndicesDetails: (show: boolean) => void;
@@ -25,6 +28,7 @@ interface PreferencesState {
 
 const defaultPreferences = {
   theme: 'dark' as const,
+  language: 'en' as Locale,
   defaultSport: 'nba' as Sport,
   defaultRiskMode: 'median' as RiskMode,
   showIndicesDetails: true,
@@ -37,6 +41,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       ...defaultPreferences,
 
       setTheme: (theme) => set({ theme }),
+      setLanguage: (language) => set({ language }),
       setDefaultSport: (defaultSport) => set({ defaultSport }),
       setDefaultRiskMode: (defaultRiskMode) => set({ defaultRiskMode }),
       setShowIndicesDetails: (showIndicesDetails) => set({ showIndicesDetails }),

@@ -4,6 +4,7 @@ import { ThemeProvider } from '@/components/providers/ThemeProvider';
 import { QueryProvider } from '@/components/providers/QueryProvider';
 import { GoogleAuthProviderWrapper } from '@/components/providers/GoogleAuthProvider';
 import { RevenueCatProvider } from '@/components/providers/RevenueCatProvider';
+import { I18nProvider } from '@/i18n/I18nProvider';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import './globals.css';
 
@@ -36,16 +37,18 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <GoogleAuthProviderWrapper>
-            <QueryProvider>
-              <RevenueCatProvider>
-                <ToastProvider>
-                  {children}
-                  <ToastViewport />
-                </ToastProvider>
-              </RevenueCatProvider>
-            </QueryProvider>
-          </GoogleAuthProviderWrapper>
+          <I18nProvider>
+            <GoogleAuthProviderWrapper>
+              <QueryProvider>
+                <RevenueCatProvider>
+                  <ToastProvider>
+                    {children}
+                    <ToastViewport />
+                  </ToastProvider>
+                </RevenueCatProvider>
+              </QueryProvider>
+            </GoogleAuthProviderWrapper>
+          </I18nProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -21,6 +21,7 @@ SPORT_PATHS = {
     "nfl": "football/nfl",
     "mlb": "baseball/mlb",
     "nhl": "hockey/nhl",
+    "soccer": "soccer/eng.1",  # English Premier League as default
 }
 
 # Cache: 15 min TTL, max 1000 players
@@ -94,6 +95,21 @@ class PlayerStats:
     shots: float | None = None
     save_pct: float | None = None  # Goalies
 
+    # Soccer specific
+    soccer_goals: float | None = None
+    soccer_assists: float | None = None
+    soccer_minutes: float | None = None
+    soccer_shots: float | None = None
+    soccer_shots_on_target: float | None = None
+    soccer_key_passes: float | None = None
+    soccer_tackles: float | None = None
+    soccer_interceptions: float | None = None
+    soccer_clean_sheets: float | None = None
+    soccer_saves: float | None = None
+    soccer_goals_conceded: float | None = None
+    soccer_xg: float | None = None
+    soccer_xa: float | None = None
+
     # Recent trends (last 5-10 games)
     recent_avg: float | None = None  # Fantasy points or main stat
     trend_direction: str | None = None  # "up", "down", "stable"
@@ -130,6 +146,12 @@ class TeamDefense:
     vs_pf: float | None = None
     vs_c: float | None = None
 
+    # Soccer position-specific
+    vs_fwd: float | None = None
+    vs_mid: float | None = None
+    vs_def: float | None = None
+    vs_gk: float | None = None
+
 
 class ESPNService:
     """Service for fetching ESPN player and game data."""
@@ -151,7 +173,7 @@ class ESPNService:
             return []
 
         # Map sport to ESPN league
-        league_map = {"nba": "nba", "nfl": "nfl", "mlb": "mlb", "nhl": "nhl"}
+        league_map = {"nba": "nba", "nfl": "nfl", "mlb": "mlb", "nhl": "nhl", "soccer": "eng.1"}
         league = league_map.get(sport)
 
         try:
@@ -314,6 +336,25 @@ class ESPNService:
                 stats.plus_minus = stat_map.get("plusminus", 0)
                 stats.shots = stat_map.get("shots", 0)
                 stats.save_pct = stat_map.get("savepct", stat_map.get("svpct", 0))
+            elif sport == "soccer":
+                stats.games_played = int(
+                    stat_map.get("gamesplayed", stat_map.get("appearances", 0))
+                )
+                stats.soccer_goals = stat_map.get("goals", stat_map.get("totalgoals", 0))
+                stats.soccer_assists = stat_map.get("assists", stat_map.get("goalassists", 0))
+                stats.soccer_minutes = stat_map.get("minutesplayed", stat_map.get("minutes", 0))
+                stats.soccer_shots = stat_map.get("totalshots", stat_map.get("shotsontarget", 0))
+                stats.soccer_shots_on_target = stat_map.get(
+                    "shotsontarget", stat_map.get("shotsongoal", 0)
+                )
+                stats.soccer_key_passes = stat_map.get("keypasses", 0)
+                stats.soccer_tackles = stat_map.get("tackles", stat_map.get("totalTackles", 0))
+                stats.soccer_interceptions = stat_map.get("interceptions", 0)
+                stats.soccer_clean_sheets = stat_map.get("cleansheets", 0)
+                stats.soccer_saves = stat_map.get("saves", 0)
+                stats.soccer_goals_conceded = stat_map.get(
+                    "goalsconceded", stat_map.get("goalagainst", 0)
+                )
 
             return stats
 
@@ -333,7 +374,7 @@ class ESPNService:
             return None
 
         # Map sport to league for search
-        league_map = {"nba": "nba", "nfl": "nfl", "mlb": "mlb", "nhl": "nhl"}
+        league_map = {"nba": "nba", "nfl": "nfl", "mlb": "mlb", "nhl": "nhl", "soccer": "eng.1"}
         league = league_map.get(sport)
 
         try:
@@ -614,6 +655,8 @@ class ESPNService:
                         self._map_mlb_stat(stats, name, value)
                     elif sport == "nhl":
                         self._map_nhl_stat(stats, name, value)
+                    elif sport == "soccer":
+                        self._map_soccer_stat(stats, name, value)
 
             return stats
 
@@ -689,6 +732,33 @@ class ESPNService:
         if field:
             setattr(stats, field, value)
 
+    def _map_soccer_stat(self, stats: PlayerStats, name: str, value: float):
+        """Map Soccer stat names to PlayerStats fields."""
+        mapping = {
+            "gamesplayed": "games_played",
+            "appearances": "games_played",
+            "goals": "soccer_goals",
+            "totalgoals": "soccer_goals",
+            "assists": "soccer_assists",
+            "goalassists": "soccer_assists",
+            "minutesplayed": "soccer_minutes",
+            "minutes": "soccer_minutes",
+            "totalshots": "soccer_shots",
+            "shotsontarget": "soccer_shots_on_target",
+            "shotsongoal": "soccer_shots_on_target",
+            "keypasses": "soccer_key_passes",
+            "tackles": "soccer_tackles",
+            "totaltackles": "soccer_tackles",
+            "interceptions": "soccer_interceptions",
+            "cleansheets": "soccer_clean_sheets",
+            "saves": "soccer_saves",
+            "goalsconceded": "soccer_goals_conceded",
+            "goalagainst": "soccer_goals_conceded",
+        }
+        field = mapping.get(name.replace(" ", "").replace("-", "").lower())
+        if field:
+            setattr(stats, field, value)
+
     async def get_player_game_logs(self, player_id: str, sport: str, limit: int = 10) -> list[dict]:
         """
         Fetch recent game-by-game stats for trend analysis.
@@ -749,6 +819,8 @@ class ESPNService:
                 game_log.update(self._parse_mlb_game_log(stats_data, event))
             elif sport == "nhl":
                 game_log.update(self._parse_nhl_game_log(stats_data, event))
+            elif sport == "soccer":
+                game_log.update(self._parse_soccer_game_log(stats_data, event))
 
             return game_log
 
@@ -851,6 +923,30 @@ class ESPNService:
             "goals_against": int(stat_map.get("ga", 0)),
         }
 
+    def _parse_soccer_game_log(self, stats: list, event: dict) -> dict:
+        """Parse Soccer game log stats."""
+        stat_names = event.get("statNames", [])
+        stat_map = {}
+        for i, name in enumerate(stat_names):
+            if i < len(stats):
+                try:
+                    stat_map[name.lower()] = float(stats[i]) if stats[i] else 0
+                except (ValueError, TypeError):
+                    stat_map[name.lower()] = 0
+
+        return {
+            "goals": int(stat_map.get("g", stat_map.get("goals", 0))),
+            "assists": int(stat_map.get("a", stat_map.get("assists", 0))),
+            "minutes": int(stat_map.get("min", stat_map.get("minutes", 0))),
+            "shots": int(stat_map.get("sh", stat_map.get("shots", 0))),
+            "shots_on_target": int(stat_map.get("sot", stat_map.get("shotsontarget", 0))),
+            "key_passes": int(stat_map.get("kp", stat_map.get("keypasses", 0))),
+            "tackles": int(stat_map.get("tk", stat_map.get("tackles", 0))),
+            "interceptions": int(stat_map.get("int", stat_map.get("interceptions", 0))),
+            "saves": int(stat_map.get("sv", stat_map.get("saves", 0))),
+            "goals_conceded": int(stat_map.get("gc", stat_map.get("goalsconceded", 0))),
+        }
+
     def calculate_trends(self, game_logs: list[dict], sport: str) -> dict:
         """
         Calculate trend metrics from game logs.
@@ -919,6 +1015,24 @@ class ESPNService:
             baseline_shots = sum(g.get("shots", 0) for g in baseline) / len(baseline)
             trends["usage_trend"] = recent_shots - baseline_shots
 
+        elif sport == "soccer":
+            # Minutes played as primary involvement metric
+            recent_mins = sum(g.get("minutes", 0) for g in recent) / len(recent)
+            baseline_mins = sum(g.get("minutes", 0) for g in baseline) / len(baseline)
+            trends["minutes_trend"] = recent_mins - baseline_mins
+
+            # Goal involvement (goals + assists) as points proxy
+            recent_gi = sum(g.get("goals", 0) + g.get("assists", 0) for g in recent) / len(recent)
+            baseline_gi = sum(g.get("goals", 0) + g.get("assists", 0) for g in baseline) / len(
+                baseline
+            )
+            trends["points_trend"] = recent_gi - baseline_gi
+
+            # Shots as usage proxy
+            recent_shots = sum(g.get("shots", 0) for g in recent) / len(recent)
+            baseline_shots = sum(g.get("shots", 0) for g in baseline) / len(baseline)
+            trends["usage_trend"] = recent_shots - baseline_shots
+
         else:
             trends = {"minutes_trend": 0, "points_trend": 0, "usage_trend": 0}
 
@@ -973,5 +1087,17 @@ def format_player_context(player: PlayerInfo, stats: PlayerStats | None, sport: 
             )
             if stats.save_pct:
                 lines.append(f"- Save %: {stats.save_pct:.3f}")
+        elif sport == "soccer":
+            lines.append(
+                f"- Stats: {stats.soccer_goals or 0:.0f} G, {stats.soccer_assists or 0:.0f} A"
+            )
+            if stats.soccer_minutes:
+                lines.append(f"- Minutes: {stats.soccer_minutes:.0f}")
+            if stats.soccer_key_passes:
+                lines.append(f"- Key Passes: {stats.soccer_key_passes:.1f}")
+            if stats.soccer_clean_sheets:
+                lines.append(f"- Clean Sheets: {stats.soccer_clean_sheets:.0f}")
+            if stats.soccer_saves:
+                lines.append(f"- Saves: {stats.soccer_saves:.0f}")
 
     return "\n".join(lines)

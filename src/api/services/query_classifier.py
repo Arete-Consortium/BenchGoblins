@@ -103,6 +103,15 @@ SPORT_TERMS = {
     "wnba",
     "mls",
     "soccer",
+    "premier league",
+    "epl",
+    "fpl",
+    "la liga",
+    "bundesliga",
+    "serie a",
+    "ligue 1",
+    "champions league",
+    "ucl",
 }
 
 # Position terms
@@ -139,6 +148,15 @@ POSITIONS = {
     "goalie",
     "winger",
     "defenseman",
+    # Soccer
+    "goalkeeper",
+    "striker",
+    "midfielder",
+    "defender",
+    "fullback",
+    "winger",
+    "attacker",
+    "keeper",
 }
 
 # Stat terms
@@ -180,6 +198,16 @@ STAT_TERMS = {
     "goals",
     "fpts",
     "fantasy points",
+    "xg",
+    "xa",
+    "clean sheet",
+    "clean sheets",
+    "key passes",
+    "tackles",
+    "interceptions",
+    "shots on target",
+    "minutes played",
+    "appearances",
 }
 
 # Injury/status terms
@@ -422,6 +450,24 @@ COMMON_PLAYER_FIRST_NAMES = {
     "mcdavid",
     "auston",
     "matthews",
+    # Soccer
+    "haaland",
+    "erling",
+    "salah",
+    "mohamed",
+    "mbappé",
+    "mbappe",
+    "vinicius",
+    "bellingham",
+    "jude",
+    "saka",
+    "bukayo",
+    "palmer",
+    "cole",
+    "foden",
+    "phil",
+    "messi",
+    "ronaldo",
 }
 
 # Patterns that suggest player names (Firstname Lastname)

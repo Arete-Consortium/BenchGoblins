@@ -3,13 +3,14 @@
 import { cn, getSportDisplayName } from '@/lib/utils';
 import { Sport } from '@/types';
 
-const SPORTS: Sport[] = ['nba', 'nfl', 'mlb', 'nhl'];
+const SPORTS: Sport[] = ['nba', 'nfl', 'mlb', 'nhl', 'soccer'];
 
 const SPORT_ICONS: Record<Sport, string> = {
   nba: '🏀',
   nfl: '🏈',
   mlb: '⚾',
   nhl: '🏒',
+  soccer: '⚽',
 };
 
 interface SportSelectorProps {

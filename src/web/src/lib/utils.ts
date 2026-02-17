@@ -38,6 +38,7 @@ export function getSportDisplayName(sport: Sport): string {
     nfl: 'NFL',
     mlb: 'MLB',
     nhl: 'NHL',
+    soccer: 'Soccer',
   };
   return names[sport] || sport.toUpperCase();
 }

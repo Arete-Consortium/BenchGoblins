@@ -14,7 +14,7 @@ CREATE TABLE players (
     team VARCHAR(50),
     team_abbrev VARCHAR(10),
     position VARCHAR(20),
-    sport VARCHAR(10) NOT NULL CHECK (sport IN ('nba', 'nfl', 'mlb', 'nhl')),
+    sport VARCHAR(10) NOT NULL CHECK (sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')),
     jersey VARCHAR(10),
     height VARCHAR(20),
     weight VARCHAR(20),
@@ -86,6 +86,21 @@ CREATE TABLE player_stats (
     save_pct DECIMAL(4,3),
     goals_against_avg DECIMAL(4,2),
 
+    -- Soccer stats
+    soccer_goals DECIMAL(5,2),
+    soccer_assists DECIMAL(5,2),
+    soccer_minutes DECIMAL(6,2),
+    soccer_shots DECIMAL(5,2),
+    soccer_shots_on_target DECIMAL(5,2),
+    soccer_key_passes DECIMAL(5,2),
+    soccer_tackles DECIMAL(5,2),
+    soccer_interceptions DECIMAL(5,2),
+    soccer_clean_sheets DECIMAL(5,2),
+    soccer_saves DECIMAL(5,2),
+    soccer_goals_conceded DECIMAL(5,2),
+    soccer_xg DECIMAL(5,3),
+    soccer_xa DECIMAL(5,3),
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW(),
 
@@ -154,6 +169,21 @@ CREATE TABLE game_logs (
     saves INTEGER,
     goals_against INTEGER,
 
+    -- Soccer game stats
+    soccer_goals_game INTEGER,
+    soccer_assists_game INTEGER,
+    soccer_minutes_game INTEGER,
+    soccer_shots_game INTEGER,
+    soccer_shots_on_target_game INTEGER,
+    soccer_key_passes_game INTEGER,
+    soccer_tackles_game INTEGER,
+    soccer_interceptions_game INTEGER,
+    soccer_clean_sheet BOOLEAN,
+    soccer_saves_game INTEGER,
+    soccer_goals_conceded_game INTEGER,
+    soccer_xg_game DECIMAL(5,3),
+    soccer_xa_game DECIMAL(5,3),
+
     -- Fantasy points (calculated)
     fantasy_points DECIMAL(8,2),
 
@@ -206,7 +236,7 @@ CREATE INDEX idx_player_indices_matchup ON player_indices(player_id, opponent, g
 CREATE TABLE team_defense (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     team_abbrev VARCHAR(10) NOT NULL,
-    sport VARCHAR(10) NOT NULL CHECK (sport IN ('nba', 'nfl', 'mlb', 'nhl')),
+    sport VARCHAR(10) NOT NULL CHECK (sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')),
     season VARCHAR(10) NOT NULL,
 
     -- General defensive metrics
@@ -226,6 +256,12 @@ CREATE TABLE team_defense (
     vs_rb DECIMAL(6,2),
     vs_wr DECIMAL(6,2),
     vs_te DECIMAL(6,2),
+
+    -- Soccer position-specific
+    vs_fwd DECIMAL(6,2),
+    vs_mid DECIMAL(6,2),
+    vs_def DECIMAL(6,2),
+    vs_gk DECIMAL(6,2),
 
     -- Additional metrics
     turnovers_forced DECIMAL(5,2),
