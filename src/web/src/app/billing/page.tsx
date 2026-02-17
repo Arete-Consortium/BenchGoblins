@@ -11,7 +11,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import { presentPaywall, RC_ENTITLEMENT_ID } from '@/lib/revenuecat';
 
 const FREE_FEATURES = [
-  '5 queries per day',
+  '5 queries per week',
   'All sports (NBA, NFL, MLB, NHL, Soccer)',
   'Basic AI recommendations',
   'Start/sit decisions',
