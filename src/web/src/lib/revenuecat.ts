@@ -16,7 +16,8 @@ export function isRevenueCatAvailable(): boolean {
 export const PRODUCT_IDS = {
   weekly: 'benchgoblins_pro_weekly',
   monthly: 'benchgoblins_pro_monthly',
-  annual: 'benchgoblins_pro_annual',
+  seasonal: 'benchgoblins_pro_seasonal',
+  league_seasonal: 'benchgoblins_league_seasonal',
 } as const;
 
 /**
