@@ -11,8 +11,8 @@ from contextlib import asynccontextmanager
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
-# Database URL from environment
-DATABASE_URL = os.getenv("DATABASE_URL", "")
+# Database URL from environment (strip whitespace — Railway env vars sometimes have trailing newlines)
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
 
 # Detect Railway internal connection - needs SSL disabled
 IS_RAILWAY_INTERNAL = DATABASE_URL and ".railway.internal" in DATABASE_URL

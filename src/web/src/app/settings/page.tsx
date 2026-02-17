@@ -138,7 +138,7 @@ export default function SettingsPage() {
               <div className="flex items-center justify-between p-4 bg-dark-700/50 rounded-lg mb-4">
                 <div>
                   <div className="font-medium">Free Tier</div>
-                  <div className="text-sm text-dark-400">5 queries per day, all sports</div>
+                  <div className="text-sm text-dark-400">5 queries per week, all sports</div>
                 </div>
                 <span className="px-3 py-1 rounded-full bg-dark-600 text-dark-300 text-sm">
                   Current Plan

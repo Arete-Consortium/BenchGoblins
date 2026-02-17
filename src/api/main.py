@@ -505,50 +505,50 @@ def _is_sports_query(query: str) -> tuple[bool, str]:
 # ---------------------------------------------------------------------------
 
 # Tier limits
-FREE_TIER_DAILY_LIMIT = 5
-PRO_TIER_DAILY_LIMIT = -1  # Unlimited
+FREE_TIER_WEEKLY_LIMIT = 5
+PRO_TIER_WEEKLY_LIMIT = -1  # Unlimited
 
 
 async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int]:
     """Check if user can make a query and increment counter.
 
     Returns:
-        Tuple of (allowed, queries_today, daily_limit)
+        Tuple of (allowed, queries_this_period, weekly_limit)
     """
     if not db_service.is_configured:
-        return True, 0, FREE_TIER_DAILY_LIMIT
+        return True, 0, FREE_TIER_WEEKLY_LIMIT
 
     async with db_service.session() as session:
         result = await session.execute(select(User).where(User.id == user_id))
         user = result.scalar_one_or_none()
 
         if not user:
-            return True, 0, FREE_TIER_DAILY_LIMIT
+            return True, 0, FREE_TIER_WEEKLY_LIMIT
 
-        # Determine daily limit based on tier
-        daily_limit = (
-            PRO_TIER_DAILY_LIMIT if user.subscription_tier == "pro" else FREE_TIER_DAILY_LIMIT
+        # Determine weekly limit based on tier
+        weekly_limit = (
+            PRO_TIER_WEEKLY_LIMIT if user.subscription_tier == "pro" else FREE_TIER_WEEKLY_LIMIT
         )
 
-        # Check if counter needs reset (new day)
+        # Check if counter needs reset (new week — 7 days since last reset)
         now = datetime.now(UTC)
-        if user.queries_reset_at is None or user.queries_reset_at.date() < now.date():
-            # Reset counter for new day
+        if user.queries_reset_at is None or (now - user.queries_reset_at) >= timedelta(days=7):
+            # Reset counter for new week
             user.queries_today = 0
             user.queries_reset_at = now
 
         # Pro tier has unlimited queries
         if user.subscription_tier == "pro":
             user.queries_today += 1
-            return True, user.queries_today, daily_limit
+            return True, user.queries_today, weekly_limit
 
         # Free tier - check limit
-        if user.queries_today >= daily_limit:
-            return False, user.queries_today, daily_limit
+        if user.queries_today >= weekly_limit:
+            return False, user.queries_today, weekly_limit
 
         # Increment counter
         user.queries_today += 1
-        return True, user.queries_today, daily_limit
+        return True, user.queries_today, weekly_limit
 
 
 @app.post("/decide", response_model=DecisionResponse)
@@ -580,14 +580,14 @@ async def make_decision(
     # Check tier-based daily limit if authenticated
     user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
-        tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
+        tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
             raise HTTPException(
                 status_code=402,
                 detail={
-                    "message": f"Daily query limit reached ({queries_today}/{daily_limit}). Upgrade to Pro for unlimited queries.",
+                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
                     "queries_today": queries_today,
-                    "daily_limit": daily_limit,
+                    "weekly_limit": weekly_limit,
                     "upgrade_url": "/billing/create-checkout",
                 },
             )
@@ -1000,14 +1000,14 @@ async def draft_decision(
     # Check tier-based daily limit if authenticated
     user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
-        tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
+        tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
             raise HTTPException(
                 status_code=402,
                 detail={
-                    "message": f"Daily query limit reached ({queries_today}/{daily_limit}). Upgrade to Pro for unlimited queries.",
+                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
                     "queries_today": queries_today,
-                    "daily_limit": daily_limit,
+                    "weekly_limit": weekly_limit,
                     "upgrade_url": "/billing/create-checkout",
                 },
             )
@@ -1201,14 +1201,14 @@ async def make_decision_stream(
     # Check tier-based daily limit if authenticated
     user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
-        tier_allowed, queries_today, daily_limit = await _check_and_increment_query_count(user_id)
+        tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
             raise HTTPException(
                 status_code=402,
                 detail={
-                    "message": f"Daily query limit reached ({queries_today}/{daily_limit}). Upgrade to Pro for unlimited queries.",
+                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
                     "queries_today": queries_today,
-                    "daily_limit": daily_limit,
+                    "weekly_limit": weekly_limit,
                     "upgrade_url": "/billing/create-checkout",
                 },
             )
@@ -3131,7 +3131,7 @@ class BillingStatusResponse(BaseModel):
     tier: str
     status: str
     queries_today: int
-    daily_limit: int
+    weekly_limit: int
     queries_remaining: int | None  # None if unlimited
     subscription_id: str | None = None
     current_period_end: str | None = None
@@ -3258,23 +3258,23 @@ async def get_billing_status(
             tier="free",
             status="none",
             queries_today=0,
-            daily_limit=FREE_TIER_DAILY_LIMIT,
-            queries_remaining=FREE_TIER_DAILY_LIMIT,
+            weekly_limit=FREE_TIER_WEEKLY_LIMIT,
+            queries_remaining=FREE_TIER_WEEKLY_LIMIT,
         )
 
-    # Check if queries_reset_at needs update for new day
+    # Check if queries_reset_at needs update for new week
     now = datetime.now(UTC)
     queries_today = user.queries_today
-    if user.queries_reset_at is None or user.queries_reset_at.date() < now.date():
+    if user.queries_reset_at is None or (now - user.queries_reset_at) >= timedelta(days=7):
         queries_today = 0
 
     # Determine limits
     if user.subscription_tier == "pro":
-        daily_limit = -1  # Unlimited
+        weekly_limit = -1  # Unlimited
         queries_remaining = None
     else:
-        daily_limit = FREE_TIER_DAILY_LIMIT
-        queries_remaining = max(0, daily_limit - queries_today)
+        weekly_limit = FREE_TIER_WEEKLY_LIMIT
+        queries_remaining = max(0, weekly_limit - queries_today)
 
     # Get Stripe subscription details if available
     subscription_status = "none"
@@ -3291,7 +3291,7 @@ async def get_billing_status(
         tier=user.subscription_tier,
         status=subscription_status,
         queries_today=queries_today,
-        daily_limit=daily_limit,
+        weekly_limit=weekly_limit,
         queries_remaining=queries_remaining,
         subscription_id=user.stripe_subscription_id,
         current_period_end=current_period_end,
