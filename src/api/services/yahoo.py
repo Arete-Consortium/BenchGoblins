@@ -9,6 +9,7 @@ Yahoo Fantasy uses OAuth 2.0 for API access. Users need to:
 API Docs: https://developer.yahoo.com/fantasysports/guide/
 """
 
+import logging
 import os
 import time
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from enum import Enum
 from urllib.parse import urlencode
 
 import httpx
+
+logger = logging.getLogger("benchgoblins.yahoo")
 
 # Yahoo API configuration
 YAHOO_AUTH_URL = "https://api.login.yahoo.com/oauth2/request_auth"
@@ -219,10 +222,10 @@ class YahooService:
                     expires_at=time.time() + expires_in,
                 )
             else:
-                print(f"Yahoo OAuth error: {response.status_code} - {response.text}")
+                logger.warning("Yahoo OAuth error: status %d", response.status_code)
 
         except httpx.HTTPError as e:
-            print(f"Yahoo OAuth error: {e}")
+            logger.warning("Yahoo OAuth HTTP error: %s", e)
 
         return None
 
@@ -264,7 +267,7 @@ class YahooService:
                 )
 
         except httpx.HTTPError as e:
-            print(f"Yahoo token refresh error: {e}")
+            logger.warning("Yahoo token refresh error: %s", e)
 
         return None
 
@@ -301,12 +304,12 @@ class YahooService:
             if response.status_code == 200:
                 return response.json()
             elif response.status_code == 401:
-                print("Yahoo API: Token expired or invalid")
+                logger.warning("Yahoo API: Token expired or invalid")
             else:
-                print(f"Yahoo API error: {response.status_code} - {response.text}")
+                logger.warning("Yahoo API error: status %d", response.status_code)
 
         except httpx.HTTPError as e:
-            print(f"Yahoo API error: {e}")
+            logger.warning("Yahoo API HTTP error: %s", e)
 
         return None
 
@@ -335,7 +338,7 @@ class YahooService:
             )
 
         except (KeyError, IndexError, TypeError) as e:
-            print(f"Error parsing Yahoo user: {e}")
+            logger.warning("Error parsing Yahoo user data: %s", e)
             return None
 
     # =========================================================================
@@ -414,7 +417,7 @@ class YahooService:
                 game_idx += 1
 
         except (KeyError, TypeError, IndexError) as e:
-            print(f"Error parsing Yahoo leagues: {e}")
+            logger.warning("Error parsing Yahoo leagues: %s", e)
 
         return leagues
 
@@ -509,7 +512,7 @@ class YahooService:
                 team_idx += 1
 
         except (KeyError, TypeError, IndexError) as e:
-            print(f"Error parsing standings: {e}")
+            logger.warning("Error parsing Yahoo standings: %s", e)
 
         return standings
 
@@ -570,7 +573,7 @@ class YahooService:
                 team_idx += 1
 
         except (KeyError, TypeError, IndexError) as e:
-            print(f"Error parsing teams: {e}")
+            logger.warning("Error parsing Yahoo teams: %s", e)
 
         return teams
 
@@ -637,7 +640,7 @@ class YahooService:
                 player_idx += 1
 
         except (KeyError, TypeError, IndexError) as e:
-            print(f"Error parsing roster: {e}")
+            logger.warning("Error parsing Yahoo roster: %s", e)
 
         return players
 
@@ -732,7 +735,7 @@ class YahooService:
                 player_idx += 1
 
         except (KeyError, TypeError, IndexError) as e:
-            print(f"Error parsing player search: {e}")
+            logger.warning("Error parsing Yahoo player search: %s", e)
 
         return players[:limit]
 

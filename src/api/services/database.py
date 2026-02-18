@@ -4,12 +4,15 @@ Database Service — Async PostgreSQL session management.
 Provides async database sessions using SQLAlchemy 2.0 with psycopg (psycopg3).
 """
 
+import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
+
+logger = logging.getLogger("benchgoblins.database")
 
 # Database URL from environment — remove all embedded whitespace (newlines, spaces)
 # that Railway env var references can sometimes inject.
@@ -35,7 +38,7 @@ if DATABASE_URL:
             DATABASE_URL = DATABASE_URL + "&sslmode=disable"
         else:
             DATABASE_URL = DATABASE_URL + "?sslmode=disable"
-        print("[DB] Using internal Railway URL with sslmode=disable")
+        logger.info("Using internal Railway URL with sslmode=disable")
 
 
 class DatabaseService:
@@ -59,7 +62,7 @@ class DatabaseService:
         if self._engine is not None:
             return  # Already connected
 
-        print(f"[DB] Connecting with URL prefix: {self._url[:50]}...")
+        logger.info("Connecting to database...")
 
         self._engine = create_async_engine(
             self._url,

@@ -184,7 +184,7 @@ async def main():
                 sport=args.sport,
             )
 
-        print(f"\nResults: {result}")
+        logger.info("Results: %s", result)
 
     finally:
         await db_service.disconnect()

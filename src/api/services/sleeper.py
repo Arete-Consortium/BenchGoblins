@@ -7,10 +7,13 @@ Users just need their Sleeper username to fetch their leagues and rosters.
 API Docs: https://docs.sleeper.com/
 """
 
+import logging
 from dataclasses import dataclass
 from enum import Enum
 
 import httpx
+
+logger = logging.getLogger("benchgoblins.sleeper")
 
 # Sleeper API base URL
 SLEEPER_API = "https://api.sleeper.app/v1"
@@ -136,7 +139,7 @@ class SleeperService:
                         avatar=data.get("avatar"),
                     )
         except httpx.HTTPError as e:
-            print(f"Sleeper API error: {e}")
+            logger.warning("Sleeper API error looking up user: %s", e)
 
         return None
 
@@ -194,7 +197,7 @@ class SleeperService:
                     leagues.append(self._parse_league(league_data))
 
         except httpx.HTTPError as e:
-            print(f"Sleeper API error: {e}")
+            logger.warning("Sleeper API error fetching leagues: %s", e)
 
         return leagues
 
@@ -336,7 +339,7 @@ class SleeperService:
                 return self._players_cache[sport]
 
         except httpx.HTTPError as e:
-            print(f"Sleeper API error fetching players: {e}")
+            logger.warning("Sleeper API error fetching players: %s", e)
 
         return {}
 
