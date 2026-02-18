@@ -29,8 +29,8 @@ from sqlalchemy import func, select, text
 from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
 from models.database import Session as SessionModel
-from monitoring import MetricsMiddleware, metrics_endpoint, update_engagement_metrics
-from routes.auth import get_current_user, get_optional_user
+from monitoring import MetricsMiddleware, update_engagement_metrics
+from routes.auth import get_current_user, get_optional_user, require_admin_key
 from routes.auth import router as auth_router
 from routes.leagues import router as leagues_router
 from routes.sessions import router as sessions_router
@@ -100,6 +100,7 @@ if SENTRY_DSN:
 def _validate_production_env() -> None:
     """Fail fast if required env vars are missing in production."""
     required_vars = [
+        "ADMIN_API_KEY",
         "ANTHROPIC_API_KEY",
         "DATABASE_URL",
         "JWT_SECRET_KEY",
@@ -200,8 +201,16 @@ app.add_middleware(
 # Performance monitoring middleware
 app.add_middleware(MetricsMiddleware)
 
-# Prometheus metrics endpoint
-app.add_route("/metrics", metrics_endpoint)
+
+# Prometheus metrics endpoint (admin-only)
+@app.get("/metrics", tags=["Admin"])
+async def metrics_endpoint(_admin=Depends(require_admin_key)):
+    """Prometheus metrics (admin-only)."""
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+    from starlette.responses import Response
+
+    return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
 
 # Session management routes
 app.include_router(sessions_router)
@@ -1392,21 +1401,18 @@ async def get_cache_stats():
     }
 
 
-@app.post("/cache/clear")
-async def clear_cache():
-    """Clear all caches (Claude in-memory + Redis)."""
+@app.post("/cache/clear", tags=["Admin"])
+async def clear_cache(_admin=Depends(require_admin_key)):
+    """Clear all caches (Claude in-memory + Redis). Requires admin API key."""
     claude_service.clear_cache()
     if redis_service.is_connected:
         await redis_service.clear_all()
     return {"status": "cleared"}
 
 
-@app.post("/cache/invalidate/{sport}")
-async def invalidate_sport_cache(sport: Sport):
-    """Invalidate all cached data for a specific sport.
-
-    Useful after stat updates or breaking news (e.g., injuries).
-    """
+@app.post("/cache/invalidate/{sport}", tags=["Admin"])
+async def invalidate_sport_cache(sport: Sport, _admin=Depends(require_admin_key)):
+    """Invalidate all cached data for a specific sport. Requires admin API key."""
     if not redis_service.is_connected:
         return {"status": "skipped", "reason": "redis not connected", "keys_deleted": 0}
 
@@ -1578,9 +1584,9 @@ class BudgetAlertResponse(BaseModel):
     percent_used: float
 
 
-@app.get("/budget", response_model=BudgetConfigResponse)
-async def get_budget():
-    """Get current budget configuration and spending status."""
+@app.get("/budget", response_model=BudgetConfigResponse, tags=["Admin"])
+async def get_budget(_admin=Depends(require_admin_key)):
+    """Get current budget configuration and spending status. Requires admin API key."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1649,9 +1655,9 @@ async def get_budget():
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.put("/budget", response_model=BudgetConfigResponse)
-async def set_budget(request: BudgetConfigRequest):
-    """Set monthly spending limit, alert threshold, and webhook URLs."""
+@app.put("/budget", response_model=BudgetConfigResponse, tags=["Admin"])
+async def set_budget(request: BudgetConfigRequest, _admin=Depends(require_admin_key)):
+    """Set monthly spending limit, alert threshold, and webhook URLs. Requires admin API key."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1691,9 +1697,9 @@ async def set_budget(request: BudgetConfigRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/budget/alerts", response_model=BudgetAlertResponse)
-async def get_budget_alerts():
-    """Get any active budget warnings or alerts."""
+@app.get("/budget/alerts", response_model=BudgetAlertResponse, tags=["Admin"])
+async def get_budget_alerts(_admin=Depends(require_admin_key)):
+    """Get any active budget warnings or alerts. Requires admin API key."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1772,9 +1778,9 @@ class WebhookTestRequest(BaseModel):
     webhook_url: str = Field(..., description="The webhook URL to test")
 
 
-@app.post("/budget/webhooks/test")
-async def test_budget_webhook(request: WebhookTestRequest):
-    """Send a test notification to verify webhook configuration."""
+@app.post("/budget/webhooks/test", tags=["Admin"])
+async def test_budget_webhook(request: WebhookTestRequest, _admin=Depends(require_admin_key)):
+    """Send a test notification to verify webhook configuration. Requires admin API key."""
     if request.webhook_type.lower() not in ("slack", "discord"):
         raise HTTPException(
             status_code=400,
@@ -2626,14 +2632,13 @@ async def unregister_push_token(request: PushTokenRequest):
     return {"status": "unregistered"}
 
 
-@app.post("/notifications/send")
+@app.post("/notifications/send", tags=["Admin"])
 async def send_notification_to_token(
     token: str = Query(..., description="Target push token"),
     request: SendNotificationRequest = ...,
+    _admin=Depends(require_admin_key),
 ):
-    """
-    Send a notification to a specific device (admin/testing endpoint).
-    """
+    """Send a notification to a specific device. Requires admin API key."""
     notification = PushNotification(
         to=token,
         title=request.title,
@@ -2645,11 +2650,11 @@ async def send_notification_to_token(
     return result
 
 
-@app.post("/notifications/broadcast")
-async def broadcast_notification(request: SendNotificationRequest):
-    """
-    Send a notification to all registered devices (admin endpoint).
-    """
+@app.post("/notifications/broadcast", tags=["Admin"])
+async def broadcast_notification(
+    request: SendNotificationRequest, _admin=Depends(require_admin_key)
+):
+    """Send a notification to all registered devices. Requires admin API key."""
     results = await notification_service.send_to_all(
         title=request.title,
         body=request.body,
@@ -2662,11 +2667,9 @@ async def broadcast_notification(request: SendNotificationRequest):
     }
 
 
-@app.get("/notifications/tokens")
-async def list_registered_tokens():
-    """
-    List all registered push tokens (admin endpoint).
-    """
+@app.get("/notifications/tokens", tags=["Admin"])
+async def list_registered_tokens(_admin=Depends(require_admin_key)):
+    """List all registered push tokens. Requires admin API key."""
     tokens = notification_service.get_all_tokens()
     return {"count": len(tokens), "tokens": tokens}
 

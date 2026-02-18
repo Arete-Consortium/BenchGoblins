@@ -16,12 +16,20 @@ Usage in other routes:
         return {"user_id": current_user["user_id"]}
 """
 
+import os
+import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-__all__ = ["router", "get_current_user", "get_current_user_token", "get_optional_user"]
+__all__ = [
+    "router",
+    "get_current_user",
+    "get_current_user_token",
+    "get_optional_user",
+    "require_admin_key",
+]
 
 from services.auth import (
     ConfigurationError,
@@ -155,6 +163,22 @@ async def get_optional_user(
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def require_admin_key(
+    x_admin_key: Annotated[str | None, Header()] = None,
+) -> None:
+    """Require a valid admin API key via X-Admin-Key header.
+
+    Returns 503 if ADMIN_API_KEY env var is not configured (prevents
+    accidental open access). Returns 403 if the key is missing or wrong.
+    Uses secrets.compare_digest for timing-safe comparison.
+    """
+    admin_key = os.getenv("ADMIN_API_KEY")
+    if not admin_key:
+        raise HTTPException(status_code=503, detail="Admin API key not configured")
+    if not x_admin_key or not secrets.compare_digest(x_admin_key, admin_key):
+        raise HTTPException(status_code=403, detail="Invalid or missing admin API key")
 
 
 async def get_current_user(token: str = Depends(get_current_user_token)) -> dict:
