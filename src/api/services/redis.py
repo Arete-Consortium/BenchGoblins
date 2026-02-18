@@ -10,6 +10,7 @@ Provides async Redis operations for:
 import hashlib
 import json
 import os
+import random
 from typing import Any
 
 import redis.asyncio as redis
@@ -30,10 +31,16 @@ REDIS_URL = os.getenv("REDIS_URL", "")
 class RedisService:
     """Async Redis caching service."""
 
-    # TTLs in seconds
+    # TTLs in seconds (base values — actual TTL gets ±10% jitter to prevent stampedes)
     PLAYER_TTL = 3600  # 1 hour
     DECISION_TTL = 3600  # 1 hour
     STATS_TTL = 1800  # 30 minutes
+
+    @staticmethod
+    def _jittered_ttl(base_ttl: int) -> int:
+        """Add ±10% random jitter to a TTL to prevent cache stampedes."""
+        jitter = int(base_ttl * 0.1)
+        return base_ttl + random.randint(-jitter, jitter)
 
     def __init__(self, url: str | None = None):
         self._url = url or REDIS_URL
@@ -114,7 +121,7 @@ class RedisService:
         try:
             await self._client.setex(
                 self._player_key(sport, player_id),
-                self.PLAYER_TTL,
+                self._jittered_ttl(self.PLAYER_TTL),
                 json.dumps(data),
             )
             return True
@@ -140,7 +147,7 @@ class RedisService:
         try:
             await self._client.setex(
                 self._player_search_key(sport, query),
-                self.STATS_TTL,  # Shorter TTL for search
+                self._jittered_ttl(self.STATS_TTL),  # Shorter TTL for search
                 json.dumps(results),
             )
             return True
@@ -214,7 +221,7 @@ class RedisService:
             key = await self._versioned_decision_key(sport, risk_mode, query)
             await self._client.setex(
                 key,
-                self.DECISION_TTL,
+                self._jittered_ttl(self.DECISION_TTL),
                 json.dumps(decision),
             )
             return True
