@@ -4,11 +4,14 @@ ESPN Data Service — Fetches real player stats and information.
 Uses ESPN's public API endpoints for player data across NBA, NFL, MLB, NHL.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 import httpx
 from cachetools import TTLCache
+
+logger = logging.getLogger(__name__)
 
 # ESPN API base URLs
 ESPN_API_BASE = "https://site.api.espn.com/apis/site/v2/sports"
@@ -211,7 +214,7 @@ class ESPNService:
             return players[:limit]
 
         except Exception as e:
-            print(f"ESPN search error: {e}")
+            logger.error("ESPN search error: %s", e)
             return []
 
     async def get_player(self, player_id: str, sport: str) -> PlayerInfo | None:
@@ -238,7 +241,7 @@ class ESPNService:
             return player
 
         except Exception as e:
-            print(f"ESPN get_player error: {e}")
+            logger.error("ESPN get_player error: %s", e)
             return None
 
     async def get_player_stats(self, player_id: str, sport: str) -> PlayerStats | None:
@@ -264,7 +267,7 @@ class ESPNService:
             return stats
 
         except Exception as e:
-            print(f"ESPN get_player_stats error: {e}")
+            logger.error("ESPN get_player_stats error: %s", e)
             return None
 
     def _parse_overview_stats(self, data: dict, player_id: str, sport: str) -> PlayerStats | None:
@@ -359,7 +362,7 @@ class ESPNService:
             return stats
 
         except Exception as e:
-            print(f"Error parsing overview stats: {e}")
+            logger.error("Error parsing overview stats: %s", e)
             return None
 
     async def find_player_by_name(
@@ -421,7 +424,7 @@ class ESPNService:
             return result
 
         except Exception as e:
-            print(f"ESPN find_player_by_name error: {e}")
+            logger.error("ESPN find_player_by_name error: %s", e)
             return None
 
     async def get_team_schedule(self, team_abbrev: str, sport: str) -> list[GameInfo]:
@@ -477,7 +480,7 @@ class ESPNService:
             return games[:10]
 
         except Exception as e:
-            print(f"ESPN get_team_schedule error: {e}")
+            logger.error("ESPN get_team_schedule error: %s", e)
             return []
 
     async def get_next_opponent(self, team_abbrev: str, sport: str) -> str | None:
@@ -543,7 +546,7 @@ class ESPNService:
             return defense
 
         except Exception as e:
-            print(f"ESPN get_team_defense error: {e}")
+            logger.error("ESPN get_team_defense error: %s", e)
             return None
 
     async def _search_rosters(self, name: str, sport: str) -> PlayerInfo | None:
@@ -583,7 +586,7 @@ class ESPNService:
                         return self._parse_player(athlete, sport)
 
         except Exception as e:
-            print(f"ESPN roster search error: {e}")
+            logger.error("ESPN roster search error: %s", e)
 
         return None
 
@@ -623,7 +626,7 @@ class ESPNService:
                 headshot_url=headshot_url,
             )
         except Exception as e:
-            print(f"Error parsing player: {e}")
+            logger.error("Error parsing player: %s", e)
             return None
 
     def _parse_stats(self, data: dict, player_id: str, sport: str) -> PlayerStats | None:
@@ -661,7 +664,7 @@ class ESPNService:
             return stats
 
         except Exception as e:
-            print(f"Error parsing stats: {e}")
+            logger.error("Error parsing stats: %s", e)
             return None
 
     def _map_nba_stat(self, stats: PlayerStats, name: str, value: float):
@@ -793,7 +796,7 @@ class ESPNService:
             return game_logs
 
         except Exception as e:
-            print(f"ESPN get_player_game_logs error: {e}")
+            logger.error("ESPN get_player_game_logs error: %s", e)
             return []
 
     def _parse_game_log(self, event: dict, sport: str) -> dict | None:
@@ -825,7 +828,7 @@ class ESPNService:
             return game_log
 
         except Exception as e:
-            print(f"Error parsing game log: {e}")
+            logger.error("Error parsing game log: %s", e)
             return None
 
     def _parse_nba_game_log(self, stats: list, event: dict) -> dict:

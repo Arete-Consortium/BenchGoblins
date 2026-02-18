@@ -8,10 +8,13 @@ Rate-limited to respect robots.txt (3-second delay between requests).
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
 from dataclasses import dataclass
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 BBALL_REF_BASE = "https://www.basketball-reference.com"
 PFR_BASE = "https://www.pro-football-reference.com"
@@ -78,7 +81,7 @@ async def _rate_limited_get(client: httpx.AsyncClient, url: str) -> httpx.Respon
         response.raise_for_status()
         return response
     except Exception as e:
-        print(f"Reference scraper error for {url}: {e}")
+        logger.error("Reference scraper error for %s: %s", url, e)
         return None
 
 

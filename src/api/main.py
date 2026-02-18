@@ -3,6 +3,7 @@ BenchGoblin API — Fantasy Sports Decision Engine
 """
 
 import json
+import logging
 import os
 import secrets
 import sys
@@ -70,6 +71,10 @@ from services.yahoo import yahoo_service
 
 load_dotenv()
 
+from logging_config import setup_logging  # noqa: E402
+
+logger = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Sentry Error Monitoring
 # ---------------------------------------------------------------------------
@@ -85,7 +90,7 @@ if SENTRY_DSN:
         enable_tracing=True,
         send_default_pii=False,
     )
-    print("Sentry error monitoring enabled")
+    logger.info("Sentry error monitoring enabled")
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -111,18 +116,20 @@ def _validate_production_env() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup app resources"""
+    setup_logging()
+
     # Fail fast in production if critical env vars are missing
     if os.getenv("ENVIRONMENT") == "production":
         _validate_production_env()
 
     # Initialize services
     if claude_service.is_available:
-        print("Claude API configured and ready")
+        logger.info("Claude API configured and ready")
     else:
-        print("WARNING: ANTHROPIC_API_KEY not set - Claude integration disabled")
+        logger.warning("ANTHROPIC_API_KEY not set - Claude integration disabled")
 
     # Connect to PostgreSQL and create tables
-    print("[STARTUP v6] Connecting to PostgreSQL...")
+    logger.info("Connecting to PostgreSQL...")
     if db_service.is_configured:
         try:
             await db_service.connect()
@@ -134,23 +141,23 @@ async def lifespan(app: FastAPI):
 
             async with db_service._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("[STARTUP v6] PostgreSQL connected and tables created")
+            logger.info("PostgreSQL connected and tables created")
         except Exception as e:
-            print(f"WARNING: PostgreSQL connection failed: {e}")
+            logger.warning("PostgreSQL connection failed: %s", e)
     else:
-        print("WARNING: DATABASE_URL not set - persistence disabled")
+        logger.warning("DATABASE_URL not set - persistence disabled")
 
     # Connect to Redis
     if redis_service.is_configured:
         try:
             await redis_service.connect()
-            print("Redis connected")
+            logger.info("Redis connected")
         except Exception as e:
-            print(f"WARNING: Redis connection failed: {e}")
+            logger.warning("Redis connection failed: %s", e)
     else:
-        print("WARNING: REDIS_URL not set - caching disabled")
+        logger.warning("REDIS_URL not set - caching disabled")
 
-    print("ESPN data service ready")
+    logger.info("ESPN data service ready")
     yield
 
     # Cleanup
@@ -453,7 +460,7 @@ async def _store_decision(
             session.add(decision)
     except Exception as e:
         # Don't fail the request if persistence fails
-        print(f"Failed to store decision: {e}")
+        logger.error("Failed to store decision: %s", e)
 
 
 async def _check_budget_exceeded() -> tuple[bool, str | None]:
@@ -505,7 +512,7 @@ async def _check_budget_exceeded() -> tuple[bool, str | None]:
 
             return False, None
     except Exception as e:
-        print(f"Budget check failed: {e}")
+        logger.error("Budget check failed: %s", e)
         return False, None  # Fail open - don't block on errors
 
 
@@ -524,7 +531,7 @@ def _is_sports_query(query: str) -> tuple[bool, str]:
 
     # Log ambiguous queries for review (could add proper logging here)
     if result.category == QueryCategory.AMBIGUOUS:
-        print(f"AMBIGUOUS query allowed: '{query[:50]}...' - {result.reason}")
+        logger.info("AMBIGUOUS query allowed: '%s...' - %s", query[:50], result.reason)
 
     return True, result.reason
 
@@ -1154,7 +1161,7 @@ async def _store_draft_decision(
             )
             session.add(decision)
     except Exception as e:
-        print(f"Failed to store draft decision: {e}")
+        logger.error("Failed to store draft decision: %s", e)
 
 
 async def _claude_draft_fallback(
@@ -1358,7 +1365,7 @@ async def make_decision_stream(
                     )
                     await check_and_send_alerts()
                 except Exception as e:
-                    print(f"Failed to persist streaming decision: {e}")
+                    logger.error("Failed to persist streaming decision: %s", e)
 
             yield "data: [DONE]\n\n"
         except Exception as e:
@@ -1522,7 +1529,7 @@ async def get_token_usage(
 
             return result
     except Exception as e:
-        print(f"Failed to fetch usage: {e}")
+        logger.error("Failed to fetch usage: %s", e)
         return {"error": str(e)}
 
 
@@ -1638,7 +1645,7 @@ async def get_budget():
                 updated_at=config.updated_at.isoformat() if config.updated_at else None,
             )
     except Exception as e:
-        print(f"Failed to fetch budget: {e}")
+        logger.error("Failed to fetch budget: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1680,7 +1687,7 @@ async def set_budget(request: BudgetConfigRequest):
         # Return updated status
         return await get_budget()
     except Exception as e:
-        print(f"Failed to set budget: {e}")
+        logger.error("Failed to set budget: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1754,7 +1761,7 @@ async def get_budget_alerts():
                 percent_used=round(percent_used, 2),
             )
     except Exception as e:
-        print(f"Failed to fetch budget alerts: {e}")
+        logger.error("Failed to fetch budget alerts: %s", e)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1849,7 +1856,7 @@ async def get_decision_history(
                 for d in decisions
             ]
     except Exception as e:
-        print(f"Failed to fetch history: {e}")
+        logger.error("Failed to fetch history: %s", e)
         return []
 
 
@@ -2914,7 +2921,7 @@ async def get_experiment_results():
 
             return {"variants": results}
     except Exception as e:
-        print(f"Failed to fetch experiment results: {e}")
+        logger.error("Failed to fetch experiment results: %s", e)
         return {"error": str(e)}
 
 
@@ -3112,7 +3119,7 @@ async def get_engagement_metrics(
                 },
             }
     except Exception as e:
-        print(f"Failed to fetch engagement metrics: {e}")
+        logger.error("Failed to fetch engagement metrics: %s", e)
         return {"error": str(e)}
 
 
