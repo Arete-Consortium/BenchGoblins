@@ -33,6 +33,7 @@ from routes.auth import get_current_user, get_optional_user
 from routes.auth import router as auth_router
 from routes.leagues import router as leagues_router
 from routes.sessions import router as sessions_router
+from routes.verdicts import router as verdicts_router
 from services import stripe_billing
 from services.accuracy import AccuracyTracker, DecisionOutcome
 from services.budget_alerts import check_and_send_alerts, send_test_webhook
@@ -203,6 +204,9 @@ app.include_router(auth_router)
 
 # League integration routes (Sleeper)
 app.include_router(leagues_router)
+
+# Verdict routes (Start/Sit engine)
+app.include_router(verdicts_router)
 
 
 # ---------------------------------------------------------------------------
