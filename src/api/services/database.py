@@ -10,7 +10,6 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.pool import AsyncAdaptedQueuePool
 
 logger = logging.getLogger("benchgoblins.database")
 
@@ -66,7 +65,7 @@ class DatabaseService:
 
         self._engine = create_async_engine(
             self._url,
-            poolclass=AsyncAdaptedQueuePool,
+            # create_async_engine defaults to AsyncAdaptedQueuePool already
             pool_size=5,
             max_overflow=10,
             pool_timeout=30,

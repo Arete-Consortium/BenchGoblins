@@ -127,6 +127,8 @@ class APIClient {
     this.authToken = token;
     if (typeof window !== 'undefined') {
       localStorage.setItem(AUTH_TOKEN_KEY, token);
+      // Mirror to cookie so Next.js middleware (server-side) can read it
+      document.cookie = `${AUTH_TOKEN_KEY}=${encodeURIComponent(token)}; path=/; max-age=${7 * 24 * 60 * 60}; SameSite=Lax`;
     }
   }
 
@@ -134,6 +136,8 @@ class APIClient {
     this.authToken = null;
     if (typeof window !== 'undefined') {
       localStorage.removeItem(AUTH_TOKEN_KEY);
+      // Clear the mirrored cookie
+      document.cookie = `${AUTH_TOKEN_KEY}=; path=/; max-age=0`;
     }
   }
 

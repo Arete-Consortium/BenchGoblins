@@ -61,6 +61,8 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () => {
         if (typeof window !== 'undefined') {
           localStorage.removeItem(AUTH_TOKEN_KEY);
+          // Clear the mirrored cookie so middleware sees logged-out state
+          document.cookie = `${AUTH_TOKEN_KEY}=; path=/; max-age=0`;
         }
         set({
           user: null,
