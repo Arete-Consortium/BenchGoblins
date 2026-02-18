@@ -24,9 +24,11 @@ from pydantic import BaseModel, Field
 __all__ = ["router", "get_current_user", "get_current_user_token", "get_optional_user"]
 
 from services.auth import (
+    JWT_EXPIRATION_HOURS,
     ConfigurationError,
     InvalidTokenError,
     blacklist_token,
+    can_refresh_token,
     create_jwt_token,
     get_or_create_user,
     get_user_by_id,
@@ -253,8 +255,7 @@ async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
         except ConfigurationError as e:
             raise HTTPException(status_code=503, detail=str(e))
 
-        # Calculate expiration in seconds (7 days)
-        expires_in = 7 * 24 * 60 * 60
+        expires_in = JWT_EXPIRATION_HOURS * 60 * 60
 
         return AuthResponse(
             access_token=access_token,
@@ -328,12 +329,15 @@ async def logout(
 
 
 @router.post("/refresh", response_model=AuthResponse)
-async def refresh_token(current_user: dict = Depends(get_current_user)):
+async def refresh_token(
+    token: str = Depends(get_current_user_token),
+):
     """
     Get a fresh JWT token.
 
-    Use this to extend the session before the current token expires.
-    The current token remains valid until it expires.
+    Accepts both valid and recently-expired tokens (within the 7-day
+    refresh window).  Use this to seamlessly extend sessions without
+    requiring the user to re-authenticate with Google.
     """
     if not db_service.is_configured:
         raise HTTPException(
@@ -341,8 +345,46 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
             detail="Database not configured. Token refresh unavailable.",
         )
 
+    # Reject blacklisted tokens
+    if is_token_blacklisted(token):
+        raise HTTPException(
+            status_code=401,
+            detail="Token has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # First try normal verification (token still valid)
+    user_info = None
+    try:
+        user_info = verify_jwt_token(token)
+    except InvalidTokenError:
+        # Token expired — check if within refresh window
+        if not can_refresh_token(token):
+            raise HTTPException(
+                status_code=401,
+                detail="Token expired and outside refresh window. Please re-authenticate.",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        # Decode without expiry check to get user_id
+        import jwt as _jwt
+        from services.auth import JWT_SECRET_KEY, JWT_ALGORITHM
+        try:
+            payload = _jwt.decode(
+                token, JWT_SECRET_KEY,
+                algorithms=[JWT_ALGORITHM],
+                issuer="benchgoblins",
+                options={"verify_exp": False},
+            )
+            user_info = {"user_id": int(payload["sub"])}
+        except _jwt.InvalidTokenError:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
     async with db_service.session() as db:
-        user = await get_user_by_id(current_user["user_id"], db)
+        user = await get_user_by_id(user_info["user_id"], db)
 
         if not user:
             raise HTTPException(
@@ -355,7 +397,7 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
         except ConfigurationError as e:
             raise HTTPException(status_code=503, detail=str(e))
 
-        expires_in = 7 * 24 * 60 * 60
+        expires_in = JWT_EXPIRATION_HOURS * 60 * 60
 
         return AuthResponse(
             access_token=access_token,

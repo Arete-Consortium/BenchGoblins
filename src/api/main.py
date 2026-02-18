@@ -193,15 +193,33 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["authorization", "content-type", "x-session-id"],
 )
 
 # Performance monitoring middleware
 app.add_middleware(MetricsMiddleware)
 
-# Prometheus metrics endpoint
-app.add_route("/metrics", metrics_endpoint)
+# Prometheus metrics endpoint — restricted by IP or auth token.
+# Allow access from localhost (Prometheus scraper) without auth.
+# All other callers need a valid JWT.
+METRICS_TRUSTED_IPS = os.getenv("METRICS_TRUSTED_IPS", "127.0.0.1,::1").split(",")
+
+
+@app.get("/metrics", include_in_schema=False)
+async def protected_metrics(request: Request):
+    """Prometheus metrics (restricted to trusted IPs or authenticated users)."""
+    client_ip = request.client.host if request.client else ""
+    if client_ip in METRICS_TRUSTED_IPS:
+        return await metrics_endpoint(request)
+    # Require auth for external callers
+    auth_header = request.headers.get("authorization", "")
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    from routes.auth import get_current_user_token, get_current_user as _get_user
+    token = await get_current_user_token(auth_header)
+    await _get_user(token)
+    return await metrics_endpoint(request)
 
 # Session management routes
 app.include_router(sessions_router)
@@ -1600,8 +1618,8 @@ class BudgetAlertResponse(BaseModel):
 
 
 @app.get("/budget", response_model=BudgetConfigResponse)
-async def get_budget():
-    """Get current budget configuration and spending status."""
+async def get_budget(current_user: dict = Depends(get_current_user)):
+    """Get current budget configuration and spending status (requires authentication)."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1667,12 +1685,12 @@ async def get_budget():
             )
     except Exception as e:
         logger.error("Failed to fetch budget: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch budget configuration")
 
 
 @app.put("/budget", response_model=BudgetConfigResponse)
-async def set_budget(request: BudgetConfigRequest):
-    """Set monthly spending limit, alert threshold, and webhook URLs."""
+async def set_budget(request: BudgetConfigRequest, current_user: dict = Depends(get_current_user)):
+    """Set monthly spending limit, alert threshold, and webhook URLs (requires authentication)."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1709,12 +1727,12 @@ async def set_budget(request: BudgetConfigRequest):
         return await get_budget()
     except Exception as e:
         logger.error("Failed to set budget: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to update budget configuration")
 
 
 @app.get("/budget/alerts", response_model=BudgetAlertResponse)
-async def get_budget_alerts():
-    """Get any active budget warnings or alerts."""
+async def get_budget_alerts(current_user: dict = Depends(get_current_user)):
+    """Get any active budget warnings or alerts (requires authentication)."""
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
@@ -1783,7 +1801,7 @@ async def get_budget_alerts():
             )
     except Exception as e:
         logger.error("Failed to fetch budget alerts: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Failed to fetch budget alerts")
 
 
 class WebhookTestRequest(BaseModel):
@@ -1794,8 +1812,8 @@ class WebhookTestRequest(BaseModel):
 
 
 @app.post("/budget/webhooks/test")
-async def test_budget_webhook(request: WebhookTestRequest):
-    """Send a test notification to verify webhook configuration."""
+async def test_budget_webhook(request: WebhookTestRequest, current_user: dict = Depends(get_current_user)):
+    """Send a test notification to verify webhook configuration (requires authentication)."""
     if request.webhook_type.lower() not in ("slack", "discord"):
         raise HTTPException(
             status_code=400,
@@ -1837,9 +1855,10 @@ class DecisionHistoryItem(BaseModel):
 async def get_decision_history(
     limit: int = Query(default=20, ge=1, le=100),
     sport: Sport | None = None,
+    current_user: dict = Depends(get_current_user),
 ):
     """
-    Get recent decision history.
+    Get recent decision history (requires authentication).
 
     Optionally filter by sport.
     """
@@ -2698,9 +2717,11 @@ async def list_registered_tokens():
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
+async def websocket_endpoint(websocket: WebSocket, token: str | None = Query(default=None)):
     """
-    WebSocket endpoint for real-time updates.
+    WebSocket endpoint for real-time updates (authenticated).
+
+    Connect with: ws://host/ws?token=<JWT>
 
     Message Protocol:
     - Client sends: {"type": "subscribe", "topic": "player:nba:12345"}
@@ -2716,6 +2737,23 @@ async def websocket_endpoint(websocket: WebSocket):
     - sport:{sport} — All updates for a sport (nba, nfl, mlb, nhl, soccer)
     - injuries — All injury alerts
     """
+    from services.auth import InvalidTokenError, verify_jwt_token, is_token_blacklisted
+
+    # Authenticate before accepting the connection
+    if not token:
+        await websocket.close(code=1008, reason="Missing authentication token")
+        return
+
+    if is_token_blacklisted(token):
+        await websocket.close(code=1008, reason="Token has been revoked")
+        return
+
+    try:
+        verify_jwt_token(token)
+    except (InvalidTokenError, Exception):
+        await websocket.close(code=1008, reason="Invalid or expired token")
+        return
+
     connection_id = await connection_manager.connect(websocket)
     try:
         while True:
@@ -2726,8 +2764,8 @@ async def websocket_endpoint(websocket: WebSocket):
 
 
 @app.get("/ws/stats")
-async def websocket_stats():
-    """Get WebSocket connection statistics."""
+async def websocket_stats(current_user: dict = Depends(get_current_user)):
+    """Get WebSocket connection statistics (requires authentication)."""
     return connection_manager.get_stats()
 
 
@@ -2875,7 +2913,8 @@ async def sync_outcomes(request: SyncOutcomesRequest | None = None):
             **result,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+        logger.error("League sync failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="League sync failed")
 
 
 # ---------------------------------------------------------------------------
@@ -3238,7 +3277,8 @@ async def create_checkout(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create checkout session: {e}")
+        logger.error("Failed to create checkout session: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create checkout session")
 
 
 @app.post("/billing/create-portal", response_model=PortalResponse)
@@ -3272,7 +3312,8 @@ async def create_portal(
         )
         return PortalResponse(portal_url=portal_url)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create portal session: {e}")
+        logger.error("Failed to create portal session: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to create portal session")
 
 
 @app.post("/billing/webhook")
@@ -3298,7 +3339,8 @@ async def handle_stripe_webhook(request: Request):
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {e}")
+        logger.error("Webhook processing failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 
 @app.get("/billing/status", response_model=BillingStatusResponse)

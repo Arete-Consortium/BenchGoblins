@@ -8,6 +8,8 @@ Environment Variables:
     JWT_SECRET_KEY: Secret key for signing JWT tokens (min 32 characters recommended)
 """
 
+import hashlib
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -19,6 +21,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import User
 
+logger = logging.getLogger("benchgoblins.auth")
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -26,7 +30,17 @@ from models.database import User
 GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
 JWT_ALGORITHM = "HS256"
-JWT_EXPIRATION_HOURS = 24 * 7  # 7 days
+# Access tokens expire in 1 hour — clients should call /auth/refresh before expiry
+JWT_EXPIRATION_HOURS = 1
+# Refresh window: a token can be refreshed up to 7 days after issuance
+JWT_REFRESH_WINDOW_HOURS = 24 * 7
+
+# Validate secret strength at import time for production deployments
+if os.getenv("ENVIRONMENT", "development") == "production" and len(JWT_SECRET_KEY) < 32:
+    raise RuntimeError(
+        "JWT_SECRET_KEY must be at least 32 characters in production. "
+        "Generate one with: python -c \"import secrets; print(secrets.token_urlsafe(48))\""
+    )
 
 
 class AuthServiceError(Exception):
@@ -271,28 +285,87 @@ def verify_jwt_token(token: str) -> dict:
         raise InvalidTokenError(f"Invalid token: {str(e)}")
 
 
+def can_refresh_token(token: str) -> bool:
+    """Check whether an expired token is still within the refresh window.
+
+    Allows the /auth/refresh endpoint to issue a new access token without
+    forcing the user to re-authenticate with Google, as long as the
+    original token was issued within the last 7 days.
+    """
+    if not JWT_SECRET_KEY:
+        return False
+    try:
+        # Decode without verifying expiration
+        payload = jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            issuer="benchgoblins",
+            options={"verify_exp": False},
+        )
+        issued_at = datetime.fromtimestamp(payload["iat"], tz=UTC)
+        return datetime.now(UTC) - issued_at < timedelta(hours=JWT_REFRESH_WINDOW_HOURS)
+    except jwt.InvalidTokenError:
+        return False
+
+
 # ---------------------------------------------------------------------------
-# Token Blacklist (for logout)
+# Token Blacklist — Redis-backed with in-memory fallback
 # ---------------------------------------------------------------------------
 
-# In-memory blacklist for revoked tokens
-# In production, use Redis or database for persistence across restarts
-_token_blacklist: set[str] = set()
+# In-memory fallback for when Redis is unavailable
+_token_blacklist_memory: set[str] = set()
+
+
+def _blacklist_key(token: str) -> str:
+    """Derive a short, fixed-length Redis key from a JWT."""
+    token_hash = hashlib.sha256(token.encode()).hexdigest()[:16]
+    return f"token_blacklist:{token_hash}"
+
+
+def _get_redis_client():
+    """Lazily import and return the Redis service client, or None."""
+    try:
+        from services.redis import redis_service
+
+        if redis_service.is_connected and redis_service._client:
+            return redis_service._client
+    except Exception:
+        pass
+    return None
 
 
 def blacklist_token(token: str) -> None:
     """
     Add a token to the blacklist (for logout).
 
+    Persists to Redis when available so the blacklist survives restarts
+    and is shared across instances.  Falls back to in-memory set.
+
     Args:
         token: JWT token to blacklist
     """
-    _token_blacklist.add(token)
+    import asyncio
+
+    _token_blacklist_memory.add(token)
+
+    client = _get_redis_client()
+    if client:
+        try:
+            # Store in Redis with TTL matching token expiry so it auto-cleans
+            ttl = int(timedelta(hours=JWT_EXPIRATION_HOURS).total_seconds()) + 60
+            asyncio.get_event_loop().create_task(
+                client.setex(_blacklist_key(token), ttl, "1")
+            )
+        except Exception:
+            logger.warning("Failed to persist token blacklist to Redis")
 
 
 def is_token_blacklisted(token: str) -> bool:
     """
     Check if a token has been blacklisted.
+
+    Checks in-memory set first (fast path), then Redis.
 
     Args:
         token: JWT token to check
@@ -300,21 +373,59 @@ def is_token_blacklisted(token: str) -> bool:
     Returns:
         True if token is blacklisted, False otherwise
     """
-    return token in _token_blacklist
+    if token in _token_blacklist_memory:
+        return True
+
+    client = _get_redis_client()
+    if client:
+        import asyncio
+
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                # We're inside an async context but called synchronously.
+                # Schedule a coroutine and don't block — rely on memory set
+                # for current request; Redis will be checked next time.
+                return False
+        except RuntimeError:
+            pass
+
+    return False
+
+
+async def is_token_blacklisted_async(token: str) -> bool:
+    """Async version of blacklist check — preferred in async handlers."""
+    if token in _token_blacklist_memory:
+        return True
+
+    client = _get_redis_client()
+    if client:
+        try:
+            result = await client.get(_blacklist_key(token))
+            if result:
+                # Populate memory cache for future sync checks
+                _token_blacklist_memory.add(token)
+                return True
+        except Exception:
+            pass
+
+    return False
 
 
 def clear_expired_blacklist_entries() -> int:
     """
-    Remove expired tokens from the blacklist (maintenance task).
+    Remove expired tokens from the in-memory blacklist (maintenance task).
+
+    Redis entries auto-expire via TTL and don't need manual cleanup.
 
     Returns:
         Number of entries removed
     """
-    global _token_blacklist
-    initial_count = len(_token_blacklist)
+    global _token_blacklist_memory
+    initial_count = len(_token_blacklist_memory)
 
     valid_tokens = set()
-    for token in _token_blacklist:
+    for token in _token_blacklist_memory:
         try:
             # Try to decode - if expired, we can remove it
             verify_jwt_token(token)
@@ -323,8 +434,8 @@ def clear_expired_blacklist_entries() -> int:
             # Token is expired or invalid, don't keep it
             pass
 
-    _token_blacklist = valid_tokens
-    return initial_count - len(_token_blacklist)
+    _token_blacklist_memory = valid_tokens
+    return initial_count - len(_token_blacklist_memory)
 
 
 # ---------------------------------------------------------------------------

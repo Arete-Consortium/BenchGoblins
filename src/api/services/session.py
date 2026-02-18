@@ -34,16 +34,32 @@ class SessionService:
 
     @property
     def encryption_key(self) -> bytes:
-        """Get the master encryption key from environment."""
+        """Get the master encryption key from environment.
+
+        In production, SESSION_ENCRYPTION_KEY must be set or credential
+        storage will be refused.  In development a temporary key is
+        generated (and logged as a warning) so the app can still start,
+        but encrypted credentials will be lost on restart.
+        """
         if self._encryption_key is None:
+            import base64
+            import logging
+
+            _logger = logging.getLogger("benchgoblins.session")
             key_b64 = os.getenv("SESSION_ENCRYPTION_KEY")
             if key_b64:
-                import base64
-
                 self._encryption_key = base64.b64decode(key_b64)
+            elif os.getenv("ENVIRONMENT", "development") == "production":
+                raise RuntimeError(
+                    "SESSION_ENCRYPTION_KEY is required in production. "
+                    "Generate one with: python -c "
+                    '"import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"'
+                )
             else:
-                # For development only - generate a temporary key
-                # In production, this should fail or use a secure key management system
+                _logger.warning(
+                    "SESSION_ENCRYPTION_KEY not set — using ephemeral key. "
+                    "Encrypted credentials will be lost on restart."
+                )
                 self._encryption_key = secrets.token_bytes(32)
         return self._encryption_key
 
