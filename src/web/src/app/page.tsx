@@ -15,6 +15,10 @@ import {
   CheckCircle,
   LogIn,
   Clock,
+  MessageSquare,
+  Brain,
+  Trophy,
+  Crown,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -266,6 +270,36 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* How It Works */}
+      <section className="container mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold">{t('landing.howTitle')}</h2>
+          <p className="mt-4 text-dark-400">
+            {t('landing.howSubtitle')}
+          </p>
+        </div>
+        <div className="grid gap-8 md:grid-cols-3 max-w-4xl mx-auto">
+          {[
+            { step: 1, icon: MessageSquare, title: t('landing.howStep1Title'), desc: t('landing.howStep1Desc'), color: 'text-primary-400', bg: 'bg-primary-500/10' },
+            { step: 2, icon: Brain, title: t('landing.howStep2Title'), desc: t('landing.howStep2Desc'), color: 'text-purple-400', bg: 'bg-purple-500/10' },
+            { step: 3, icon: Trophy, title: t('landing.howStep3Title'), desc: t('landing.howStep3Desc'), color: 'text-amber-400', bg: 'bg-amber-500/10' },
+          ].map((item) => (
+            <div key={item.step} className="text-center">
+              <div className="relative mx-auto mb-4">
+                <div className={`w-16 h-16 rounded-2xl ${item.bg} flex items-center justify-center mx-auto`}>
+                  <item.icon className={`h-8 w-8 ${item.color}`} />
+                </div>
+                <div className="absolute -top-2 -right-2 w-7 h-7 rounded-full bg-dark-800 border border-dark-600 flex items-center justify-center">
+                  <span className="text-xs font-bold text-dark-300">{item.step}</span>
+                </div>
+              </div>
+              <h3 className="font-semibold text-lg mb-2">{item.title}</h3>
+              <p className="text-dark-400 text-sm">{item.desc}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
       {/* Risk Modes */}
       <section className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
@@ -325,6 +359,83 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Pricing */}
+      <section className="container mx-auto px-4 py-16">
+        <div className="text-center mb-12">
+          <h2 className="text-3xl font-bold">{t('landing.pricingTitle')}</h2>
+          <p className="mt-4 text-dark-400">
+            {t('landing.pricingSubtitle')}
+          </p>
+        </div>
+        <div className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto">
+          {/* Free Tier */}
+          <Card className="bg-dark-800/50 border-dark-700">
+            <CardContent className="pt-6">
+              <h3 className="text-xl font-bold mb-1">{t('landing.pricingFree')}</h3>
+              <div className="mb-6">
+                <span className="text-3xl font-bold">{t('landing.pricingFreePrice')}</span>
+                <span className="text-dark-500 text-sm">{t('landing.pricingPerMonth')}</span>
+              </div>
+              <ul className="space-y-3 mb-6">
+                {[
+                  t('landing.pricingFreeFeature1'),
+                  t('landing.pricingFreeFeature2'),
+                  t('landing.pricingFreeFeature3'),
+                  t('landing.pricingFreeFeature4'),
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                    <CheckCircle className="h-4 w-4 text-green-400 shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/ask" className="block">
+                <Button variant="outline" className="w-full border-dark-600">
+                  {t('landing.pricingGetStarted')}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Pro Tier */}
+          <Card className="bg-dark-800/50 border-primary-500/50 ring-2 ring-primary-500/30">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-xl font-bold">{t('landing.pricingPro')}</h3>
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400">
+                  <Crown className="inline h-3 w-3 mr-0.5 -mt-0.5" />
+                  {t('landing.pricingPopular')}
+                </span>
+              </div>
+              <div className="mb-6">
+                <span className="text-3xl font-bold gradient-text">{t('landing.pricingProPrice')}</span>
+                <span className="text-dark-500 text-sm">{t('landing.pricingPerMonth')}</span>
+              </div>
+              <ul className="space-y-3 mb-6">
+                {[
+                  t('landing.pricingProFeature1'),
+                  t('landing.pricingProFeature2'),
+                  t('landing.pricingProFeature3'),
+                  t('landing.pricingProFeature4'),
+                  t('landing.pricingProFeature5'),
+                  t('landing.pricingProFeature6'),
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                    <CheckCircle className="h-4 w-4 text-primary-400 shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/auth/login" className="block">
+                <Button className="w-full shadow-lg shadow-primary-500/20">
+                  {t('landing.pricingUpgrade')}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </section>
+
       {/* CTA */}
       <section className="container mx-auto px-4 py-24 text-center">
         <div className="mx-auto max-w-2xl">
@@ -348,6 +459,17 @@ export default function LandingPage() {
             <div className="flex items-center gap-2">
               <Image src="/logo.png" alt="Bench Goblins" width={32} height={32} className="rounded" />
               <span className="font-semibold">Bench Goblins</span>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-dark-500">
+              <Link href="/privacy" className="hover:text-dark-300 transition-colors">
+                {t('landing.footerPrivacy')}
+              </Link>
+              <Link href="/terms" className="hover:text-dark-300 transition-colors">
+                {t('landing.footerTerms')}
+              </Link>
+              <Link href="/billing" className="hover:text-dark-300 transition-colors">
+                {t('landing.footerBilling')}
+              </Link>
             </div>
             <p className="text-dark-500 text-sm">
               {t('landing.footerTagline')}
