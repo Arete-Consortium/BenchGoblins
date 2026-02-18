@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -13,11 +14,60 @@ import {
   ArrowRight,
   CheckCircle,
   LogIn,
+  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useTranslation } from '@/i18n/I18nProvider';
+
+// Upcoming sports events — countdown auto-rotates to the nearest future event
+const SPORTS_EVENTS = [
+  { name: 'NFL Draft', location: 'Pittsburgh', date: '2026-04-23T20:00:00-04:00', sport: 'NFL' },
+  { name: 'NBA Playoffs', location: '', date: '2026-04-18T12:00:00-04:00', sport: 'NBA' },
+  { name: 'NHL Playoffs', location: '', date: '2026-04-15T19:00:00-04:00', sport: 'NHL' },
+  { name: 'MLB Opening Day', location: '', date: '2026-03-26T13:00:00-04:00', sport: 'MLB' },
+  { name: 'NFL Season Kickoff', location: '', date: '2026-09-10T20:20:00-04:00', sport: 'NFL' },
+  { name: 'Premier League Starts', location: '', date: '2026-08-15T12:30:00+01:00', sport: 'Soccer' },
+  { name: 'NBA Season Tipoff', location: '', date: '2026-10-20T19:30:00-04:00', sport: 'NBA' },
+];
+
+function getNextEvent() {
+  const now = Date.now();
+  const upcoming = SPORTS_EVENTS
+    .map((e) => ({ ...e, ms: new Date(e.date).getTime() }))
+    .filter((e) => e.ms > now)
+    .sort((a, b) => a.ms - b.ms);
+  return upcoming[0] ?? { ...SPORTS_EVENTS[0], ms: new Date(SPORTS_EVENTS[0].date).getTime() };
+}
+
+function useCountdown() {
+  const [event, setEvent] = useState(getNextEvent);
+  const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+
+  useEffect(() => {
+    function tick() {
+      const current = getNextEvent();
+      if (current.name !== event.name) setEvent(current);
+      const diff = current.ms - Date.now();
+      if (diff <= 0) {
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        return;
+      }
+      setTimeLeft({
+        days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+        hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+        minutes: Math.floor((diff / (1000 * 60)) % 60),
+        seconds: Math.floor((diff / 1000) % 60),
+      });
+    }
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => clearInterval(interval);
+  }, [event.name]);
+
+  return { event, timeLeft };
+}
 
 const jsonLd = {
   '@context': 'https://schema.org',
@@ -37,6 +87,7 @@ const jsonLd = {
 
 export default function LandingPage() {
   const { t } = useTranslation();
+  const { event, timeLeft: countdown } = useCountdown();
 
   const features = [
     {
@@ -141,6 +192,32 @@ export default function LandingPage() {
               className="drop-shadow-2xl"
               priority
             />
+          </div>
+
+          {/* Dynamic Sports Countdown */}
+          <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-dark-800/80 border border-dark-700 px-4 py-2">
+            <Clock className="h-4 w-4 text-primary-400" />
+            <span className="text-sm font-medium text-dark-300">
+              {event.name}{event.location ? ` — ${event.location}` : ''}
+            </span>
+            <span className="text-xs text-dark-500 border-l border-dark-700 pl-2">{event.sport}</span>
+          </div>
+          <div className="mb-8 flex justify-center gap-4">
+            {[
+              { value: countdown.days, label: 'Days' },
+              { value: countdown.hours, label: 'Hrs' },
+              { value: countdown.minutes, label: 'Min' },
+              { value: countdown.seconds, label: 'Sec' },
+            ].map((unit) => (
+              <div key={unit.label} className="flex flex-col items-center">
+                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-dark-800/80 border border-dark-700 flex items-center justify-center">
+                  <span className="text-2xl sm:text-3xl font-bold tabular-nums gradient-text">
+                    {String(unit.value).padStart(2, '0')}
+                  </span>
+                </div>
+                <span className="mt-1 text-xs text-dark-500 uppercase tracking-wider">{unit.label}</span>
+              </div>
+            ))}
           </div>
 
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
