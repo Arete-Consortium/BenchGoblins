@@ -417,16 +417,137 @@ class TestExperimentEndpoints:
 class TestCacheInvalidateEndpoint:
     """Tests for /cache/invalidate/{sport} endpoint."""
 
+    ADMIN_KEY = "test-admin-key-abc123"
+
+    @patch.dict("os.environ", {"ADMIN_API_KEY": "test-admin-key-abc123"})
     def test_invalidate_sport(self, test_client):
-        """Invalidate endpoint returns response."""
-        response = test_client.post("/cache/invalidate/nba")
+        """Invalidate endpoint returns response with valid admin key."""
+        response = test_client.post(
+            "/cache/invalidate/nba",
+            headers={"X-Admin-Key": self.ADMIN_KEY},
+        )
 
         assert response.status_code == 200
         data = response.json()
         assert "status" in data
 
+    @patch.dict("os.environ", {"ADMIN_API_KEY": "test-admin-key-abc123"})
     def test_invalidate_invalid_sport(self, test_client):
         """Invalidate endpoint rejects invalid sport."""
-        response = test_client.post("/cache/invalidate/invalid")
+        response = test_client.post(
+            "/cache/invalidate/invalid",
+            headers={"X-Admin-Key": self.ADMIN_KEY},
+        )
 
         assert response.status_code == 422
+
+
+class TestAdminEndpointProtection:
+    """Tests for admin API key protection on all admin endpoints."""
+
+    ADMIN_KEY = "test-admin-key-abc123"
+    ADMIN_HEADERS = {"X-Admin-Key": ADMIN_KEY}
+
+    # All admin endpoints: (method, path, needs_body)
+    ADMIN_ENDPOINTS = [
+        ("POST", "/cache/clear", False),
+        ("POST", "/cache/invalidate/nba", False),
+        ("GET", "/budget", False),
+        ("PUT", "/budget", True),
+        ("GET", "/budget/alerts", False),
+        ("POST", "/budget/webhooks/test", True),
+        ("POST", "/notifications/send?token=test", True),
+        ("POST", "/notifications/broadcast", True),
+        ("GET", "/notifications/tokens", False),
+        ("GET", "/metrics", False),
+    ]
+
+    BUDGET_BODY = {
+        "monthly_limit_usd": 100,
+        "alert_threshold_pct": 80,
+        "alerts_enabled": True,
+    }
+
+    WEBHOOK_BODY = {
+        "webhook_type": "slack",
+        "webhook_url": "https://hooks.slack.com/test",
+    }
+
+    NOTIFICATION_BODY = {"title": "Test", "body": "Test notification"}
+
+    def _get_body(self, path):
+        """Return appropriate request body for endpoints that need one."""
+        if "budget/webhooks" in path:
+            return self.WEBHOOK_BODY
+        if "budget" in path:
+            return self.BUDGET_BODY
+        if "notifications" in path:
+            return self.NOTIFICATION_BODY
+        return None
+
+    def _request(self, test_client, method, path, headers=None, json=None):
+        """Make a request with the given method."""
+        fn = getattr(test_client, method.lower())
+        kwargs = {}
+        if headers:
+            kwargs["headers"] = headers
+        if json:
+            kwargs["json"] = json
+        return fn(path, **kwargs)
+
+    def test_no_key_returns_503_when_env_not_set(self, test_client):
+        """All admin endpoints return 503 when ADMIN_API_KEY env var is not set."""
+        for method, path, needs_body in self.ADMIN_ENDPOINTS:
+            body = self._get_body(path) if needs_body else None
+            response = self._request(test_client, method, path, json=body)
+            assert response.status_code == 503, (
+                f"{method} {path} should return 503 without env var"
+            )
+            assert "not configured" in response.json()["detail"]
+
+    @patch.dict("os.environ", {"ADMIN_API_KEY": "test-admin-key-abc123"})
+    def test_no_key_header_returns_403(self, test_client):
+        """All admin endpoints return 403 when no X-Admin-Key header is sent."""
+        for method, path, needs_body in self.ADMIN_ENDPOINTS:
+            body = self._get_body(path) if needs_body else None
+            response = self._request(test_client, method, path, json=body)
+            assert response.status_code == 403, (
+                f"{method} {path} should return 403 without key"
+            )
+
+    @patch.dict("os.environ", {"ADMIN_API_KEY": "test-admin-key-abc123"})
+    def test_wrong_key_returns_403(self, test_client):
+        """All admin endpoints return 403 with an incorrect key."""
+        for method, path, needs_body in self.ADMIN_ENDPOINTS:
+            body = self._get_body(path) if needs_body else None
+            response = self._request(
+                test_client,
+                method,
+                path,
+                headers={"X-Admin-Key": "wrong-key"},
+                json=body,
+            )
+            assert response.status_code == 403, (
+                f"{method} {path} should return 403 with wrong key"
+            )
+
+    @patch.dict("os.environ", {"ADMIN_API_KEY": "test-admin-key-abc123"})
+    def test_valid_key_allows_access(self, test_client):
+        """Admin endpoints accept requests with valid admin key."""
+        # Test a few representative endpoints (not all need DB)
+        safe_endpoints = [
+            ("POST", "/cache/clear"),
+            ("GET", "/notifications/tokens"),
+            ("GET", "/metrics"),
+        ]
+        for method, path in safe_endpoints:
+            response = self._request(
+                test_client,
+                method,
+                path,
+                headers=self.ADMIN_HEADERS,
+            )
+            # Should not be 403 or 503 (may be 200 or 500 due to no DB — that's fine)
+            assert response.status_code not in (403, 503), (
+                f"{method} {path} should not be 403/503 with valid key, got {response.status_code}"
+            )
