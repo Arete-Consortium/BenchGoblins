@@ -23,6 +23,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import INET, UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -58,6 +59,12 @@ class User(Base):
         CheckConstraint("subscription_tier IN ('free', 'pro')", name="check_subscription_tier"),
         Index("idx_users_google_id", "google_id"),
         Index("idx_users_email", "email"),
+        # Partial index for paid subscribers (skip majority 'free' rows)
+        Index(
+            "idx_users_subscription_tier",
+            "subscription_tier",
+            postgresql_where=text("subscription_tier != 'free'"),
+        ),
     )
 
 
@@ -446,6 +453,15 @@ class Decision(Base):
         Index("idx_decisions_user", "user_id"),
         Index("idx_decisions_created", "created_at"),
         Index("idx_decisions_sport", "sport"),
+        # Composite indexes for hot query paths
+        Index("idx_decisions_sport_created", "sport", created_at.desc()),
+        Index("idx_decisions_type_created", "decision_type", created_at.desc()),
+        Index(
+            "idx_decisions_variant",
+            "prompt_variant",
+            created_at.desc(),
+            postgresql_where=text("prompt_variant IS NOT NULL"),
+        ),
     )
 
 
@@ -513,6 +529,8 @@ class Session(Base):
         Index("idx_sessions_token", "session_token"),
         Index("idx_sessions_status", "status"),
         Index("idx_sessions_expires", "expires_at"),
+        # Composite index for session listing queries
+        Index("idx_sessions_created_status", created_at.desc(), "status"),
     )
 
 
