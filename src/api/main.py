@@ -91,9 +91,29 @@ if SENTRY_DSN:
 # ---------------------------------------------------------------------------
 
 
+def _validate_production_env() -> None:
+    """Fail fast if required env vars are missing in production."""
+    required_vars = [
+        "ANTHROPIC_API_KEY",
+        "DATABASE_URL",
+        "JWT_SECRET_KEY",
+        "SESSION_ENCRYPTION_KEY",
+    ]
+    missing = [var for var in required_vars if not os.getenv(var)]
+    if missing:
+        raise RuntimeError(
+            f"Missing required environment variables for production: {', '.join(missing)}. "
+            "Set these variables or run with ENVIRONMENT=development."
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup app resources"""
+    # Fail fast in production if critical env vars are missing
+    if os.getenv("ENVIRONMENT") == "production":
+        _validate_production_env()
+
     # Initialize services
     if claude_service.is_available:
         print("Claude API configured and ready")
