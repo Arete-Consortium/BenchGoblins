@@ -1,17 +1,28 @@
-FROM python:3.12-slim
+# Stage 1: Builder — install pip deps with build tools available
+FROM python:3.12-slim AS builder
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
+COPY src/api/requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-# Install system dependencies
+# Stage 2: Runtime — slim image with no build tools
+FROM python:3.12-slim
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install
-COPY src/api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+WORKDIR /app
 
-# Copy all source code - force rebuild 2026-02-02
+# Copy installed packages from builder
+COPY --from=builder /install /usr/local
+
+# Copy all source code
 COPY src/ ./src/
 
 # Set Python path so imports work (core module is in /app/src)
