@@ -5,6 +5,7 @@ Provides async database sessions using SQLAlchemy 2.0 with psycopg (psycopg3).
 """
 
 import os
+import re
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
@@ -13,7 +14,6 @@ from sqlalchemy.pool import NullPool
 
 # Database URL from environment — remove all embedded whitespace (newlines, spaces)
 # that Railway env var references can sometimes inject.
-import re
 
 DATABASE_URL = re.sub(r"\s+", "", os.getenv("DATABASE_URL", ""))
 
