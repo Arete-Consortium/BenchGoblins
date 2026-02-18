@@ -1,0 +1,5 @@
+[allowlist]
+description = "BenchGoblins gitleaks allowlist"
+paths = [
+  '''TODO_REVENUECAT_STRIPE\.md''',
+]
