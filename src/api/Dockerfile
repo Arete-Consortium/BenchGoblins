@@ -1,21 +1,25 @@
 FROM python:3.12-slim
 
-WORKDIR /app
+# API runs from /app/api; core module at /app/core (sibling).
+# main.py's sys.path.insert adds /app so "from core.scoring import ..."
+# resolves to /app/core/scoring.py.
+
+WORKDIR /app/api
 
 # Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Force cache invalidation - this RUN command changes the layer
-RUN echo "CACHE_BUST_20260202_v1" > /tmp/build_version
-
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
-COPY . .
+# Copy core module (sibling — found via sys.path parent hack in main.py)
+COPY core/ /app/core/
+
+# Copy API application code
+COPY api/ /app/api/
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
