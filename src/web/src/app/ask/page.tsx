@@ -1,13 +1,14 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { Header } from '@/components/layout/Header';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
-import { Sparkles, TrendingUp, Shield, Target } from 'lucide-react';
+import { ManualRosterForm } from '@/components/ManualRosterForm';
+import { Sparkles, TrendingUp, Shield, Target, ClipboardList } from 'lucide-react';
 
 const EXAMPLE_QUERIES = [
   'Should I start Jayson Tatum or Anthony Edwards this week?',
@@ -83,6 +84,7 @@ export default function AskPage() {
     useAppStore();
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [showRosterForm, setShowRosterForm] = useState(false);
 
   // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
@@ -101,6 +103,14 @@ export default function AskPage() {
               <SportSelector value={sport} onChange={setSport} disabled={isLoading} />
               <div className="flex items-center gap-3">
                 <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
+                <button
+                  onClick={() => setShowRosterForm(!showRosterForm)}
+                  className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all flex items-center gap-1.5"
+                  title="Enter roster manually"
+                >
+                  <ClipboardList className="h-4 w-4" />
+                  <span className="hidden sm:inline">Roster</span>
+                </button>
                 {messages.length > 0 && (
                   <button
                     onClick={clearMessages}
@@ -114,6 +124,13 @@ export default function AskPage() {
             </div>
           </div>
         </div>
+
+        {/* Manual roster form */}
+        {showRosterForm && (
+          <div className="max-w-4xl mx-auto w-full px-4 py-3">
+            <ManualRosterForm sport={sport} onClose={() => setShowRosterForm(false)} />
+          </div>
+        )}
 
         {/* Chat area */}
         <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">

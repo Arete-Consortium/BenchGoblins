@@ -474,6 +474,45 @@ class BudgetConfig(Base):
     )
 
 
+class WaitlistEntry(Base):
+    """Waitlist signups from the landing page."""
+
+    __tablename__ = "waitlist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    source: Mapped[str] = mapped_column(String(50), default="landing")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    __table_args__ = (Index("idx_waitlist_email", "email"),)
+
+
+class ManualRoster(Base):
+    """User-submitted rosters when league sync isn't available."""
+
+    __tablename__ = "manual_rosters"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[str | None] = mapped_column(String(100))
+    session_id: Mapped[str | None] = mapped_column(String(100))
+    sport: Mapped[str] = mapped_column(String(10), nullable=False)
+    league_type: Mapped[str | None] = mapped_column(String(50))
+    team_name: Mapped[str | None] = mapped_column(String(100))
+    players: Mapped[dict] = mapped_column(JSON, nullable=False)  # [{name, position, team}]
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        CheckConstraint(
+            "sport IN ('nba', 'nfl', 'mlb', 'nhl', 'soccer')", name="check_roster_sport"
+        ),
+        Index("idx_manual_rosters_user", "user_id"),
+        Index("idx_manual_rosters_session", "session_id"),
+    )
+
+
 class Session(Base):
     """Client session for credential and state management."""
 

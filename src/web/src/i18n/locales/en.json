@@ -44,6 +44,12 @@
     "explanationsDesc": "Deep dives on players",
     "exampleQuery": "\"Should I start Jayson Tatum or Anthony Edwards this week? I'm projected to lose by 10 points.\"",
     "exampleNote": "Bench Goblins will factor in your situation when making recommendations.",
+    "draftBadge": "Draft Season Coming",
+    "waitlistTitle": "Get Early Access",
+    "waitlistSubtitle": "Be first to know when draft tools go live. Free during beta.",
+    "waitlistPlaceholder": "you@email.com",
+    "waitlistButton": "Join Waitlist",
+    "waitlistSuccess": "You're on the list!",
     "ctaTitle": "Ready to win your league?",
     "ctaSubtitle": "Join thousands of fantasy managers making smarter decisions with Bench Goblins.",
     "footerTagline": "Built by fantasy sports enthusiasts, for fantasy sports enthusiasts."

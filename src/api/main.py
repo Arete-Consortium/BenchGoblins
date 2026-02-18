@@ -225,8 +225,17 @@ app.include_router(billing_router)
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
-    redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
+    """Health check endpoint — always returns fast so Railway doesn't kill us."""
+    # Redis check is async; wrap in a timeout so a slow Redis can't stall deploy
+    redis_healthy = False
+    if redis_service.is_connected:
+        try:
+            import asyncio
+
+            redis_healthy = await asyncio.wait_for(redis_service.health_check(), timeout=2.0)
+        except Exception:
+            redis_healthy = False
+
     return {
         "status": "healthy",
         "version": "0.7.0",
@@ -902,6 +911,212 @@ async def get_engagement_metrics(
     except Exception as e:
         logger.error("Failed to fetch engagement metrics: %s", e, exc_info=True)
         return {"error": str(e)}
+
+
+# ---------------------------------------------------------------------------
+# Waitlist
+# ---------------------------------------------------------------------------
+
+
+class WaitlistRequest(BaseModel):
+    """Request to join the waitlist."""
+
+    email: str = Field(..., description="Email address", max_length=255)
+    source: str = Field(default="landing", max_length=50)
+
+
+@app.post("/waitlist")
+async def join_waitlist(request: WaitlistRequest):
+    """Add email to the draft-season waitlist."""
+    import re as _re
+
+    if not _re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", request.email):
+        raise HTTPException(status_code=400, detail="Invalid email address")
+
+    if not db_service.is_configured:
+        logger.info("Waitlist signup (no DB): %s", request.email)
+        return {"status": "ok"}
+
+    from models.database import WaitlistEntry
+
+    try:
+        async with db_service.session() as session:
+            entry = WaitlistEntry(email=request.email.lower().strip(), source=request.source)
+            session.add(entry)
+        return {"status": "ok"}
+    except Exception as e:
+        if "unique" in str(e).lower() or "duplicate" in str(e).lower():
+            return {"status": "ok", "message": "Already on the list"}
+        logger.error("Waitlist signup failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to join waitlist")
+
+
+# ---------------------------------------------------------------------------
+# Manual Roster Entry
+# ---------------------------------------------------------------------------
+
+
+class ManualPlayerEntry(BaseModel):
+    """A single player in a manual roster."""
+
+    name: str = Field(..., min_length=1, max_length=100)
+    position: str = Field(..., max_length=20)
+    team: str = Field(default="", max_length=50)
+
+
+class ManualRosterRequest(BaseModel):
+    """Request to submit a manual roster."""
+
+    sport: Sport
+    players: list[ManualPlayerEntry] = Field(..., min_length=1, max_length=30)
+    league_type: str | None = Field(default=None, max_length=50)
+    team_name: str | None = Field(default=None, max_length=100)
+
+
+class ManualRosterResponse(BaseModel):
+    """Response after saving a manual roster."""
+
+    id: str
+    sport: str
+    player_count: int
+
+
+@app.post("/roster/manual", response_model=ManualRosterResponse)
+async def submit_manual_roster(
+    request: ManualRosterRequest,
+    session_id: str | None = Query(default=None),
+    current_user: dict | None = Depends(get_optional_user),
+):
+    """Submit a roster manually when league sync isn't available."""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    from models.database import ManualRoster
+
+    user_id = str(current_user["user_id"]) if current_user else None
+
+    async with db_service.session() as session:
+        roster = ManualRoster(
+            user_id=user_id,
+            session_id=session_id,
+            sport=request.sport.value,
+            league_type=request.league_type,
+            team_name=request.team_name,
+            players=[p.model_dump() for p in request.players],
+        )
+        session.add(roster)
+        await session.flush()
+        roster_id = str(roster.id)
+
+    return ManualRosterResponse(
+        id=roster_id,
+        sport=request.sport.value,
+        player_count=len(request.players),
+    )
+
+
+@app.get("/roster/manual")
+async def get_manual_rosters(
+    sport: Sport | None = None,
+    session_id: str | None = Query(default=None),
+    current_user: dict | None = Depends(get_optional_user),
+):
+    """Get saved manual rosters for the current user/session."""
+    if not db_service.is_configured:
+        return {"rosters": []}
+
+    from models.database import ManualRoster
+
+    user_id = str(current_user["user_id"]) if current_user else None
+
+    async with db_service.session() as session:
+        q = select(ManualRoster).order_by(ManualRoster.updated_at.desc()).limit(20)
+        if user_id:
+            q = q.where(ManualRoster.user_id == user_id)
+        elif session_id:
+            q = q.where(ManualRoster.session_id == session_id)
+        else:
+            return {"rosters": []}
+
+        if sport:
+            q = q.where(ManualRoster.sport == sport.value)
+
+        rows = (await session.execute(q)).scalars().all()
+        return {
+            "rosters": [
+                {
+                    "id": str(r.id),
+                    "sport": r.sport,
+                    "team_name": r.team_name,
+                    "league_type": r.league_type,
+                    "players": r.players,
+                    "updated_at": r.updated_at.isoformat() if r.updated_at else None,
+                }
+                for r in rows
+            ]
+        }
+
+
+# ---------------------------------------------------------------------------
+# Goblin Score — Single-Player Index Lookup
+# ---------------------------------------------------------------------------
+
+
+class GoblinScoreResponse(BaseModel):
+    """Single-player Goblin Score (five-index breakdown)."""
+
+    player_name: str
+    team: str
+    position: str
+    sport: str
+    goblin_score: float
+    risk_mode: str
+    indices: dict
+
+
+@app.get("/goblin-score/{sport}/{player_name}", response_model=GoblinScoreResponse)
+async def get_goblin_score(
+    sport: Sport,
+    player_name: str,
+    risk_mode: str = Query(default="median", pattern="^(floor|median|ceiling)$"),
+):
+    """Get a single player's Goblin Score and five-index breakdown."""
+    from core.scoring import RiskMode as CoreRiskMode
+    from core.scoring import composite_score, calculate_indices
+    from services.scoring_adapter import adapt_espn_to_core
+
+    player_data = await espn_service.find_player_by_name(player_name, sport.value)
+    if not player_data:
+        raise HTTPException(status_code=404, detail=f"Player '{player_name}' not found")
+
+    info, stats = player_data
+
+    game_logs = await espn_service.get_player_game_logs(info.id, sport.value)
+    trends = espn_service.calculate_trends(game_logs, sport.value)
+    opp = await espn_service.get_next_opponent(info.team_abbrev, sport.value)
+    matchup = await espn_service.get_team_defense(opp, sport.value) if opp else None
+
+    core_player = adapt_espn_to_core(info, stats, trends=trends, matchup=matchup)
+    core_mode = CoreRiskMode(risk_mode)
+
+    indices = calculate_indices(core_player)
+    score = composite_score(indices, core_mode)
+
+    return GoblinScoreResponse(
+        player_name=info.name,
+        team=info.team_abbrev or info.team or "",
+        position=info.position or "",
+        sport=sport.value,
+        goblin_score=round(score, 1),
+        risk_mode=risk_mode,
+        indices={
+            "sci": round(indices.sci, 1),
+            "rmi": round(indices.rmi, 1),
+            "gis": round(indices.gis, 1),
+            "od": round(indices.od, 1),
+            "msf": round(indices.msf, 1),
+        },
+    )
 
 
 if __name__ == "__main__":

@@ -391,6 +391,43 @@ class APIClient {
     const response = await this.client.get<HealthResponse>('/health');
     return response.data;
   }
+
+  // Goblin Score — single-player lookup
+  async getGoblinScore(
+    sport: Sport,
+    playerName: string,
+    riskMode: string = 'median'
+  ): Promise<{
+    player_name: string;
+    team: string;
+    position: string;
+    sport: string;
+    goblin_score: number;
+    risk_mode: string;
+    indices: { sci: number; rmi: number; gis: number; od: number; msf: number };
+  }> {
+    const response = await this.client.get(
+      `/goblin-score/${sport}/${encodeURIComponent(playerName)}?risk_mode=${riskMode}`
+    );
+    return response.data;
+  }
+
+  // Manual roster
+  async submitManualRoster(data: {
+    sport: Sport;
+    players: { name: string; position: string; team: string }[];
+    team_name?: string;
+    league_type?: string;
+  }): Promise<{ id: string; sport: string; player_count: number }> {
+    const response = await this.client.post('/roster/manual', data);
+    return response.data;
+  }
+
+  async getManualRosters(sport?: Sport): Promise<{ rosters: unknown[] }> {
+    const params = sport ? `?sport=${sport}` : '';
+    const response = await this.client.get(`/roster/manual${params}`);
+    return response.data;
+  }
 }
 
 // Singleton instance
