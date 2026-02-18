@@ -35,4 +35,5 @@ export interface Message {
   content: string;
   timestamp: Date;
   decision?: DecisionResponse;
+  isError?: boolean;
 }

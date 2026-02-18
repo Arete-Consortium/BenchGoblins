@@ -4,11 +4,19 @@ ESPN Data Service — Fetches real player stats and information.
 Uses ESPN's public API endpoints for player data across NBA, NFL, MLB, NHL.
 """
 
+import asyncio
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 import httpx
 from cachetools import TTLCache
+
+logger = logging.getLogger("benchgoblins.espn")
+
+# Retry configuration for transient ESPN API failures
+ESPN_MAX_RETRIES = 3
+ESPN_RETRY_BACKOFF = 1.0  # seconds, doubled on each retry
 
 # ESPN API base URLs
 ESPN_API_BASE = "https://site.api.espn.com/apis/site/v2/sports"
@@ -157,7 +165,44 @@ class ESPNService:
     """Service for fetching ESPN player and game data."""
 
     def __init__(self):
-        self.client = httpx.AsyncClient(timeout=30.0)
+        self.client = httpx.AsyncClient(
+            timeout=30.0,
+            limits=httpx.Limits(max_keepalive_connections=10, max_connections=50),
+        )
+
+    async def _request_with_retry(
+        self,
+        method: str,
+        url: str,
+        **kwargs,
+    ) -> httpx.Response:
+        """Make an HTTP request with exponential backoff retry on transient failures."""
+        last_exc: Exception | None = None
+        for attempt in range(ESPN_MAX_RETRIES):
+            try:
+                response = await self.client.request(method, url, **kwargs)
+                response.raise_for_status()
+                return response
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.WriteTimeout) as exc:
+                last_exc = exc
+                wait = ESPN_RETRY_BACKOFF * (2**attempt)
+                logger.warning(
+                    "ESPN request retry %d/%d for %s: %s (waiting %.1fs)",
+                    attempt + 1, ESPN_MAX_RETRIES, url, exc, wait,
+                )
+                await asyncio.sleep(wait)
+            except httpx.HTTPStatusError as exc:
+                if exc.response.status_code >= 500:
+                    last_exc = exc
+                    wait = ESPN_RETRY_BACKOFF * (2**attempt)
+                    logger.warning(
+                        "ESPN server error retry %d/%d for %s: %s",
+                        attempt + 1, ESPN_MAX_RETRIES, url, exc,
+                    )
+                    await asyncio.sleep(wait)
+                else:
+                    raise
+        raise last_exc  # type: ignore[misc]
 
     async def close(self):
         await self.client.aclose()
@@ -184,8 +229,7 @@ class ESPNService:
                 "type": "player",
             }
 
-            response = await self.client.get(ESPN_SEARCH_API, params=params)
-            response.raise_for_status()
+            response = await self._request_with_retry("GET", ESPN_SEARCH_API, params=params)
             data = response.json()
 
             players = []
@@ -211,7 +255,7 @@ class ESPNService:
             return players[:limit]
 
         except Exception as e:
-            print(f"ESPN search error: {e}")
+            logger.warning("ESPN search failed for query '%s': %s", query, e)
             return []
 
     async def get_player(self, player_id: str, sport: str) -> PlayerInfo | None:
@@ -227,8 +271,7 @@ class ESPNService:
         try:
             # Use web API for athlete data
             url = f"{ESPN_WEB_API}/{sport_path}/athletes/{player_id}"
-            response = await self.client.get(url)
-            response.raise_for_status()
+            response = await self._request_with_retry("GET", url)
             data = response.json()
 
             athlete_data = data.get("athlete", data)
@@ -238,7 +281,7 @@ class ESPNService:
             return player
 
         except Exception as e:
-            print(f"ESPN get_player error: {e}")
+            logger.warning("ESPN get_player error for %s/%s: %s", sport, player_id, e)
             return None
 
     async def get_player_stats(self, player_id: str, sport: str) -> PlayerStats | None:
@@ -264,7 +307,7 @@ class ESPNService:
             return stats
 
         except Exception as e:
-            print(f"ESPN get_player_stats error: {e}")
+            logger.warning("ESPN get_player_stats error: %s", e)
             return None
 
     def _parse_overview_stats(self, data: dict, player_id: str, sport: str) -> PlayerStats | None:
@@ -359,7 +402,7 @@ class ESPNService:
             return stats
 
         except Exception as e:
-            print(f"Error parsing overview stats: {e}")
+            logger.warning("Error parsing overview stats: %s", e)
             return None
 
     async def find_player_by_name(
@@ -421,7 +464,7 @@ class ESPNService:
             return result
 
         except Exception as e:
-            print(f"ESPN find_player_by_name error: {e}")
+            logger.warning("ESPN find_player_by_name error: %s", e)
             return None
 
     async def get_team_schedule(self, team_abbrev: str, sport: str) -> list[GameInfo]:
@@ -477,7 +520,7 @@ class ESPNService:
             return games[:10]
 
         except Exception as e:
-            print(f"ESPN get_team_schedule error: {e}")
+            logger.warning("ESPN get_team_schedule error: %s", e)
             return []
 
     async def get_next_opponent(self, team_abbrev: str, sport: str) -> str | None:
@@ -543,7 +586,7 @@ class ESPNService:
             return defense
 
         except Exception as e:
-            print(f"ESPN get_team_defense error: {e}")
+            logger.warning("ESPN get_team_defense error: %s", e)
             return None
 
     async def _search_rosters(self, name: str, sport: str) -> PlayerInfo | None:
@@ -583,7 +626,7 @@ class ESPNService:
                         return self._parse_player(athlete, sport)
 
         except Exception as e:
-            print(f"ESPN roster search error: {e}")
+            logger.warning("ESPN roster search error: %s", e)
 
         return None
 
@@ -623,7 +666,7 @@ class ESPNService:
                 headshot_url=headshot_url,
             )
         except Exception as e:
-            print(f"Error parsing player: {e}")
+            logger.warning("Error parsing player: %s", e)
             return None
 
     def _parse_stats(self, data: dict, player_id: str, sport: str) -> PlayerStats | None:
@@ -661,7 +704,7 @@ class ESPNService:
             return stats
 
         except Exception as e:
-            print(f"Error parsing stats: {e}")
+            logger.warning("Error parsing stats: %s", e)
             return None
 
     def _map_nba_stat(self, stats: PlayerStats, name: str, value: float):
@@ -793,7 +836,7 @@ class ESPNService:
             return game_logs
 
         except Exception as e:
-            print(f"ESPN get_player_game_logs error: {e}")
+            logger.warning("ESPN get_player_game_logs error: %s", e)
             return []
 
     def _parse_game_log(self, event: dict, sport: str) -> dict | None:
@@ -825,7 +868,7 @@ class ESPNService:
             return game_log
 
         except Exception as e:
-            print(f"Error parsing game log: {e}")
+            logger.warning("Error parsing game log: %s", e)
             return None
 
     def _parse_nba_game_log(self, stats: list, event: dict) -> dict:

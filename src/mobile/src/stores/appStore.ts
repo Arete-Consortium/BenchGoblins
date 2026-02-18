@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { Sport, RiskMode, Message, DecisionResponse } from '../types';
-import { makeDecision } from '../services/api';
+import { makeDecision, ApiError } from '../services/api';
 import { hapticSuccess, hapticError, hapticSelection } from '../utils/haptics';
 
 interface AppState {
@@ -13,7 +13,9 @@ interface AppState {
   // Chat
   messages: Message[];
   isLoading: boolean;
+  lastError: ApiError | null;
   sendMessage: (content: string) => Promise<void>;
+  retryLastMessage: () => Promise<void>;
   clearMessages: () => void;
 }
 
@@ -34,6 +36,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   // Chat state
   messages: [],
   isLoading: false,
+  lastError: null,
 
   sendMessage: async (content: string) => {
     const { sport, riskMode, messages } = get();
@@ -46,7 +49,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       timestamp: new Date(),
     };
 
-    set({ messages: [...messages, userMessage], isLoading: true });
+    set({ messages: [...messages, userMessage], isLoading: true, lastError: null });
 
     try {
       const response = await makeDecision({
@@ -68,22 +71,51 @@ export const useAppStore = create<AppState>((set, get) => ({
       set((state) => ({
         messages: [...state.messages, assistantMessage],
         isLoading: false,
+        lastError: null,
       }));
     } catch (error) {
       hapticError();
+
+      const apiError = error instanceof ApiError ? error : null;
+      const errorText = apiError
+        ? apiError.message
+        : 'Sorry, something went wrong. Please try again.';
+
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        content: errorText,
         timestamp: new Date(),
+        isError: true,
       };
 
       set((state) => ({
         messages: [...state.messages, errorMessage],
         isLoading: false,
+        lastError: apiError,
       }));
     }
   },
 
-  clearMessages: () => set({ messages: [] }),
+  retryLastMessage: async () => {
+    const { messages, sendMessage } = get();
+    // Find the last user message
+    const lastUserMsg = [...messages].reverse().find((m) => m.role === 'user');
+    if (!lastUserMsg) return;
+
+    // Remove the error message (last assistant message)
+    const lastAssistantIdx = messages.length - 1;
+    if (messages[lastAssistantIdx]?.isError) {
+      set({ messages: messages.slice(0, -1) });
+    }
+
+    // Remove the user message too — sendMessage will re-add it
+    set((state) => ({
+      messages: state.messages.filter((m) => m.id !== lastUserMsg.id),
+    }));
+
+    await sendMessage(lastUserMsg.content);
+  },
+
+  clearMessages: () => set({ messages: [], lastError: null }),
 }));

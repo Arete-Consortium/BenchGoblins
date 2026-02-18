@@ -13,7 +13,7 @@ import { FREE_TIER_LIMITS } from '../services/purchases';
 
 export function ChatScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<any>>();
-  const { messages, isLoading } = useAppStore();
+  const { messages, isLoading, lastError, retryLastMessage } = useAppStore();
   const { isPro, getRemainingQueries, dailyQueriesUsed } = useSubscriptionStore();
   const { theme } = useThemeStore();
 
@@ -27,6 +27,27 @@ export function ChatScreen() {
     return (
       <View style={styles.skeletonContainer}>
         <SkeletonMessage />
+      </View>
+    );
+  };
+
+  const renderRetryBanner = () => {
+    if (!lastError?.retryable || isLoading) return null;
+    return (
+      <View style={[styles.retryBanner, { backgroundColor: 'rgba(239, 68, 68, 0.1)', borderColor: '#ef4444' }]}>
+        <View style={styles.retryContent}>
+          <Ionicons name="warning-outline" size={18} color="#ef4444" />
+          <Text style={[styles.retryText, { color: theme.textSecondary }]}>
+            {lastError.message}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.retryButton}
+          onPress={retryLastMessage}
+        >
+          <Ionicons name="refresh" size={16} color={theme.primaryLight} />
+          <Text style={[styles.retryButtonText, { color: theme.primaryLight }]}>Retry</Text>
+        </TouchableOpacity>
       </View>
     );
   };
@@ -93,6 +114,8 @@ export function ChatScreen() {
           <Ionicons name="chevron-forward" size={24} color={theme.primary} />
         </TouchableOpacity>
       )}
+
+      {renderRetryBanner()}
 
       <FlatList
         data={messages}
@@ -165,6 +188,39 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     padding: 8,
+  },
+  retryBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  retryContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  retryText: {
+    fontSize: 13,
+    flex: 1,
+  },
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: 'rgba(99, 102, 241, 0.15)',
+  },
+  retryButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
   },
   upgradePrompt: {
     flexDirection: 'row',

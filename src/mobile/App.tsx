@@ -1,15 +1,17 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChatScreen, DashboardScreen, HistoryScreen, RosterScreen } from './src/screens';
 import PaywallScreen from './src/screens/PaywallScreen';
 import SettingsScreen from './src/screens/SettingsScreen';
 import PrivacyPolicyScreen from './src/screens/PrivacyPolicyScreen';
 import TermsOfServiceScreen from './src/screens/TermsOfServiceScreen';
+import OnboardingScreen, { ONBOARDING_KEY } from './src/screens/OnboardingScreen';
 import { useSubscriptionStore } from './src/stores/subscriptionStore';
 
 // Type definitions for navigation
@@ -95,10 +97,23 @@ function MainTabs() {
 
 function AppContent() {
   const initialize = useSubscriptionStore((state) => state.initialize);
+  const [showOnboarding, setShowOnboarding] = useState<boolean | null>(null);
 
   useEffect(() => {
     initialize();
+
+    // Check if onboarding has been completed
+    AsyncStorage.getItem(ONBOARDING_KEY).then((value) => {
+      setShowOnboarding(value !== 'true');
+    });
   }, [initialize]);
+
+  // Wait until we know whether to show onboarding
+  if (showOnboarding === null) return null;
+
+  if (showOnboarding) {
+    return <OnboardingScreen onComplete={() => setShowOnboarding(false)} />;
+  }
 
   return (
     <NavigationContainer>

@@ -3,6 +3,7 @@ BenchGoblin API — Fantasy Sports Decision Engine
 """
 
 import json
+import logging
 import os
 import secrets
 import sys
@@ -20,10 +21,22 @@ from core.scoring import compare_players
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, constr
+from fastapi.responses import JSONResponse, StreamingResponse
+from pydantic import BaseModel, Field, constr, field_validator
 from sqlalchemy import Integer as SAInteger
 from sqlalchemy import func, select, text
+
+# ---------------------------------------------------------------------------
+# Structured Logging
+# ---------------------------------------------------------------------------
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
+)
+logger = logging.getLogger("benchgoblins")
 
 from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
@@ -83,7 +96,7 @@ if SENTRY_DSN:
         enable_tracing=True,
         send_default_pii=False,
     )
-    print("Sentry error monitoring enabled")
+    logger.info("Sentry error monitoring enabled")
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -93,14 +106,30 @@ if SENTRY_DSN:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Initialize and cleanup app resources"""
+    # ---------------------------------------------------------------------------
+    # Startup Validation
+    # ---------------------------------------------------------------------------
+    _missing_env = []
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        logger.warning("ANTHROPIC_API_KEY not set — Claude integration disabled")
+    if not os.getenv("DATABASE_URL"):
+        logger.warning("DATABASE_URL not set — persistence disabled")
+        _missing_env.append("DATABASE_URL")
+    if not os.getenv("JWT_SECRET_KEY"):
+        logger.warning("JWT_SECRET_KEY not set — auth will use insecure default")
+    if os.getenv("ENVIRONMENT", "development") == "production":
+        for var in ("ANTHROPIC_API_KEY", "DATABASE_URL", "JWT_SECRET_KEY", "SESSION_ENCRYPTION_KEY"):
+            if not os.getenv(var):
+                _missing_env.append(var)
+        if _missing_env:
+            logger.error("Missing required env vars for production: %s", ", ".join(_missing_env))
+
     # Initialize services
     if claude_service.is_available:
-        print("Claude API configured and ready")
-    else:
-        print("WARNING: ANTHROPIC_API_KEY not set - Claude integration disabled")
+        logger.info("Claude API configured and ready")
 
     # Connect to PostgreSQL and create tables
-    print("[STARTUP v6] Connecting to PostgreSQL...")
+    logger.info("Connecting to PostgreSQL...")
     if db_service.is_configured:
         try:
             await db_service.connect()
@@ -112,23 +141,23 @@ async def lifespan(app: FastAPI):
 
             async with db_service._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
-            print("[STARTUP v6] PostgreSQL connected and tables created")
+            logger.info("PostgreSQL connected and tables created")
         except Exception as e:
-            print(f"WARNING: PostgreSQL connection failed: {e}")
+            logger.error("PostgreSQL connection failed: %s", e)
     else:
-        print("WARNING: DATABASE_URL not set - persistence disabled")
+        logger.warning("DATABASE_URL not set — persistence disabled")
 
     # Connect to Redis
     if redis_service.is_configured:
         try:
             await redis_service.connect()
-            print("Redis connected")
+            logger.info("Redis connected")
         except Exception as e:
-            print(f"WARNING: Redis connection failed: {e}")
+            logger.warning("Redis connection failed: %s", e)
     else:
-        print("WARNING: REDIS_URL not set - caching disabled")
+        logger.warning("REDIS_URL not set — caching disabled")
 
-    print("ESPN data service ready")
+    logger.info("ESPN data service ready")
     yield
 
     # Cleanup
@@ -214,6 +243,16 @@ class Confidence(str, Enum):
     HIGH = "high"
 
 
+class ErrorDetail(BaseModel):
+    """Standardized error response envelope."""
+
+    error: str
+    code: str
+    detail: str | None = None
+    retry_after: int | None = None
+    upgrade_url: str | None = None
+
+
 class DecisionRequest(BaseModel):
     """Request body for /decide endpoint"""
 
@@ -222,6 +261,7 @@ class DecisionRequest(BaseModel):
     decision_type: DecisionType = DecisionType.START_SIT
     query: str = Field(
         ...,
+        min_length=1,
         max_length=1000,
         description="Natural language query, e.g., 'Should I start Jalen Brunson or Tyrese Maxey?'",
     )
@@ -234,6 +274,14 @@ class DecisionRequest(BaseModel):
     league_type: str | None = Field(
         None, max_length=50, description="e.g., 'points', 'categories', 'half-ppr'"
     )
+
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Query must not be blank")
+        return stripped
 
 
 class DecisionResponse(BaseModel):
@@ -253,9 +301,18 @@ class DraftRequest(BaseModel):
     risk_mode: RiskMode = RiskMode.MEDIAN
     query: str = Field(
         ...,
+        min_length=1,
         max_length=1000,
         description="Natural language query, e.g., 'draft Jalen Brunson or Tyrese Maxey?'",
     )
+
+    @field_validator("query")
+    @classmethod
+    def query_must_not_be_blank(cls, v: str) -> str:
+        stripped = v.strip()
+        if not stripped:
+            raise ValueError("Query must not be blank")
+        return stripped
     players: list[constr(max_length=100)] | None = Field(
         None, max_length=20, description="Explicit list of player names to rank"
     )
@@ -396,6 +453,14 @@ async def _store_decision(
         return
 
     try:
+        # Safely extract scores from details dict
+        details = response.details if isinstance(response.details, dict) else {}
+        player_a_detail = details.get("player_a")
+        player_b_detail = details.get("player_b")
+        score_a = player_a_detail.get("score") if isinstance(player_a_detail, dict) else None
+        score_b = player_b_detail.get("score") if isinstance(player_b_detail, dict) else None
+        margin = details.get("margin")
+
         async with db_service.session() as session:
             decision = DecisionModel(
                 sport=request.sport.value,
@@ -408,13 +473,9 @@ async def _store_decision(
                 confidence=response.confidence.value,
                 rationale=response.rationale,
                 source=response.source,
-                score_a=response.details.get("player_a", {}).get("score")
-                if response.details
-                else None,
-                score_b=response.details.get("player_b", {}).get("score")
-                if response.details
-                else None,
-                margin=response.details.get("margin") if response.details else None,
+                score_a=score_a,
+                score_b=score_b,
+                margin=margin,
                 league_type=request.league_type,
                 player_context=player_context,
                 input_tokens=input_tokens,
@@ -425,7 +486,7 @@ async def _store_decision(
             session.add(decision)
     except Exception as e:
         # Don't fail the request if persistence fails
-        print(f"Failed to store decision: {e}")
+        logger.error("Failed to store decision: %s", e, exc_info=True)
 
 
 async def _check_budget_exceeded() -> tuple[bool, str | None]:
@@ -477,7 +538,7 @@ async def _check_budget_exceeded() -> tuple[bool, str | None]:
 
             return False, None
     except Exception as e:
-        print(f"Budget check failed: {e}")
+        logger.error("Budget check failed: %s", e, exc_info=True)
         return False, None  # Fail open - don't block on errors
 
 
@@ -496,7 +557,7 @@ def _is_sports_query(query: str) -> tuple[bool, str]:
 
     # Log ambiguous queries for review (could add proper logging here)
     if result.category == QueryCategory.AMBIGUOUS:
-        print(f"AMBIGUOUS query allowed: '{query[:50]}...' - {result.reason}")
+        logger.info("Ambiguous query allowed: '%s...' — %s", query[:50], result.reason)
 
     return True, result.reason
 
@@ -513,6 +574,9 @@ PRO_TIER_WEEKLY_LIMIT = -1  # Unlimited
 async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int]:
     """Check if user can make a query and increment counter.
 
+    Uses SELECT ... FOR UPDATE to prevent race conditions where
+    concurrent requests could bypass the query limit.
+
     Returns:
         Tuple of (allowed, queries_this_period, weekly_limit)
     """
@@ -520,7 +584,10 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
         return True, 0, FREE_TIER_WEEKLY_LIMIT
 
     async with db_service.session() as session:
-        result = await session.execute(select(User).where(User.id == user_id))
+        # Lock the row to prevent concurrent bypass
+        result = await session.execute(
+            select(User).where(User.id == user_id).with_for_update()
+        )
         user = result.scalar_one_or_none()
 
         if not user:
@@ -568,8 +635,8 @@ async def make_decision(
     - Free tier: 5 queries per day
     - Pro tier: unlimited queries
     """
-    # Check rate limit (use "anonymous" for requests without session_id)
-    effective_session = session_id or "anonymous"
+    # Check rate limit — use IP-derived key for anonymous to avoid shared-bucket DoS
+    effective_session = session_id or f"anon:{id(request)}"
     allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
     if not allowed:
         raise HTTPException(
@@ -578,19 +645,14 @@ async def make_decision(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check tier-based daily limit if authenticated
+    # Check tier-based weekly limit if authenticated
     user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
         tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
             raise HTTPException(
                 status_code=402,
-                detail={
-                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
-                    "queries_today": queries_today,
-                    "weekly_limit": weekly_limit,
-                    "upgrade_url": "/billing/create-checkout",
-                },
+                detail=f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
             )
 
     # Check if query is sports-related using smart classifier
@@ -598,7 +660,7 @@ async def make_decision(
     if not is_allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+            detail=f"Query must be about fantasy sports. {rejection_reason}",
         )
 
     # Assign A/B prompt variant
@@ -698,7 +760,7 @@ async def make_decision(
                 ),
                 rationale=cached.get("rationale", ""),
                 details=cached.get("details"),
-                source=cached.get("source", "claude") + "_cached",
+                source=(cached.get("source") or "claude") + "_cached",
             )
             await _store_decision(
                 request,
@@ -964,10 +1026,13 @@ async def _claude_decision(
 
         return response, result.get("input_tokens"), result.get("output_tokens")
 
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error("Claude decision failed: %s", e, exc_info=True)
         raise HTTPException(
             status_code=500,
-            detail=f"Error processing request: {str(e)}",
+            detail="An error occurred processing your request. Please try again.",
         )
 
 
@@ -989,7 +1054,7 @@ async def draft_decision(
     - Pro tier: unlimited queries
     """
     # Check rate limit
-    effective_session = session_id or "anonymous"
+    effective_session = session_id or f"anon:{id(request)}"
     allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
     if not allowed:
         raise HTTPException(
@@ -998,19 +1063,14 @@ async def draft_decision(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check tier-based daily limit if authenticated
+    # Check tier-based weekly limit if authenticated
     user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
         tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
             raise HTTPException(
                 status_code=402,
-                detail={
-                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
-                    "queries_today": queries_today,
-                    "weekly_limit": weekly_limit,
-                    "upgrade_url": "/billing/create-checkout",
-                },
+                detail=f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
             )
 
     # Check if query is sports-related
@@ -1018,7 +1078,7 @@ async def draft_decision(
     if not is_allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+            detail=f"Query must be about fantasy sports. {rejection_reason}",
         )
 
     # Determine player names: explicit list takes priority over query parsing
@@ -1126,7 +1186,7 @@ async def _store_draft_decision(
             )
             session.add(decision)
     except Exception as e:
-        print(f"Failed to store draft decision: {e}")
+        logger.error("Failed to store draft decision: %s", e, exc_info=True)
 
 
 async def _claude_draft_fallback(
@@ -1189,8 +1249,8 @@ async def make_decision_stream(
     - Free tier: 5 queries per day
     - Pro tier: unlimited queries
     """
-    # Check rate limit (use "anonymous" for requests without session_id)
-    effective_session = session_id or "anonymous"
+    # Check rate limit
+    effective_session = session_id or f"anon:{id(request)}"
     allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
     if not allowed:
         raise HTTPException(
@@ -1199,19 +1259,14 @@ async def make_decision_stream(
             headers={"Retry-After": str(retry_after)},
         )
 
-    # Check tier-based daily limit if authenticated
+    # Check tier-based weekly limit if authenticated
     user_id = current_user["user_id"] if current_user else None
     if user_id is not None:
         tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
             raise HTTPException(
                 status_code=402,
-                detail={
-                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
-                    "queries_today": queries_today,
-                    "weekly_limit": weekly_limit,
-                    "upgrade_url": "/billing/create-checkout",
-                },
+                detail=f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
             )
 
     # Check if query is sports-related using smart classifier
@@ -1219,7 +1274,7 @@ async def make_decision_stream(
     if not is_allowed:
         raise HTTPException(
             status_code=400,
-            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+            detail=f"Query must be about fantasy sports. {rejection_reason}",
         )
 
     if not claude_service.is_available:
@@ -1330,11 +1385,12 @@ async def make_decision_stream(
                     )
                     await check_and_send_alerts()
                 except Exception as e:
-                    print(f"Failed to persist streaming decision: {e}")
+                    logger.error("Failed to persist streaming decision: %s", e, exc_info=True)
 
             yield "data: [DONE]\n\n"
         except Exception as e:
-            yield f"data: [ERROR] {str(e)}\n\n"
+            logger.error("Stream error: %s", e, exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'An error occurred processing your request.'})}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -1494,7 +1550,7 @@ async def get_token_usage(
 
             return result
     except Exception as e:
-        print(f"Failed to fetch usage: {e}")
+        logger.error("Failed to fetch usage: %s", e, exc_info=True)
         return {"error": str(e)}
 
 
@@ -1610,7 +1666,7 @@ async def get_budget():
                 updated_at=config.updated_at.isoformat() if config.updated_at else None,
             )
     except Exception as e:
-        print(f"Failed to fetch budget: {e}")
+        logger.error("Failed to fetch budget: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1652,7 +1708,7 @@ async def set_budget(request: BudgetConfigRequest):
         # Return updated status
         return await get_budget()
     except Exception as e:
-        print(f"Failed to set budget: {e}")
+        logger.error("Failed to set budget: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1726,7 +1782,7 @@ async def get_budget_alerts():
                 percent_used=round(percent_used, 2),
             )
     except Exception as e:
-        print(f"Failed to fetch budget alerts: {e}")
+        logger.error("Failed to fetch budget alerts: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1821,7 +1877,7 @@ async def get_decision_history(
                 for d in decisions
             ]
     except Exception as e:
-        print(f"Failed to fetch history: {e}")
+        logger.error("Failed to fetch history: %s", e, exc_info=True)
         return []
 
 
@@ -2886,7 +2942,7 @@ async def get_experiment_results():
 
             return {"variants": results}
     except Exception as e:
-        print(f"Failed to fetch experiment results: {e}")
+        logger.error("Failed to fetch experiment results: %s", e, exc_info=True)
         return {"error": str(e)}
 
 
@@ -3084,7 +3140,7 @@ async def get_engagement_metrics(
                 },
             }
     except Exception as e:
-        print(f"Failed to fetch engagement metrics: {e}")
+        logger.error("Failed to fetch engagement metrics: %s", e, exc_info=True)
         return {"error": str(e)}
 
 
