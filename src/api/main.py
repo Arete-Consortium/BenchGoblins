@@ -31,6 +31,7 @@ from models.database import Session as SessionModel
 from monitoring import MetricsMiddleware, metrics_endpoint, update_engagement_metrics
 from routes.auth import get_current_user, get_optional_user
 from routes.auth import router as auth_router
+from routes.leagues import router as leagues_router
 from routes.sessions import router as sessions_router
 from services import stripe_billing
 from services.accuracy import AccuracyTracker, DecisionOutcome
@@ -179,6 +180,9 @@ app.include_router(sessions_router)
 
 # Authentication routes
 app.include_router(auth_router)
+
+# League integration routes (Sleeper)
+app.include_router(leagues_router)
 
 
 # ---------------------------------------------------------------------------
