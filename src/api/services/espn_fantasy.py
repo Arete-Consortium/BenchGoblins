@@ -5,10 +5,13 @@ Implements OAuth 2.0 flow for ESPN Fantasy Sports.
 Fetches leagues, rosters, and team data with user authentication.
 """
 
+import logging
 from dataclasses import dataclass
 from datetime import datetime
 
 import httpx
+
+logger = logging.getLogger(__name__)
 
 # ESPN OAuth endpoints
 ESPN_AUTH_URL = "https://www.espn.com/login"
@@ -176,7 +179,7 @@ class ESPNFantasyService:
                                 leagues.append(league)
 
             except httpx.HTTPError as e:
-                print(f"ESPN Fantasy API error for {sport_key}: {e}")
+                logger.error("ESPN Fantasy API error for %s: %s", sport_key, e)
                 continue
 
         return leagues
@@ -237,7 +240,7 @@ class ESPNFantasyService:
                 return response.json()
 
         except httpx.HTTPError as e:
-            print(f"Error fetching league {league_id}: {e}")
+            logger.error("Error fetching league %s: %s", league_id, e)
 
         return None
 
@@ -290,7 +293,7 @@ class ESPNFantasyService:
                 return self._parse_roster(data, team_id, sport)
 
         except httpx.HTTPError as e:
-            print(f"Error fetching roster for team {team_id}: {e}")
+            logger.error("Error fetching roster for team %s: %s", team_id, e)
 
         return []
 

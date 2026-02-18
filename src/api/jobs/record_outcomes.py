@@ -33,17 +33,13 @@ from datetime import date, timedelta
 # Add parent directory to path for imports when running as script
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from logging_config import setup_logging
 from services.database import db_service
 from services.outcome_recorder import (
     record_outcomes_for_date,
     sync_recent_outcomes,
 )
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
 logger = logging.getLogger(__name__)
 
 
@@ -132,6 +128,8 @@ async def run_backfill(start_date: date, end_date: date, sport: str | None = Non
 
 async def main():
     """Main entry point for running as a script."""
+    setup_logging()
+
     import argparse
 
     parser = argparse.ArgumentParser(description="Record decision outcomes from ESPN box scores")
@@ -184,7 +182,7 @@ async def main():
                 sport=args.sport,
             )
 
-        print(f"\nResults: {result}")
+        logger.info("Results: %s", result)
 
     finally:
         await db_service.disconnect()
