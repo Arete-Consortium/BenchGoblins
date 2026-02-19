@@ -137,5 +137,16 @@
     "notSupported": "Não disponível para este esporte",
     "comingSoon": "Em Breve",
     "sleeperNote": "A API do Sleeper é pública — apenas lemos suas ligas e elenco."
+  },
+  "newsletter": {
+    "badge": "Newsletter",
+    "title": "Fique por Dentro",
+    "subtitle": "Análises semanais de fantasy, atualizações de pontuação e preparação para o Draft Day — direto na sua caixa de entrada.",
+    "placeholder": "your@email.com",
+    "subscribe": "Assinar",
+    "subscribing": "Assinando...",
+    "success": "Você está dentro! Fique de olho na sua caixa de entrada.",
+    "error": "Algo deu errado. Tente novamente.",
+    "privacy": "Respeitamos sua caixa de entrada. Cancele quando quiser."
   }
 }

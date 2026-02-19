@@ -137,5 +137,16 @@
     "notSupported": "No disponible para este deporte",
     "comingSoon": "Pronto",
     "sleeperNote": "La API de Sleeper es pública — solo leemos tus ligas y roster."
+  },
+  "newsletter": {
+    "badge": "Newsletter",
+    "title": "No Te Pierdas Nada",
+    "subtitle": "Análisis semanal de fantasy, actualizaciones de puntuación y preparación para el Draft Day — directo a tu bandeja de entrada.",
+    "placeholder": "your@email.com",
+    "subscribe": "Suscribirse",
+    "subscribing": "Suscribiendo...",
+    "success": "¡Estás dentro! Revisa tu bandeja de entrada.",
+    "error": "Algo salió mal. Intenta de nuevo.",
+    "privacy": "Respetamos tu bandeja de entrada. Cancela cuando quieras."
   }
 }

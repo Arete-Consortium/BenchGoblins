@@ -565,3 +565,27 @@ class SessionCredential(Base):
         Index("idx_session_credentials_session", "session_id"),
         Index("idx_session_credentials_provider", "provider"),
     )
+
+
+class NewsletterSubscriber(Base):
+    """Email list subscriber for marketing and pre-launch campaigns."""
+
+    __tablename__ = "newsletter_subscribers"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sport_interest: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    referrer: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    subscribed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    unsubscribed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(INET, nullable=True)
+
+    __table_args__ = (
+        Index("idx_newsletter_email", "email"),
+        Index(
+            "idx_newsletter_subscribed",
+            subscribed_at.desc(),
+            postgresql_where=text("unsubscribed_at IS NULL"),
+        ),
+    )

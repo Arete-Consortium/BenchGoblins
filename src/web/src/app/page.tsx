@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { EmailCapture } from '@/components/EmailCapture';
 import { LanguageSelector } from '@/components/LanguageSelector';
 import { useTranslation } from '@/i18n/I18nProvider';
 
@@ -597,6 +598,13 @@ export default function LandingPage() {
               {t('common.startFree')}
             </Link>
           </Button>
+        </div>
+      </section>
+
+      {/* Newsletter */}
+      <section className="border-t border-dark-800">
+        <div className="container mx-auto px-4 py-16">
+          <EmailCapture variant="inline" referrer="landing-page" />
         </div>
       </section>
 

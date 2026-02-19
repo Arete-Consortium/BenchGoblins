@@ -137,5 +137,16 @@
     "notSupported": "Not supported for this sport",
     "comingSoon": "Soon",
     "sleeperNote": "Sleeper's API is public — we only read your leagues and roster."
+  },
+  "newsletter": {
+    "badge": "Newsletter",
+    "title": "Stay in the Game",
+    "subtitle": "Weekly fantasy insights, scoring updates, and Draft Day prep — straight to your inbox.",
+    "placeholder": "your@email.com",
+    "subscribe": "Subscribe",
+    "subscribing": "Subscribing...",
+    "success": "You're in! Watch your inbox.",
+    "error": "Something went wrong. Try again.",
+    "privacy": "We respect your inbox. Unsubscribe anytime."
   }
 }

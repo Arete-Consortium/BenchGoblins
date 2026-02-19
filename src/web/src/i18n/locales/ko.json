@@ -137,5 +137,16 @@
     "notSupported": "이 스포츠에서는 지원되지 않습니다",
     "comingSoon": "곧 출시",
     "sleeperNote": "Sleeper API는 공개되어 있습니다 — 리그와 로스터만 읽습니다."
+  },
+  "newsletter": {
+    "badge": "뉴스레터",
+    "title": "최신 소식을 받아보세요",
+    "subtitle": "주간 판타지 분석, 스코어링 업데이트, Draft Day 준비 정보를 받아보세요.",
+    "placeholder": "your@email.com",
+    "subscribe": "구독하기",
+    "subscribing": "구독 중...",
+    "success": "구독 완료! 받은편지함을 확인하세요.",
+    "error": "문제가 발생했습니다. 다시 시도해 주세요.",
+    "privacy": "메일함을 존중합니다. 언제든지 구독 취소 가능합니다."
   }
 }

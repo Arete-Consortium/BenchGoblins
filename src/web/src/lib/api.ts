@@ -407,6 +407,20 @@ class APIClient {
     return response.data;
   }
 
+  // Newsletter
+  async subscribeNewsletter(
+    email: string,
+    name?: string,
+    sport?: string,
+    referrer?: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await this.client.post<{ success: boolean; message: string }>(
+      '/newsletter/subscribe',
+      { email, name, sport, referrer }
+    );
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

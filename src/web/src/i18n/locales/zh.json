@@ -137,5 +137,16 @@
     "notSupported": "此运动不支持",
     "comingSoon": "即将推出",
     "sleeperNote": "Sleeper的API是公开的 — 我们只读取你的联赛和阵容。"
+  },
+  "newsletter": {
+    "badge": "邮件订阅",
+    "title": "掌握最新动态",
+    "subtitle": "每周梦幻体育分析、评分更新和Draft Day准备资讯，直达你的收件箱。",
+    "placeholder": "your@email.com",
+    "subscribe": "订阅",
+    "subscribing": "订阅中...",
+    "success": "订阅成功！请查收你的收件箱。",
+    "error": "出了点问题，请重试。",
+    "privacy": "我们尊重你的收件箱。随时可以取消订阅。"
   }
 }

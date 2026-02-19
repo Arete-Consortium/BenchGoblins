@@ -137,5 +137,16 @@
     "notSupported": "このスポーツでは利用できません",
     "comingSoon": "近日公開",
     "sleeperNote": "SleeperのAPIは公開されています — リーグとロスターの読み取りのみ行います。"
+  },
+  "newsletter": {
+    "badge": "ニュースレター",
+    "title": "最新情報をキャッチ",
+    "subtitle": "毎週のファンタジー分析、スコアリング更新、Draft Day準備情報をお届けします。",
+    "placeholder": "your@email.com",
+    "subscribe": "登録する",
+    "subscribing": "登録中...",
+    "success": "登録完了！受信トレイをチェックしてください。",
+    "error": "問題が発生しました。もう一度お試しください。",
+    "privacy": "メールの配信頻度は控えめです。いつでも配信停止できます。"
   }
 }
