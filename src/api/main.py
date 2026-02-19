@@ -247,6 +247,22 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(MetricsMiddleware)
 
 
+# ---------------------------------------------------------------------------
+# Global Exception Handler — prevent stack traces from leaking to clients
+# ---------------------------------------------------------------------------
+from fastapi.responses import JSONResponse  # noqa: E402
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch unhandled exceptions and return a safe 500 response."""
+    logger.error("Unhandled exception on %s %s", request.method, request.url.path, exc_info=exc)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
 # Prometheus metrics endpoint (admin-only)
 @app.get("/metrics", tags=["Admin"])
 async def metrics_endpoint(_admin=Depends(require_admin_key)):
