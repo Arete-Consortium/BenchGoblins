@@ -147,7 +147,7 @@ async def get_optional_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     token = parts[1]
-    if is_token_blacklisted(token):
+    if await is_token_blacklisted(token):
         raise HTTPException(
             status_code=401,
             detail="Token has been revoked",
@@ -188,7 +188,7 @@ async def get_current_user(token: str = Depends(get_current_user_token)) -> dict
     Use as dependency: current_user: dict = Depends(get_current_user)
     """
     # Check if token is blacklisted (logged out)
-    if is_token_blacklisted(token):
+    if await is_token_blacklisted(token):
         raise HTTPException(
             status_code=401,
             detail="Token has been revoked",
@@ -342,7 +342,7 @@ async def logout(
     The token will be blacklisted and can no longer be used for authentication.
     Client should discard the token after calling this endpoint.
     """
-    blacklist_token(token)
+    await blacklist_token(token)
 
     return {
         "status": "logged_out",

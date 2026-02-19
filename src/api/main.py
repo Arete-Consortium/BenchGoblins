@@ -23,7 +23,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, constr
+from pydantic import BaseModel, Field, constr, field_validator
 from sqlalchemy import Integer as SAInteger
 from sqlalchemy import func, select, text
 
@@ -155,6 +155,12 @@ async def lifespan(app: FastAPI):
         try:
             await redis_service.connect()
             logger.info("Redis connected")
+            # Wire up Redis-backed token blacklist for persistent logout
+            from services.auth import set_blacklist_redis
+
+            if redis_service.is_connected and redis_service._client:
+                set_blacklist_redis(redis_service._client)
+                logger.info("Token blacklist using Redis (persistent)")
         except Exception as e:
             logger.warning("Redis connection failed: %s", e)
     else:
@@ -399,17 +405,34 @@ class PlayerDetail(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint — returns 503 if critical services are down."""
+    from starlette.responses import JSONResponse
+
+    # Test actual database connectivity (not just is_configured)
+    db_healthy = False
+    if db_service.is_configured:
+        try:
+            async with db_service._engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            db_healthy = True
+        except Exception as e:
+            logger.error("Health check: DB connectivity failed: %s", e)
+
     redis_healthy = await redis_service.health_check() if redis_service.is_connected else False
-    return {
-        "status": "healthy",
+
+    status = "healthy" if db_healthy else "unhealthy"
+    payload = {
+        "status": status,
         "version": "0.7.0",
         "claude_available": claude_service.is_available,
-        "espn_available": True,
-        "postgres_connected": db_service.is_configured,
+        "postgres_connected": db_healthy,
         "redis_connected": redis_healthy,
         "sentry_enabled": bool(SENTRY_DSN),
     }
+
+    if not db_healthy:
+        return JSONResponse(status_code=503, content=payload)
+    return payload
 
 
 @app.post("/players/search", response_model=list[Player])
@@ -1652,6 +1675,34 @@ async def get_token_usage(
 # ---------------------------------------------------------------------------
 
 
+def _validate_webhook_url(url: str | None) -> str | None:
+    """Validate webhook URL to prevent SSRF attacks."""
+    if url is None:
+        return None
+    import ipaddress
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("Webhook URL must use http:// or https://")
+    hostname = parsed.hostname
+    if not hostname:
+        raise ValueError("Webhook URL must have a valid hostname")
+    if hostname in ("localhost", "127.0.0.1", "::1", "0.0.0.0"):
+        raise ValueError("Webhook URL cannot point to localhost")
+    try:
+        ip = ipaddress.ip_address(hostname)
+        if ip.is_private or ip.is_loopback or ip.is_link_local:
+            raise ValueError("Webhook URL cannot point to private/internal network")
+    except ValueError as exc:
+        if "cannot point" in str(exc):
+            raise
+        # Not an IP address (it's a domain name) — that's fine
+    if len(url) > 2000:
+        raise ValueError("Webhook URL too long")
+    return url
+
+
 class BudgetConfigRequest(BaseModel):
     """Request to set budget configuration."""
 
@@ -1664,6 +1715,11 @@ class BudgetConfigRequest(BaseModel):
     discord_webhook_url: str | None = Field(
         default=None, description="Discord webhook URL for alerts"
     )
+
+    @field_validator("slack_webhook_url", "discord_webhook_url")
+    @classmethod
+    def check_webhook_url(cls, v: str | None) -> str | None:
+        return _validate_webhook_url(v)
 
 
 class BudgetConfigResponse(BaseModel):
@@ -1884,6 +1940,14 @@ class WebhookTestRequest(BaseModel):
 
     webhook_type: str = Field(..., description="Either 'slack' or 'discord'")
     webhook_url: str = Field(..., description="The webhook URL to test")
+
+    @field_validator("webhook_url")
+    @classmethod
+    def check_webhook_url(cls, v: str) -> str:
+        result = _validate_webhook_url(v)
+        if result is None:
+            raise ValueError("Webhook URL is required")
+        return result
 
 
 @app.post("/budget/webhooks/test", tags=["Admin"])

@@ -174,7 +174,7 @@ class TestInvalidJwtReturns401:
             "routes.auth.verify_jwt_token",
             side_effect=InvalidTokenError("Token has expired"),
         ):
-            with patch("routes.auth.is_token_blacklisted", return_value=False):
+            with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=False):
                 response = test_client.post(
                     "/decide",
                     json=DECIDE_PAYLOAD,
@@ -186,7 +186,7 @@ class TestInvalidJwtReturns401:
     @pytest.mark.usefixtures("_bypass_rate_limiter", "_valid_sports_query")
     def test_decide_blacklisted_jwt_returns_401(self, test_client):
         """POST /decide with blacklisted JWT should return 401."""
-        with patch("routes.auth.is_token_blacklisted", return_value=True):
+        with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=True):
             response = test_client.post(
                 "/decide",
                 json=DECIDE_PAYLOAD,
@@ -214,7 +214,7 @@ class TestInvalidJwtReturns401:
             "routes.auth.verify_jwt_token",
             side_effect=InvalidTokenError("Token has expired"),
         ):
-            with patch("routes.auth.is_token_blacklisted", return_value=False):
+            with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=False):
                 response = test_client.post(
                     "/draft",
                     json=DRAFT_PAYLOAD,
@@ -231,7 +231,7 @@ class TestInvalidJwtReturns401:
             "routes.auth.verify_jwt_token",
             side_effect=InvalidTokenError("Token has expired"),
         ):
-            with patch("routes.auth.is_token_blacklisted", return_value=False):
+            with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=False):
                 response = test_client.post(
                     "/decide/stream",
                     json=DECIDE_PAYLOAD,
@@ -459,7 +459,7 @@ class TestGetOptionalUser:
     async def test_valid_bearer_returns_user(self):
         from routes.auth import get_optional_user
 
-        with patch("routes.auth.is_token_blacklisted", return_value=False):
+        with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=False):
             with patch("routes.auth.verify_jwt_token", return_value=VALID_USER):
                 result = await get_optional_user(authorization="Bearer valid.token")
                 assert result == VALID_USER
@@ -471,7 +471,7 @@ class TestGetOptionalUser:
         from routes.auth import get_optional_user
         from services.auth import InvalidTokenError
 
-        with patch("routes.auth.is_token_blacklisted", return_value=False):
+        with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=False):
             with patch(
                 "routes.auth.verify_jwt_token",
                 side_effect=InvalidTokenError("Token has expired"),
@@ -486,7 +486,7 @@ class TestGetOptionalUser:
 
         from routes.auth import get_optional_user
 
-        with patch("routes.auth.is_token_blacklisted", return_value=True):
+        with patch("routes.auth.is_token_blacklisted", new_callable=AsyncMock, return_value=True):
             with pytest.raises(HTTPException) as exc_info:
                 await get_optional_user(authorization="Bearer blacklisted.token")
             assert exc_info.value.status_code == 401
