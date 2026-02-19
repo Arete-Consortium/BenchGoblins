@@ -38,6 +38,47 @@ export interface DecisionRequest {
   player_a?: string;
   player_b?: string;
   league_type?: LeagueType;
+  league_id?: string;
+}
+
+// Sleeper integration types
+export interface SleeperUser {
+  user_id: string;
+  username: string;
+  display_name: string;
+  avatar: string | null;
+}
+
+export interface SleeperLeague {
+  league_id: string;
+  name: string;
+  sport: string;
+  season: string;
+  status: string;
+  total_rosters: number;
+  roster_positions: string[];
+  scoring_settings: Record<string, unknown>;
+}
+
+export interface SleeperConnectResponse {
+  sleeper_user: SleeperUser;
+  leagues: SleeperLeague[];
+}
+
+export interface RosterPlayer {
+  player_id: string;
+  full_name: string;
+  team: string | null;
+  position: string;
+  status: string;
+  injury_status: string | null;
+  is_starter: boolean;
+}
+
+export interface RosterResponse {
+  roster_id: number;
+  owner_id: string;
+  players: RosterPlayer[];
 }
 
 // Decision response from API

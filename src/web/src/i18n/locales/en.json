@@ -115,5 +115,27 @@
     "googleError": "Google Sign-In failed. Please try again.",
     "noCredential": "No credential received from Google",
     "signInFailed": "Failed to sign in. Please try again."
+  },
+  "league": {
+    "connectTitle": "Connect Your League",
+    "connectDesc": "Import your roster for personalized recommendations.",
+    "usernamePlaceholder": "Sleeper username",
+    "connect": "Connect",
+    "selectLeague": "Select a League",
+    "yourRoster": "Your Roster",
+    "starters": "Starters",
+    "bench": "Bench",
+    "done": "Done",
+    "changeUser": "Change User",
+    "changeLeague": "Change League",
+    "disconnect": "Disconnect",
+    "noLeagues": "No leagues found",
+    "connectPrompt": "Connect your Sleeper league for personalized answers",
+    "connectLeague": "Connect League",
+    "userNotFound": "User not found. Check the username and try again.",
+    "injured": "Injured",
+    "notSupported": "Not supported for this sport",
+    "comingSoon": "Soon",
+    "sleeperNote": "Sleeper's API is public — we only read your leagues and roster."
   }
 }

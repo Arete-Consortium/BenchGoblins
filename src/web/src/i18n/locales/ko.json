@@ -115,5 +115,27 @@
     "googleError": "Google 로그인에 실패했습니다. 다시 시도해 주세요.",
     "noCredential": "Google에서 인증 정보를 받지 못했습니다",
     "signInFailed": "로그인에 실패했습니다. 다시 시도해 주세요."
+  },
+  "league": {
+    "connectTitle": "리그 연결",
+    "connectDesc": "맞춤 추천을 위해 로스터를 가져오세요.",
+    "usernamePlaceholder": "Sleeper 사용자 이름",
+    "connect": "연결",
+    "selectLeague": "리그 선택",
+    "yourRoster": "내 로스터",
+    "starters": "선발",
+    "bench": "벤치",
+    "done": "완료",
+    "changeUser": "사용자 변경",
+    "changeLeague": "리그 변경",
+    "disconnect": "연결 해제",
+    "noLeagues": "리그를 찾을 수 없습니다",
+    "connectPrompt": "맞춤 답변을 위해 Sleeper 리그를 연결하세요",
+    "connectLeague": "리그 연결",
+    "userNotFound": "사용자를 찾을 수 없습니다. 이름을 확인하고 다시 시도하세요.",
+    "injured": "부상",
+    "notSupported": "이 스포츠에서는 지원되지 않습니다",
+    "comingSoon": "곧 출시",
+    "sleeperNote": "Sleeper API는 공개되어 있습니다 — 리그와 로스터만 읽습니다."
   }
 }

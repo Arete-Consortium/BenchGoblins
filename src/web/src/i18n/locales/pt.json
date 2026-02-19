@@ -115,5 +115,27 @@
     "googleError": "Falha no login com Google. Tente novamente.",
     "noCredential": "Nenhuma credencial recebida do Google",
     "signInFailed": "Falha ao entrar. Tente novamente."
+  },
+  "league": {
+    "connectTitle": "Conecte sua Liga",
+    "connectDesc": "Importe seu elenco para recomendações personalizadas.",
+    "usernamePlaceholder": "Usuário do Sleeper",
+    "connect": "Conectar",
+    "selectLeague": "Selecione uma Liga",
+    "yourRoster": "Seu Elenco",
+    "starters": "Titulares",
+    "bench": "Reservas",
+    "done": "Concluído",
+    "changeUser": "Alterar Usuário",
+    "changeLeague": "Alterar Liga",
+    "disconnect": "Desconectar",
+    "noLeagues": "Nenhuma liga encontrada",
+    "connectPrompt": "Conecte sua liga do Sleeper para respostas personalizadas",
+    "connectLeague": "Conectar Liga",
+    "userNotFound": "Usuário não encontrado. Verifique o nome e tente novamente.",
+    "injured": "Lesionado",
+    "notSupported": "Não disponível para este esporte",
+    "comingSoon": "Em Breve",
+    "sleeperNote": "A API do Sleeper é pública — apenas lemos suas ligas e elenco."
   }
 }

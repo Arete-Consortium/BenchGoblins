@@ -115,5 +115,27 @@
     "googleError": "Error en inicio con Google. Intenta de nuevo.",
     "noCredential": "No se recibió credencial de Google",
     "signInFailed": "Error al iniciar sesión. Intenta de nuevo."
+  },
+  "league": {
+    "connectTitle": "Conecta tu Liga",
+    "connectDesc": "Importa tu roster para recomendaciones personalizadas.",
+    "usernamePlaceholder": "Usuario de Sleeper",
+    "connect": "Conectar",
+    "selectLeague": "Selecciona una Liga",
+    "yourRoster": "Tu Roster",
+    "starters": "Titulares",
+    "bench": "Suplentes",
+    "done": "Listo",
+    "changeUser": "Cambiar Usuario",
+    "changeLeague": "Cambiar Liga",
+    "disconnect": "Desconectar",
+    "noLeagues": "No se encontraron ligas",
+    "connectPrompt": "Conecta tu liga de Sleeper para respuestas personalizadas",
+    "connectLeague": "Conectar Liga",
+    "userNotFound": "Usuario no encontrado. Verifica el nombre e intenta de nuevo.",
+    "injured": "Lesionado",
+    "notSupported": "No disponible para este deporte",
+    "comingSoon": "Pronto",
+    "sleeperNote": "La API de Sleeper es pública — solo leemos tus ligas y roster."
   }
 }

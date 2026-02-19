@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { Message, Sport, RiskMode, DecisionResponse } from '@/types';
 import { generateId } from '@/lib/utils';
 import api from '@/lib/api';
+import { useLeagueStore } from '@/stores/leagueStore';
 
 interface AppState {
   // Current settings
@@ -70,6 +71,10 @@ export const useAppStore = create<AppState>()(
             decisionType = 'explain';
           }
 
+          // Inject league context if connected
+          const leagueState = useLeagueStore.getState();
+          const activeLeagueId = leagueState.selectedLeagueIds[sport];
+
           // Use streaming API for real-time response
           let fullContent = '';
           const responseHolder: { value: DecisionResponse | null } = { value: null };
@@ -80,6 +85,7 @@ export const useAppStore = create<AppState>()(
               risk_mode: riskMode,
               decision_type: decisionType,
               query: content,
+              ...(activeLeagueId ? { league_id: activeLeagueId } : {}),
             },
             // Accumulate chunks silently (Claude returns JSON, not display text)
             (chunk) => {

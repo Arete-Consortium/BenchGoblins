@@ -1,13 +1,17 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/stores/appStore';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
+import { LeagueChip } from '@/components/LeagueChip';
+import { LeagueConnectDialog } from '@/components/LeagueConnectDialog';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
-import { Sparkles, TrendingUp, Shield, Target } from 'lucide-react';
+import { Sparkles, TrendingUp, Shield, Target, Link2 } from 'lucide-react';
 import type { Sport } from '@/types';
 
 const SPORT_EXAMPLES: Record<Sport, string[]> = {
@@ -59,8 +63,10 @@ const SPORT_NAMES: Record<Sport, string> = {
   soccer: 'Soccer',
 };
 
-function WelcomeScreen({ sport }: { sport: Sport }) {
+function WelcomeScreen({ sport, onConnectLeague }: { sport: Sport; onConnectLeague: () => void }) {
   const sendMessage = useAppStore((state) => state.sendMessage);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const connection = useLeagueStore((s) => s.connection);
   const examples = SPORT_EXAMPLES[sport];
 
   return (
@@ -116,6 +122,17 @@ function WelcomeScreen({ sport }: { sport: Sport }) {
             ))}
           </div>
         </div>
+
+        {/* League connect nudge */}
+        {!connection && isAuthenticated && sport !== 'soccer' && (
+          <button
+            onClick={onConnectLeague}
+            className="mt-6 inline-flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors"
+          >
+            <Link2 className="h-4 w-4" />
+            Connect your Sleeper league for personalized answers
+          </button>
+        )}
       </div>
     </div>
   );
@@ -124,8 +141,19 @@ function WelcomeScreen({ sport }: { sport: Sport }) {
 export default function AskPage() {
   const { messages, isLoading, streamingContent, sport, riskMode, setSport, setRiskMode, sendMessage, clearMessages } =
     useAppStore();
+  const leagueConnection = useLeagueStore((s) => s.connection);
+  const onSportChange = useLeagueStore((s) => s.onSportChange);
 
+  const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Coordinate sport changes with league store
+  const handleSportChange = (newSport: Sport) => {
+    setSport(newSport);
+    if (leagueConnection) {
+      onSportChange(newSport);
+    }
+  };
 
   // Auto-scroll to bottom on new messages or streaming content
   useEffect(() => {
@@ -141,8 +169,9 @@ export default function AskPage() {
         <div className="border-b border-dark-800/50 bg-dark-900/80 backdrop-blur-sm sticky top-16 z-10">
           <div className="max-w-4xl mx-auto px-4 py-3">
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <SportSelector value={sport} onChange={setSport} disabled={isLoading} />
+              <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
               <div className="flex items-center gap-3">
+                <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
                 <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
                 {messages.length > 0 && (
                   <button
@@ -161,7 +190,7 @@ export default function AskPage() {
         {/* Chat area */}
         <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
           {messages.length === 0 ? (
-            <WelcomeScreen sport={sport} />
+            <WelcomeScreen sport={sport} onConnectLeague={() => setLeagueDialogOpen(true)} />
           ) : (
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
@@ -214,6 +243,8 @@ export default function AskPage() {
           </div>
         </div>
       </main>
+
+      <LeagueConnectDialog open={leagueDialogOpen} onOpenChange={setLeagueDialogOpen} />
     </div>
   );
 }

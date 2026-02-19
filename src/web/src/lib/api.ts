@@ -7,6 +7,9 @@ import type {
   UsageStats,
   HealthResponse,
   Sport,
+  SleeperConnectResponse,
+  SleeperLeague,
+  RosterResponse,
 } from '@/types';
 import { parseSSE } from './utils';
 
@@ -379,6 +382,28 @@ class APIClient {
     queries_limit: number;
   }> {
     const response = await this.client.get('/billing/status');
+    return response.data;
+  }
+
+  // League endpoints (Sleeper)
+  async connectSleeper(username: string, sport: string, season = '2025'): Promise<SleeperConnectResponse> {
+    const response = await this.client.post<SleeperConnectResponse>('/leagues/connect', {
+      username,
+      sport,
+      season,
+    });
+    return response.data;
+  }
+
+  async getLeagueRoster(leagueId: string, sleeperUserId: string, sport: string): Promise<RosterResponse> {
+    const response = await this.client.get<RosterResponse>(`/leagues/${leagueId}/roster`, {
+      params: { sleeper_user_id: sleeperUserId, sport },
+    });
+    return response.data;
+  }
+
+  async getLeagueSettings(leagueId: string): Promise<SleeperLeague> {
+    const response = await this.client.get<SleeperLeague>(`/leagues/${leagueId}/settings`);
     return response.data;
   }
 
