@@ -3,7 +3,6 @@
 import { Link2, X } from 'lucide-react';
 import { useLeagueStore, getActiveLeague } from '@/stores/leagueStore';
 import { useAppStore } from '@/stores/appStore';
-import { useAuthStore } from '@/stores/authStore';
 
 interface LeagueChipProps {
   onOpen: () => void;
@@ -11,13 +10,12 @@ interface LeagueChipProps {
 
 export function LeagueChip({ onOpen }: LeagueChipProps) {
   const sport = useAppStore((s) => s.sport);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const connection = useLeagueStore((s) => s.connection);
   const activeLeague = useLeagueStore((s) => getActiveLeague(s, sport));
   const disconnect = useLeagueStore((s) => s.disconnect);
 
-  // Hide for soccer (Sleeper doesn't support it) or unauthenticated users
-  if (sport === 'soccer' || !isAuthenticated) return null;
+  // Hide for soccer (Sleeper doesn't support it)
+  if (sport === 'soccer') return null;
 
   if (connection && activeLeague) {
     return (
