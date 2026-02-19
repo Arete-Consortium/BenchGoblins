@@ -115,5 +115,27 @@
     "googleError": "Google登录失败。请重试。",
     "noCredential": "未从Google收到凭证",
     "signInFailed": "登录失败。请重试。"
+  },
+  "league": {
+    "connectTitle": "连接你的联赛",
+    "connectDesc": "导入阵容以获取个性化推荐。",
+    "usernamePlaceholder": "Sleeper用户名",
+    "connect": "连接",
+    "selectLeague": "选择联赛",
+    "yourRoster": "你的阵容",
+    "starters": "首发",
+    "bench": "替补",
+    "done": "完成",
+    "changeUser": "更换用户",
+    "changeLeague": "更换联赛",
+    "disconnect": "断开连接",
+    "noLeagues": "未找到联赛",
+    "connectPrompt": "连接你的Sleeper联赛以获取个性化回答",
+    "connectLeague": "连接联赛",
+    "userNotFound": "未找到用户。请检查用户名后重试。",
+    "injured": "受伤",
+    "notSupported": "此运动不支持",
+    "comingSoon": "即将推出",
+    "sleeperNote": "Sleeper的API是公开的 — 我们只读取你的联赛和阵容。"
   }
 }

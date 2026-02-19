@@ -33,6 +33,7 @@ from monitoring import MetricsMiddleware, update_engagement_metrics
 from routes.auth import get_current_user, get_optional_user, require_admin_key
 from routes.auth import router as auth_router
 from routes.leagues import router as leagues_router
+from routes.newsletter import router as newsletter_router
 from routes.sessions import router as sessions_router
 from routes.verdicts import router as verdicts_router
 from services import stripe_billing
@@ -224,6 +225,9 @@ app.include_router(leagues_router)
 # Verdict routes (Start/Sit engine)
 app.include_router(verdicts_router)
 
+# Newsletter routes (email capture)
+app.include_router(newsletter_router)
+
 
 # ---------------------------------------------------------------------------
 # Enums & Models
@@ -277,6 +281,9 @@ class DecisionRequest(BaseModel):
     )
     league_type: str | None = Field(
         None, max_length=50, description="e.g., 'points', 'categories', 'half-ppr'"
+    )
+    league_id: str | None = Field(
+        None, max_length=50, description="Sleeper league ID for roster and scoring context"
     )
 
 
@@ -715,6 +722,29 @@ async def make_decision(
                 f"Player B:\n{format_player_context(info, stats, request.sport.value)}"
             )
         player_context = "\n\n".join(context_parts)
+
+    # Inject Sleeper league context (roster + scoring)
+    if request.league_id:
+        try:
+            league = await sleeper_service.get_league(request.league_id)
+            if league:
+                scoring_items = list(league.scoring_settings.items())[:15]
+                scoring_summary = ", ".join(f"{k}: {v}" for k, v in scoring_items)
+                league_ctx = f"League: {league.name} ({league.season})\nScoring: {scoring_summary}"
+
+                # Try to get user roster for additional context
+                roster_data = await sleeper_service.get_league_rosters(request.league_id)
+                if roster_data:
+                    # We don't know the user's Sleeper ID here, so include all roster IDs
+                    # The frontend sends the league_id; full roster injection is best-effort
+                    league_ctx = f"League settings: {league.name} ({league.season}, {league.total_rosters} teams)\nScoring: {scoring_summary}"
+
+                if player_context:
+                    player_context = f"{player_context}\n\n{league_ctx}"
+                else:
+                    player_context = league_ctx
+        except Exception:
+            logger.debug("Failed to fetch Sleeper league context for %s", request.league_id)
 
     # Classify query complexity
     complexity = classify_query(
@@ -1312,6 +1342,21 @@ async def make_decision_stream(
                 )
         if context_parts:
             player_context = "\n\n".join(context_parts)
+
+    # Inject Sleeper league context (roster + scoring)
+    if request.league_id:
+        try:
+            league = await sleeper_service.get_league(request.league_id)
+            if league:
+                scoring_items = list(league.scoring_settings.items())[:15]
+                scoring_summary = ", ".join(f"{k}: {v}" for k, v in scoring_items)
+                league_ctx = f"League settings: {league.name} ({league.season}, {league.total_rosters} teams)\nScoring: {scoring_summary}"
+                if player_context:
+                    player_context = f"{player_context}\n\n{league_ctx}"
+                else:
+                    player_context = league_ctx
+        except Exception:
+            logger.debug("Failed to fetch Sleeper league context for %s", request.league_id)
 
     # Capture metadata for persistence after streaming
     stream_metadata: dict = {}

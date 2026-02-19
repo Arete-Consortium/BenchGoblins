@@ -115,5 +115,27 @@
     "googleError": "Googleログインに失敗しました。もう一度お試しください。",
     "noCredential": "Googleから認証情報を受信できませんでした",
     "signInFailed": "ログインに失敗しました。もう一度お試しください。"
+  },
+  "league": {
+    "connectTitle": "リーグを接続",
+    "connectDesc": "ロスターをインポートしてパーソナライズされた推奨を取得。",
+    "usernamePlaceholder": "Sleeperユーザー名",
+    "connect": "接続",
+    "selectLeague": "リーグを選択",
+    "yourRoster": "あなたのロスター",
+    "starters": "スターター",
+    "bench": "ベンチ",
+    "done": "完了",
+    "changeUser": "ユーザー変更",
+    "changeLeague": "リーグ変更",
+    "disconnect": "切断",
+    "noLeagues": "リーグが見つかりません",
+    "connectPrompt": "Sleeperリーグを接続してパーソナライズされた回答を取得",
+    "connectLeague": "リーグ接続",
+    "userNotFound": "ユーザーが見つかりません。ユーザー名を確認して再試行してください。",
+    "injured": "負傷中",
+    "notSupported": "このスポーツでは利用できません",
+    "comingSoon": "近日公開",
+    "sleeperNote": "SleeperのAPIは公開されています — リーグとロスターの読み取りのみ行います。"
   }
 }

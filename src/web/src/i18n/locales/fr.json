@@ -115,5 +115,27 @@
     "googleError": "Échec de la connexion Google. Veuillez réessayer.",
     "noCredential": "Aucune information d'identification reçue de Google",
     "signInFailed": "Échec de la connexion. Veuillez réessayer."
+  },
+  "league": {
+    "connectTitle": "Connectez votre Ligue",
+    "connectDesc": "Importez votre effectif pour des recommandations personnalisées.",
+    "usernamePlaceholder": "Nom d'utilisateur Sleeper",
+    "connect": "Connecter",
+    "selectLeague": "Sélectionnez une Ligue",
+    "yourRoster": "Votre Effectif",
+    "starters": "Titulaires",
+    "bench": "Remplaçants",
+    "done": "Terminé",
+    "changeUser": "Changer d'Utilisateur",
+    "changeLeague": "Changer de Ligue",
+    "disconnect": "Déconnecter",
+    "noLeagues": "Aucune ligue trouvée",
+    "connectPrompt": "Connectez votre ligue Sleeper pour des réponses personnalisées",
+    "connectLeague": "Connecter une Ligue",
+    "userNotFound": "Utilisateur introuvable. Vérifiez le nom et réessayez.",
+    "injured": "Blessé",
+    "notSupported": "Non disponible pour ce sport",
+    "comingSoon": "Bientôt",
+    "sleeperNote": "L'API Sleeper est publique — nous lisons uniquement vos ligues et effectif."
   }
 }

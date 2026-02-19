@@ -115,5 +115,27 @@
     "googleError": "Google-Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
     "noCredential": "Keine Anmeldedaten von Google erhalten",
     "signInFailed": "Anmeldung fehlgeschlagen. Bitte erneut versuchen."
+  },
+  "league": {
+    "connectTitle": "Liga Verbinden",
+    "connectDesc": "Importiere deinen Kader für personalisierte Empfehlungen.",
+    "usernamePlaceholder": "Sleeper Benutzername",
+    "connect": "Verbinden",
+    "selectLeague": "Liga Auswählen",
+    "yourRoster": "Dein Kader",
+    "starters": "Starter",
+    "bench": "Bank",
+    "done": "Fertig",
+    "changeUser": "Benutzer Ändern",
+    "changeLeague": "Liga Ändern",
+    "disconnect": "Trennen",
+    "noLeagues": "Keine Ligen gefunden",
+    "connectPrompt": "Verbinde deine Sleeper-Liga für personalisierte Antworten",
+    "connectLeague": "Liga Verbinden",
+    "userNotFound": "Benutzer nicht gefunden. Überprüfe den Namen und versuche es erneut.",
+    "injured": "Verletzt",
+    "notSupported": "Für diese Sportart nicht verfügbar",
+    "comingSoon": "Bald",
+    "sleeperNote": "Sleepers API ist öffentlich — wir lesen nur deine Ligen und deinen Kader."
   }
 }
