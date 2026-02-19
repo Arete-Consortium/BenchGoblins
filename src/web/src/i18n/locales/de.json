@@ -137,5 +137,16 @@
     "notSupported": "Für diese Sportart nicht verfügbar",
     "comingSoon": "Bald",
     "sleeperNote": "Sleepers API ist öffentlich — wir lesen nur deine Ligen und deinen Kader."
+  },
+  "newsletter": {
+    "badge": "Newsletter",
+    "title": "Bleib am Ball",
+    "subtitle": "Wöchentliche Fantasy-Analysen, Scoring-Updates und Draft Day-Vorbereitung — direkt in dein Postfach.",
+    "placeholder": "your@email.com",
+    "subscribe": "Abonnieren",
+    "subscribing": "Wird abonniert...",
+    "success": "Du bist dabei! Schau in dein Postfach.",
+    "error": "Etwas ist schiefgelaufen. Versuch es nochmal.",
+    "privacy": "Wir respektieren dein Postfach. Jederzeit abbestellbar."
   }
 }
