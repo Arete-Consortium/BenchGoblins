@@ -34,17 +34,28 @@ class SessionService:
 
     @property
     def encryption_key(self) -> bytes:
-        """Get the master encryption key from environment."""
+        """Get the master encryption key from environment.
+
+        Raises RuntimeError outside development if key is not set.
+        """
         if self._encryption_key is None:
             key_b64 = os.getenv("SESSION_ENCRYPTION_KEY")
             if key_b64:
                 import base64
 
                 self._encryption_key = base64.b64decode(key_b64)
-            else:
-                # For development only - generate a temporary key
-                # In production, this should fail or use a secure key management system
+                if len(self._encryption_key) != 32:
+                    raise ValueError(
+                        "SESSION_ENCRYPTION_KEY must decode to 32 bytes"
+                    )
+            elif os.getenv("ENVIRONMENT", "development") == "development":
+                # Development only — generate a temporary key
                 self._encryption_key = secrets.token_bytes(32)
+            else:
+                raise RuntimeError(
+                    "SESSION_ENCRYPTION_KEY not set. Generate with: "
+                    'python -c "import base64,secrets; print(base64.b64encode(secrets.token_bytes(32)).decode())"'
+                )
         return self._encryption_key
 
     def generate_token(self) -> str:

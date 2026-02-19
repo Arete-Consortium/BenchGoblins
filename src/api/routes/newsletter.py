@@ -15,6 +15,7 @@ from sqlalchemy import func, select
 from models.database import NewsletterSubscriber
 from routes.auth import require_admin_key
 from services.database import db_service
+from services.redis import redis_service
 
 logger = logging.getLogger(__name__)
 
@@ -86,18 +87,43 @@ class CountResponse(BaseModel):
 # Simple IP-based rate limiting for newsletter (no session required)
 # ---------------------------------------------------------------------------
 
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP, respecting X-Forwarded-For from Fly.io proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        # First entry is the original client IP
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
 _subscribe_timestamps: dict[str, list[float]] = {}
 _SUBSCRIBE_LIMIT = 5  # max subscriptions per IP per window
 _SUBSCRIBE_WINDOW = 3600  # 1 hour
 
 
-def _check_subscribe_rate(ip: str) -> bool:
-    """Return True if the IP is within rate limits."""
+async def _check_subscribe_rate(ip: str) -> bool:
+    """Return True if the IP is within rate limits.
+
+    Uses Redis if available (persistent across restarts), falls back to in-memory.
+    """
+    # Try Redis first
+    if redis_service.is_connected and redis_service._client:
+        try:
+            key = f"newsletter_rate:{ip}"
+            count = await redis_service._client.incr(key)
+            if count == 1:
+                await redis_service._client.expire(key, _SUBSCRIBE_WINDOW)
+            return count <= _SUBSCRIBE_LIMIT
+        except Exception as e:
+            logger.warning("Redis rate limit failed, using in-memory: %s", e)
+
+    # In-memory fallback
     import time
 
     now = time.time()
     timestamps = _subscribe_timestamps.get(ip, [])
-    # Prune old entries
     timestamps = [t for t in timestamps if now - t < _SUBSCRIBE_WINDOW]
     if len(timestamps) >= _SUBSCRIBE_LIMIT:
         return False
@@ -121,9 +147,9 @@ async def subscribe(request: Request, body: SubscribeRequest) -> SubscribeRespon
     if not db_service.is_configured:
         raise HTTPException(status_code=503, detail="Database not configured")
 
-    # Rate limit by IP
-    client_ip = request.client.host if request.client else "unknown"
-    if not _check_subscribe_rate(client_ip):
+    # Rate limit by IP (use X-Forwarded-For on Fly.io)
+    client_ip = _get_client_ip(request)
+    if not await _check_subscribe_rate(client_ip):
         raise HTTPException(status_code=429, detail="Too many requests. Try again later.")
 
     async with db_service.session() as session:
