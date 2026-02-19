@@ -15,6 +15,8 @@ from enum import Enum
 
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Add project root for scripts/ imports (migration runner, etc.)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 import sentry_sdk
 from core.scoring import RiskMode as CoreRiskMode
@@ -145,6 +147,13 @@ async def lifespan(app: FastAPI):
             async with db_service._engine.begin() as conn:
                 await conn.run_sync(Base.metadata.create_all)
             logger.info("PostgreSQL connected and tables created")
+
+            # Run SQL migrations for schema changes not covered by ORM models
+            from scripts.migrate import run_migrations_async
+
+            applied = await run_migrations_async(db_service._engine)
+            if applied:
+                logger.info("Applied %d database migration(s)", applied)
         except Exception as e:
             logger.warning("PostgreSQL connection failed: %s", e)
     else:
