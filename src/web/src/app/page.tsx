@@ -563,7 +563,7 @@ export default function LandingPage() {
                   <ul className="space-y-2 mb-4">
                     {[
                       t('landing.pricingFeatureOneLeague'),
-                      t('landing.pricingFeatureUnlimited'),
+                      t('landing.pricingFeatureLeagueScoped'),
                       t('landing.pricingFeatureTradeRecs'),
                     ].map((feature) => (
                       <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
