@@ -19,6 +19,8 @@ import {
   Brain,
   Trophy,
   Crown,
+  Calendar,
+  Users2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -367,14 +369,15 @@ export default function LandingPage() {
             {t('landing.pricingSubtitle')}
           </p>
         </div>
-        <div className="grid gap-6 md:grid-cols-2 max-w-3xl mx-auto">
-          {/* Free Tier */}
+
+        {/* Core Plans — 4 columns */}
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 max-w-6xl mx-auto">
+          {/* Free */}
           <Card className="bg-dark-800/50 border-dark-700">
             <CardContent className="pt-6">
               <h3 className="text-xl font-bold mb-1">{t('landing.pricingFree')}</h3>
               <div className="mb-6">
                 <span className="text-3xl font-bold">{t('landing.pricingFreePrice')}</span>
-                <span className="text-dark-500 text-sm">{t('landing.pricingPerMonth')}</span>
               </div>
               <ul className="space-y-3 mb-6">
                 {[
@@ -397,28 +400,58 @@ export default function LandingPage() {
             </CardContent>
           </Card>
 
-          {/* Pro Tier */}
+          {/* Weekly */}
+          <Card className="bg-dark-800/50 border-dark-700">
+            <CardContent className="pt-6">
+              <h3 className="text-xl font-bold mb-1">{t('landing.pricingWeekly')}</h3>
+              <div className="mb-6">
+                <span className="text-3xl font-bold">{t('landing.pricingWeeklyPrice')}</span>
+                <span className="text-dark-500 text-sm">{t('landing.pricingPerWeek')}</span>
+              </div>
+              <ul className="space-y-3 mb-6">
+                {[
+                  t('landing.pricingFeatureUnlimited'),
+                  t('landing.pricingFeatureAllSports'),
+                  t('landing.pricingFeatureAdvancedAI'),
+                  t('landing.pricingFeatureTradeRecs'),
+                  t('landing.pricingFeatureNoCommitment'),
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                    <CheckCircle className="h-4 w-4 text-primary-400 shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/auth/login" className="block">
+                <Button variant="outline" className="w-full border-primary-500/50 text-primary-400 hover:bg-primary-500/10">
+                  {t('landing.pricingChooseWeekly')}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          {/* Monthly — Most Popular */}
           <Card className="bg-dark-800/50 border-primary-500/50 ring-2 ring-primary-500/30">
             <CardContent className="pt-6">
               <div className="flex items-center gap-2 mb-1">
-                <h3 className="text-xl font-bold">{t('landing.pricingPro')}</h3>
+                <h3 className="text-xl font-bold">{t('landing.pricingMonthly')}</h3>
                 <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-primary-500/20 text-primary-400">
                   <Crown className="inline h-3 w-3 mr-0.5 -mt-0.5" />
-                  {t('landing.pricingPopular')}
+                  {t('landing.pricingMostPopular')}
                 </span>
               </div>
               <div className="mb-6">
-                <span className="text-3xl font-bold gradient-text">{t('landing.pricingProPrice')}</span>
+                <span className="text-3xl font-bold gradient-text">{t('landing.pricingMonthlyPrice')}</span>
                 <span className="text-dark-500 text-sm">{t('landing.pricingPerMonth')}</span>
               </div>
               <ul className="space-y-3 mb-6">
                 {[
-                  t('landing.pricingProFeature1'),
-                  t('landing.pricingProFeature2'),
-                  t('landing.pricingProFeature3'),
-                  t('landing.pricingProFeature4'),
-                  t('landing.pricingProFeature5'),
-                  t('landing.pricingProFeature6'),
+                  t('landing.pricingFeatureUnlimited'),
+                  t('landing.pricingFeatureAllSports'),
+                  t('landing.pricingFeatureAdvancedAI'),
+                  t('landing.pricingFeatureTradeRecs'),
+                  t('landing.pricingFeaturePriority'),
+                  t('landing.pricingFeatureNoCommitment'),
                 ].map((feature) => (
                   <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
                     <CheckCircle className="h-4 w-4 text-primary-400 shrink-0" />
@@ -428,11 +461,126 @@ export default function LandingPage() {
               </ul>
               <Link href="/auth/login" className="block">
                 <Button className="w-full shadow-lg shadow-primary-500/20">
-                  {t('landing.pricingUpgrade')}
+                  {t('landing.pricingChooseMonthly')}
                 </Button>
               </Link>
             </CardContent>
           </Card>
+
+          {/* Annual — Best Value */}
+          <Card className="bg-dark-800/50 border-green-500/50 ring-2 ring-green-500/30">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2 mb-1">
+                <h3 className="text-xl font-bold">{t('landing.pricingAnnual')}</h3>
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-500/20 text-green-400">
+                  {t('landing.pricingBestValue')}
+                </span>
+              </div>
+              <div className="mb-6">
+                <span className="text-3xl font-bold text-green-400">{t('landing.pricingAnnualPrice')}</span>
+                <span className="text-dark-500 text-sm">{t('landing.pricingPerYear')}</span>
+                <div className="text-green-400 text-sm mt-1">{t('landing.pricingAnnualSavings')}</div>
+              </div>
+              <ul className="space-y-3 mb-6">
+                {[
+                  t('landing.pricingFeatureUnlimited'),
+                  t('landing.pricingFeatureAllSports'),
+                  t('landing.pricingFeatureAdvancedAI'),
+                  t('landing.pricingFeatureTradeRecs'),
+                  t('landing.pricingFeaturePriority'),
+                  t('landing.pricingFeatureExport'),
+                ].map((feature) => (
+                  <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                    <CheckCircle className="h-4 w-4 text-green-400 shrink-0" />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+              <Link href="/auth/login" className="block">
+                <Button className="w-full bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20">
+                  {t('landing.pricingChooseAnnual')}
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Specialized Plans */}
+        <div className="mt-12 max-w-4xl mx-auto">
+          <h3 className="text-xl font-semibold text-center mb-6 text-dark-300">
+            {t('landing.pricingSpecializedTitle')}
+          </h3>
+          <div className="grid gap-6 md:grid-cols-2">
+            {/* Seasonal Pass */}
+            <Card className="bg-dark-800/50 border-dark-700">
+              <CardContent className="pt-6 flex gap-4">
+                <div className="shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-orange-500/20 flex items-center justify-center">
+                    <Calendar className="h-6 w-6 text-orange-400" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-bold">{t('landing.pricingSeasonal')}</h4>
+                  <div className="mb-3">
+                    <span className="text-2xl font-bold text-orange-400">{t('landing.pricingSeasonalPrice')}</span>
+                    <span className="text-dark-500 text-sm">{t('landing.pricingPerSeason')}</span>
+                  </div>
+                  <ul className="space-y-2 mb-4">
+                    {[
+                      t('landing.pricingFeatureOneSport'),
+                      t('landing.pricingFeatureUnlimited'),
+                      t('landing.pricingFeatureAdvancedAI'),
+                    ].map((feature) => (
+                      <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                        <CheckCircle className="h-3.5 w-3.5 text-orange-400 shrink-0" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link href="/auth/login" className="block">
+                    <Button variant="outline" className="w-full border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+                      {t('landing.pricingChooseSeasonal')}
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* League Plan */}
+            <Card className="bg-dark-800/50 border-dark-700">
+              <CardContent className="pt-6 flex gap-4">
+                <div className="shrink-0">
+                  <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                    <Users2 className="h-6 w-6 text-blue-400" />
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <h4 className="text-lg font-bold">{t('landing.pricingLeague')}</h4>
+                  <div className="mb-3">
+                    <span className="text-2xl font-bold text-blue-400">{t('landing.pricingLeaguePrice')}</span>
+                    <span className="text-dark-500 text-sm">{t('landing.pricingPerMoPerLeague')}</span>
+                  </div>
+                  <ul className="space-y-2 mb-4">
+                    {[
+                      t('landing.pricingFeatureOneLeague'),
+                      t('landing.pricingFeatureUnlimited'),
+                      t('landing.pricingFeatureTradeRecs'),
+                    ].map((feature) => (
+                      <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                        <CheckCircle className="h-3.5 w-3.5 text-blue-400 shrink-0" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Link href="/auth/login" className="block">
+                    <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                      {t('landing.pricingChooseLeague')}
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 

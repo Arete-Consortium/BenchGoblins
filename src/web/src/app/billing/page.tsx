@@ -17,13 +17,34 @@ const FREE_FEATURES = [
   'Start/sit decisions',
 ];
 
-const PRO_FEATURES = [
-  'Unlimited queries',
-  'All sports (NBA, NFL, MLB, NHL, Soccer)',
-  'Advanced AI analysis',
-  'Trade & waiver recommendations',
-  'Priority response time',
-  'Decision history export',
+const PAID_PLANS = [
+  {
+    name: 'Weekly',
+    price: '$2.99',
+    period: '/week',
+    packageId: '$rc_weekly',
+    features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Cancel anytime'],
+    highlight: false,
+    badge: null,
+  },
+  {
+    name: 'Monthly',
+    price: '$7.99',
+    period: '/month',
+    packageId: '$rc_monthly',
+    features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Priority response', 'Cancel anytime'],
+    highlight: true,
+    badge: 'Most Popular',
+  },
+  {
+    name: 'Annual',
+    price: '$79.99',
+    period: '/year',
+    packageId: '$rc_annual',
+    features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Priority response', 'Decision history export'],
+    highlight: false,
+    badge: 'Best Value — ~$6.67/mo',
+  },
 ];
 
 export default function BillingPage() {
@@ -109,79 +130,71 @@ export default function BillingPage() {
 
         {(
           <>
-            <div className="grid md:grid-cols-2 gap-6">
-              {/* Free Plan */}
-              <Card className={`bg-dark-900/80 border-dark-700 ${!isPro ? 'ring-2 ring-primary-500' : ''}`}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Zap className="h-5 w-5 text-dark-400" />
-                      <CardTitle>Free</CardTitle>
-                    </div>
-                    {!isPro && (
-                      <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary-500/20 text-primary-400">
-                        Current Plan
-                      </span>
-                    )}
+            {/* Free Plan */}
+            <Card className={`bg-dark-900/80 border-dark-700 ${!isPro ? 'ring-2 ring-primary-500' : ''}`}>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Zap className="h-5 w-5 text-dark-400" />
+                    <CardTitle>Free</CardTitle>
                   </div>
-                  <CardDescription>Perfect for casual players</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <span className="text-4xl font-bold">$0</span>
-                    <span className="text-dark-400">/month</span>
-                  </div>
-
-                  <ul className="space-y-3">
-                    {FREE_FEATURES.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
-                        <Check className="h-4 w-4 text-dark-500" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-
                   {!isPro && (
-                    <Button variant="outline" className="w-full" disabled>
+                    <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary-500/20 text-primary-400">
                       Current Plan
-                    </Button>
+                    </span>
                   )}
-                </CardContent>
-              </Card>
+                </div>
+                <CardDescription>Perfect for casual players — $0</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-2">
+                  {FREE_FEATURES.map((feature) => (
+                    <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                      <Check className="h-4 w-4 text-dark-500" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
 
-              {/* Pro Plan */}
-              <Card className={`bg-dark-900/80 border-primary-500/50 ${isPro ? 'ring-2 ring-primary-500' : ''}`}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Crown className="h-5 w-5 text-primary-400" />
-                      <CardTitle className="gradient-text">Pro</CardTitle>
+            {/* Paid Plans Grid */}
+            <div className="grid md:grid-cols-3 gap-6 mt-6">
+              {PAID_PLANS.map((plan) => (
+                <Card
+                  key={plan.name}
+                  className={`bg-dark-900/80 ${plan.highlight ? 'border-primary-500/50 ring-2 ring-primary-500/30' : 'border-dark-700'}`}
+                >
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Crown className="h-5 w-5 text-primary-400" />
+                        <CardTitle className={plan.highlight ? 'gradient-text' : ''}>{plan.name}</CardTitle>
+                      </div>
+                      {plan.badge && (
+                        <span className={`text-xs font-medium px-2 py-1 rounded-full ${plan.name === 'Annual' ? 'bg-green-500/20 text-green-400' : 'bg-primary-500/20 text-primary-400'}`}>
+                          {plan.badge}
+                        </span>
+                      )}
                     </div>
-                    {isPro && (
-                      <span className="text-xs font-medium px-2 py-1 rounded-full bg-primary-500/20 text-primary-400">
-                        Current Plan
+                    <CardDescription>
+                      <span className={`text-2xl font-bold ${plan.highlight ? 'gradient-text' : plan.name === 'Annual' ? 'text-green-400' : 'text-dark-200'}`}>
+                        {plan.price}
                       </span>
-                    )}
-                  </div>
-                  <CardDescription>For serious fantasy managers</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <span className="text-4xl font-bold gradient-text">$9.99</span>
-                    <span className="text-dark-400">/month</span>
-                  </div>
+                      <span className="text-dark-400">{plan.period}</span>
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <ul className="space-y-2">
+                      {plan.features.map((feature) => (
+                        <li key={feature} className="flex items-center gap-2 text-sm text-dark-200">
+                          <Check className="h-4 w-4 text-primary-400" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
 
-                  <ul className="space-y-3">
-                    {PRO_FEATURES.map((feature) => (
-                      <li key={feature} className="flex items-center gap-2 text-sm text-dark-200">
-                        <Check className="h-4 w-4 text-primary-400" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-
-                  {isPro ? (
-                    <div className="space-y-3">
+                    {isPro ? (
                       <Button
                         onClick={() => refreshCustomerInfo()}
                         variant="outline"
@@ -197,65 +210,26 @@ export default function BillingPage() {
                           </>
                         )}
                       </Button>
-                      {expiresDate && (
-                        <p className="text-xs text-center text-dark-400">
-                          Renews on {expiresDate}
-                        </p>
-                      )}
-                    </div>
-                  ) : (
-                    <Button
-                      onClick={() => handleManualPurchase('$rc_monthly')}
-                      className="w-full gap-2 bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500"
-                      disabled={purchaseLoading || subscriptionLoading}
-                    >
-                      {purchaseLoading || subscriptionLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <>
-                          <Crown className="h-4 w-4" />
-                          Upgrade to Pro
-                        </>
-                      )}
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
+                    ) : (
+                      <Button
+                        onClick={() => handleManualPurchase(plan.packageId)}
+                        className={`w-full gap-2 ${plan.name === 'Annual' ? 'bg-green-600 hover:bg-green-700' : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500'}`}
+                        disabled={purchaseLoading || subscriptionLoading}
+                      >
+                        {purchaseLoading || subscriptionLoading ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <>
+                            <Crown className="h-4 w-4" />
+                            Choose {plan.name}
+                          </>
+                        )}
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-
-            {/* Individual Package Buttons (if offerings loaded and user isn't pro) */}
-            {!isPro && offerings?.current && (
-              <Card className="mt-8 bg-dark-900/50 border-dark-700">
-                <CardHeader>
-                  <CardTitle className="text-lg">Available Plans</CardTitle>
-                  <CardDescription>Choose the plan that works best for you</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid sm:grid-cols-3 gap-4">
-                    {offerings.current.availablePackages.map((pkg) => {
-                      const product = pkg.webBillingProduct;
-                      return (
-                        <button
-                          key={pkg.identifier}
-                          onClick={() => handleManualPurchase(pkg.identifier)}
-                          disabled={purchaseLoading}
-                          className="p-4 rounded-lg border border-dark-700 hover:border-primary-500/50 bg-dark-800/50 hover:bg-dark-800 transition-all text-left"
-                        >
-                          <div className="text-sm font-medium text-dark-200 capitalize">
-                            {pkg.identifier}
-                          </div>
-                          {product && (
-                            <div className="text-lg font-bold text-primary-400 mt-1">
-                              {product.currentPrice.formattedPrice}
-                            </div>
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
 
             {/* Usage Stats */}
             <Card className="mt-8 bg-dark-900/50 border-dark-700">
