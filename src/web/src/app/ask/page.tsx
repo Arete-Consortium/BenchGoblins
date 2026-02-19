@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAppStore } from '@/stores/appStore';
 import { useLeagueStore } from '@/stores/leagueStore';
-import { useAuthStore } from '@/stores/authStore';
 import { Header } from '@/components/layout/Header';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
@@ -65,7 +64,6 @@ const SPORT_NAMES: Record<Sport, string> = {
 
 function WelcomeScreen({ sport, onConnectLeague }: { sport: Sport; onConnectLeague: () => void }) {
   const sendMessage = useAppStore((state) => state.sendMessage);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const connection = useLeagueStore((s) => s.connection);
   const examples = SPORT_EXAMPLES[sport];
 
@@ -124,7 +122,7 @@ function WelcomeScreen({ sport, onConnectLeague }: { sport: Sport; onConnectLeag
         </div>
 
         {/* League connect nudge */}
-        {!connection && isAuthenticated && sport !== 'soccer' && (
+        {!connection && sport !== 'soccer' && (
           <button
             onClick={onConnectLeague}
             className="mt-6 inline-flex items-center gap-2 text-sm text-primary-400 hover:text-primary-300 transition-colors"
