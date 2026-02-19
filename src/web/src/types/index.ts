@@ -39,6 +39,7 @@ export interface DecisionRequest {
   player_b?: string;
   league_type?: LeagueType;
   league_id?: string;
+  sleeper_user_id?: string;
 }
 
 // Sleeper integration types

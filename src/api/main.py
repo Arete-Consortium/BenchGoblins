@@ -285,6 +285,9 @@ class DecisionRequest(BaseModel):
     league_id: str | None = Field(
         None, max_length=50, description="Sleeper league ID for roster and scoring context"
     )
+    sleeper_user_id: str | None = Field(
+        None, max_length=50, description="Sleeper user ID for roster lookup"
+    )
 
 
 class DecisionResponse(BaseModel):
@@ -730,14 +733,20 @@ async def make_decision(
             if league:
                 scoring_items = list(league.scoring_settings.items())[:15]
                 scoring_summary = ", ".join(f"{k}: {v}" for k, v in scoring_items)
-                league_ctx = f"League: {league.name} ({league.season})\nScoring: {scoring_summary}"
+                league_ctx = f"League: {league.name} ({league.season}, {league.total_rosters} teams)\nScoring: {scoring_summary}"
 
-                # Try to get user roster for additional context
-                roster_data = await sleeper_service.get_league_rosters(request.league_id)
-                if roster_data:
-                    # We don't know the user's Sleeper ID here, so include all roster IDs
-                    # The frontend sends the league_id; full roster injection is best-effort
-                    league_ctx = f"League settings: {league.name} ({league.season}, {league.total_rosters} teams)\nScoring: {scoring_summary}"
+                # Fetch user's actual roster if we have their Sleeper ID
+                if request.sleeper_user_id:
+                    roster = await sleeper_service.get_user_roster(request.league_id, request.sleeper_user_id)
+                    if roster and roster.players:
+                        players = await sleeper_service.get_players_by_ids(roster.players, request.sport.value)
+                        starter_set = set(roster.starters or [])
+                        player_lines = []
+                        for p in players:
+                            starter_tag = " [STARTER]" if p.player_id in starter_set else " [BENCH]"
+                            injury = f" ({p.injury_status})" if p.injury_status else ""
+                            player_lines.append(f"  {p.full_name} ({p.position}, {p.team or '?'}){injury}{starter_tag}")
+                        league_ctx += f"\n\nUser's roster:\n" + "\n".join(player_lines)
 
                 if player_context:
                     player_context = f"{player_context}\n\n{league_ctx}"
@@ -1350,7 +1359,20 @@ async def make_decision_stream(
             if league:
                 scoring_items = list(league.scoring_settings.items())[:15]
                 scoring_summary = ", ".join(f"{k}: {v}" for k, v in scoring_items)
-                league_ctx = f"League settings: {league.name} ({league.season}, {league.total_rosters} teams)\nScoring: {scoring_summary}"
+                league_ctx = f"League: {league.name} ({league.season}, {league.total_rosters} teams)\nScoring: {scoring_summary}"
+
+                if request.sleeper_user_id:
+                    roster = await sleeper_service.get_user_roster(request.league_id, request.sleeper_user_id)
+                    if roster and roster.players:
+                        players = await sleeper_service.get_players_by_ids(roster.players, request.sport.value)
+                        starter_set = set(roster.starters or [])
+                        player_lines = []
+                        for p in players:
+                            starter_tag = " [STARTER]" if p.player_id in starter_set else " [BENCH]"
+                            injury = f" ({p.injury_status})" if p.injury_status else ""
+                            player_lines.append(f"  {p.full_name} ({p.position}, {p.team or '?'}){injury}{starter_tag}")
+                        league_ctx += f"\n\nUser's roster:\n" + "\n".join(player_lines)
+
                 if player_context:
                     player_context = f"{player_context}\n\n{league_ctx}"
                 else:

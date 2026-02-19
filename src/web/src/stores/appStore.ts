@@ -74,6 +74,7 @@ export const useAppStore = create<AppState>()(
           // Inject league context if connected
           const leagueState = useLeagueStore.getState();
           const activeLeagueId = leagueState.selectedLeagueIds[sport];
+          const sleeperUserId = leagueState.connection?.sleeperUserId;
 
           // Use streaming API for real-time response
           let fullContent = '';
@@ -85,7 +86,7 @@ export const useAppStore = create<AppState>()(
               risk_mode: riskMode,
               decision_type: decisionType,
               query: content,
-              ...(activeLeagueId ? { league_id: activeLeagueId } : {}),
+              ...(activeLeagueId ? { league_id: activeLeagueId, sleeper_user_id: sleeperUserId } : {}),
             },
             // Accumulate chunks silently (Claude returns JSON, not display text)
             (chunk) => {
