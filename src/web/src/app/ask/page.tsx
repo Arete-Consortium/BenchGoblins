@@ -8,27 +8,70 @@ import { RiskModeSelector } from '@/components/RiskModeSelector';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { Sparkles, TrendingUp, Shield, Target } from 'lucide-react';
+import type { Sport } from '@/types';
 
-const EXAMPLE_QUERIES = [
-  'Should I start Jayson Tatum or Anthony Edwards this week?',
-  'Trade Tyreek Hill for Justin Jefferson?',
-  "Is De'Aaron Fox a good waiver pickup?",
-  "Explain Luka Doncic's scoring volatility",
-  'Should I start Haaland or Salah in my FPL squad this gameweek?',
-];
+const SPORT_EXAMPLES: Record<Sport, string[]> = {
+  nba: [
+    'Should I start Jayson Tatum or Anthony Edwards this week?',
+    'Trade Trae Young for Tyrese Haliburton — who wins?',
+    "Is De'Aaron Fox a good waiver pickup?",
+    "Explain Luka Doncic's scoring volatility this season",
+  ],
+  nfl: [
+    'Start Josh Allen or Lamar Jackson this week?',
+    'Trade Tyreek Hill for Justin Jefferson — fair deal?',
+    'Is Bijan Robinson a must-start in ceiling mode?',
+    "Who's the best waiver QB for Week 12?",
+  ],
+  mlb: [
+    'Start Shohei Ohtani or Aaron Judge tonight?',
+    'Trade Corbin Burnes for Trea Turner — who wins?',
+    'Best waiver wire pitchers for this week?',
+    "Should I bench Mookie Betts against a lefty starter?",
+  ],
+  nhl: [
+    'Start Connor McDavid or Nathan MacKinnon this week?',
+    'Trade Auston Matthews for Cale Makar — fair?',
+    'Best waiver wire goalies for the week?',
+    "Should I start Ovechkin on a back-to-back?",
+  ],
+  soccer: [
+    'Should I start Haaland or Salah in my FPL squad this gameweek?',
+    'Captain Mbappé or Bellingham this week?',
+    'Best budget midfielders to pick up on FPL waivers?',
+    'Is Palmer a good differential captain option?',
+  ],
+};
 
-function WelcomeScreen() {
+const SPORT_ICONS: Record<Sport, string> = {
+  nba: '🏀',
+  nfl: '🏈',
+  mlb: '⚾',
+  nhl: '🏒',
+  soccer: '⚽',
+};
+
+const SPORT_NAMES: Record<Sport, string> = {
+  nba: 'NBA',
+  nfl: 'NFL',
+  mlb: 'MLB',
+  nhl: 'NHL',
+  soccer: 'Soccer',
+};
+
+function WelcomeScreen({ sport }: { sport: Sport }) {
   const sendMessage = useAppStore((state) => state.sendMessage);
+  const examples = SPORT_EXAMPLES[sport];
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8">
       <div className="max-w-2xl text-center">
         <div className="w-20 h-20 rounded-2xl bg-primary-600/20 flex items-center justify-center mx-auto mb-6">
-          <Sparkles className="w-10 h-10 text-primary-400" />
+          <span className="text-4xl">{SPORT_ICONS[sport]}</span>
         </div>
 
         <h1 className="text-4xl font-bold mb-4">
-          <span className="gradient-text">Fantasy Decisions,</span>
+          <span className="gradient-text">{SPORT_NAMES[sport]} Decisions,</span>
           <br />
           <span className="text-dark-100">Made Simple</span>
         </h1>
@@ -59,11 +102,11 @@ function WelcomeScreen() {
 
         {/* Example queries */}
         <div className="space-y-2">
-          <p className="text-sm text-dark-500">Try asking:</p>
+          <p className="text-sm text-dark-500">Try asking about {SPORT_NAMES[sport]}:</p>
           <div className="flex flex-wrap justify-center gap-2">
-            {EXAMPLE_QUERIES.map((query, index) => (
+            {examples.map((query) => (
               <button
-                key={index}
+                key={query}
                 onClick={() => sendMessage(query)}
                 className="px-4 py-2 rounded-full bg-dark-800 text-dark-300 text-sm
                          hover:bg-dark-700 hover:text-dark-100 transition-all"
@@ -118,7 +161,7 @@ export default function AskPage() {
         {/* Chat area */}
         <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
           {messages.length === 0 ? (
-            <WelcomeScreen />
+            <WelcomeScreen sport={sport} />
           ) : (
             <div className="flex-1 overflow-y-auto p-4 space-y-4">
               {messages.map((message) => (
