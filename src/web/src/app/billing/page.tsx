@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 
 import Link from 'next/link';
-import { CreditCard, Check, Zap, Crown, ArrowLeft, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
+import { CreditCard, Check, Zap, Crown, ArrowLeft, Loader2, RefreshCw, AlertCircle, Calendar, Users2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
@@ -44,6 +44,35 @@ const PAID_PLANS = [
     features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Priority response', 'Decision history export'],
     highlight: false,
     badge: 'Best Value — ~$6.67/mo',
+  },
+];
+
+const SPECIALIZED_PLANS = [
+  {
+    name: 'Seasonal Pass',
+    price: '$29.99',
+    period: '/season',
+    packageId: '$rc_seasonal',
+    features: ['One sport, unlimited queries', 'Advanced AI analysis', 'Trade & waiver recs'],
+    icon: Calendar,
+    iconBg: 'bg-orange-500/20',
+    iconColor: 'text-orange-400',
+    priceColor: 'text-orange-400',
+    checkColor: 'text-orange-400',
+    btnClass: 'border-orange-500/50 text-orange-400 hover:bg-orange-500/10',
+  },
+  {
+    name: 'League Plan',
+    price: '$4.99',
+    period: '/mo per league',
+    packageId: '$rc_league',
+    features: ['One league, unlimited queries', 'League-scoped analysis', 'Trade & waiver recs'],
+    icon: Users2,
+    iconBg: 'bg-blue-500/20',
+    iconColor: 'text-blue-400',
+    priceColor: 'text-blue-400',
+    checkColor: 'text-blue-400',
+    btnClass: 'border-blue-500/50 text-blue-400 hover:bg-blue-500/10',
   },
 ];
 
@@ -223,6 +252,83 @@ export default function BillingPage() {
                   </CardContent>
                 </Card>
               ))}
+            </div>
+
+            {/* Specialized Plans */}
+            <div className="mt-10">
+              <h3 className="text-lg font-semibold text-center mb-6 text-dark-300">Specialized Plans</h3>
+              <div className="grid md:grid-cols-2 gap-6">
+                {SPECIALIZED_PLANS.map((plan) => (
+                  <Card key={plan.name} className="bg-dark-900/80 border-dark-700">
+                    <CardContent className="pt-6 flex gap-4">
+                      <div className="shrink-0">
+                        <div className={`w-12 h-12 rounded-full ${plan.iconBg} flex items-center justify-center`}>
+                          <plan.icon className={`h-6 w-6 ${plan.iconColor}`} />
+                        </div>
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-lg font-bold">{plan.name}</h4>
+                        <div className="mb-3">
+                          <span className={`text-2xl font-bold ${plan.priceColor}`}>{plan.price}</span>
+                          <span className="text-dark-500 text-sm">{plan.period}</span>
+                        </div>
+                        <ul className="space-y-2 mb-4">
+                          {plan.features.map((feature) => (
+                            <li key={feature} className="flex items-center gap-2 text-sm text-dark-300">
+                              <Check className={`h-3.5 w-3.5 ${plan.checkColor} shrink-0`} />
+                              {feature}
+                            </li>
+                          ))}
+                        </ul>
+                        {!isAuthenticated ? (
+                          <Button
+                            asChild
+                            variant="outline"
+                            className={`w-full ${plan.btnClass}`}
+                          >
+                            <Link href="/auth/login">
+                              <Crown className="h-4 w-4 mr-2" />
+                              Sign in to Subscribe
+                            </Link>
+                          </Button>
+                        ) : isPro ? (
+                          <Button
+                            onClick={() => refreshCustomerInfo()}
+                            variant="outline"
+                            className="w-full gap-2"
+                            disabled={subscriptionLoading}
+                          >
+                            {subscriptionLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <RefreshCw className="h-4 w-4" />
+                                Refresh Status
+                              </>
+                            )}
+                          </Button>
+                        ) : (
+                          <Button
+                            onClick={() => handleManualPurchase(plan.packageId)}
+                            variant="outline"
+                            className={`w-full ${plan.btnClass}`}
+                            disabled={purchaseLoading || subscriptionLoading}
+                          >
+                            {purchaseLoading || subscriptionLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <>
+                                <Crown className="h-4 w-4 mr-2" />
+                                Choose {plan.name}
+                              </>
+                            )}
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             </div>
 
             {/* Usage Stats */}
