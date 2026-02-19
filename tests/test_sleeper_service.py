@@ -1,5 +1,6 @@
 """Tests for Sleeper Fantasy API service."""
 
+import time
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,6 +12,12 @@ from services.sleeper import (
     SleeperSport,
     SleeperUser,
 )
+
+
+def _seed_players_cache(svc: SleeperService, sport: str, data: dict) -> None:
+    """Seed the players cache with data and a fresh timestamp."""
+    svc._players_cache[sport] = data
+    svc._players_cache_ts[sport] = time.monotonic()
 
 
 @pytest.fixture
@@ -298,7 +305,7 @@ class TestGetUserRoster:
 class TestGetAllPlayers:
     @pytest.mark.asyncio
     async def test_cached(self, svc, mock_client):
-        svc._players_cache["nfl"] = {"p1": {"full_name": "Test"}}
+        _seed_players_cache(svc, "nfl", {"p1": {"full_name": "Test"}})
         result = await svc.get_all_players("nfl")
         assert result == {"p1": {"full_name": "Test"}}
 
@@ -317,7 +324,7 @@ class TestGetAllPlayers:
 class TestGetPlayer:
     @pytest.mark.asyncio
     async def test_found(self, svc):
-        svc._players_cache["nfl"] = {
+        _seed_players_cache(svc, "nfl", {
             "p1": {
                 "full_name": "Patrick Mahomes",
                 "first_name": "Patrick",
@@ -329,7 +336,7 @@ class TestGetPlayer:
                 "age": 28,
                 "years_exp": 7,
             }
-        }
+        })
         result = await svc.get_player("p1", "nfl")
         assert result is not None
         assert result.full_name == "Patrick Mahomes"
@@ -337,7 +344,7 @@ class TestGetPlayer:
 
     @pytest.mark.asyncio
     async def test_not_found(self, svc):
-        svc._players_cache["nfl"] = {}
+        _seed_players_cache(svc, "nfl", {})
         result = await svc.get_player("missing", "nfl")
         assert result is None
 
@@ -345,7 +352,7 @@ class TestGetPlayer:
 class TestGetPlayersByIds:
     @pytest.mark.asyncio
     async def test_multiple(self, svc):
-        svc._players_cache["nfl"] = {
+        _seed_players_cache(svc, "nfl", {
             "p1": {
                 "full_name": "A",
                 "first_name": "A",
@@ -362,7 +369,7 @@ class TestGetPlayersByIds:
                 "position": "RB",
                 "status": "Active",
             },
-        }
+        })
         result = await svc.get_players_by_ids(["p1", "p2", "missing"], "nfl")
         assert len(result) == 2
 

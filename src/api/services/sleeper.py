@@ -8,6 +8,7 @@ API Docs: https://docs.sleeper.com/
 """
 
 import logging
+import time
 from dataclasses import dataclass
 from enum import Enum
 
@@ -17,6 +18,9 @@ logger = logging.getLogger(__name__)
 
 # Sleeper API base URL
 SLEEPER_API = "https://api.sleeper.app/v1"
+
+# Cache TTL for player data (6 hours — balances freshness vs. bandwidth)
+PLAYERS_CACHE_TTL = 6 * 60 * 60
 
 
 class SleeperSport(str, Enum):
@@ -92,6 +96,7 @@ class SleeperService:
     def __init__(self):
         self._client: httpx.AsyncClient | None = None
         self._players_cache: dict[str, dict] = {}  # sport -> {player_id -> player_data}
+        self._players_cache_ts: dict[str, float] = {}  # sport -> timestamp of last fetch
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -105,10 +110,12 @@ class SleeperService:
         return self._client
 
     async def close(self) -> None:
-        """Close HTTP client."""
+        """Close HTTP client and clear caches."""
         if self._client:
             await self._client.aclose()
             self._client = None
+        self._players_cache.clear()
+        self._players_cache_ts.clear()
 
     # =========================================================================
     # User Lookup
@@ -324,8 +331,10 @@ class SleeperService:
         Returns:
             Dict mapping player_id to player data
         """
-        # Check cache first
-        if sport in self._players_cache:
+        # Check cache first (with TTL)
+        now = time.monotonic()
+        cached_ts = self._players_cache_ts.get(sport, 0)
+        if sport in self._players_cache and (now - cached_ts) < PLAYERS_CACHE_TTL:
             return self._players_cache[sport]
 
         client = await self._get_client()
@@ -336,10 +345,16 @@ class SleeperService:
             if response.status_code == 200:
                 data = response.json()
                 self._players_cache[sport] = data or {}
+                self._players_cache_ts[sport] = now
+                logger.info("Refreshed Sleeper players cache for %s (%d players)", sport, len(self._players_cache[sport]))
                 return self._players_cache[sport]
 
         except httpx.HTTPError as e:
             logger.error("Sleeper API error fetching players: %s", e)
+            # Return stale cache if available
+            if sport in self._players_cache:
+                logger.warning("Returning stale players cache for %s", sport)
+                return self._players_cache[sport]
 
         return {}
 

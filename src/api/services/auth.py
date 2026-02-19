@@ -10,6 +10,7 @@ Environment Variables:
 
 import logging
 import os
+import uuid
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -217,6 +218,7 @@ def create_jwt_token(user: User) -> str:
         "email": user.email,
         "name": user.name,
         "tier": user.subscription_tier,
+        "jti": str(uuid.uuid4()),  # Unique token ID (prevents replay)
         "iat": now,  # Issued at
         "exp": expires,  # Expiration
         "iss": "benchgoblins",  # Issuer

@@ -379,13 +379,29 @@ async def logout(
 
 
 @router.post("/refresh", response_model=AuthResponse)
-async def refresh_token(current_user: dict = Depends(get_current_user)):
+async def refresh_token(
+    req: Request,
+    token: str = Depends(get_current_user_token),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Get a fresh JWT token.
 
     Use this to extend the session before the current token expires.
-    The current token remains valid until it expires.
+    The old token is blacklisted to prevent reuse.
     """
+    # Rate limit refresh attempts by IP
+    from services.rate_limiter import rate_limiter
+
+    client_ip = _get_client_ip(req)
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"refresh:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail="Too many refresh attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if not db_service.is_configured:
         raise HTTPException(
             status_code=503,
@@ -405,6 +421,9 @@ async def refresh_token(current_user: dict = Depends(get_current_user)):
             access_token = create_jwt_token(user)
         except ConfigurationError as e:
             raise HTTPException(status_code=503, detail=str(e))
+
+        # Blacklist the old token to prevent reuse
+        await blacklist_token(token)
 
         expires_in = 7 * 24 * 60 * 60
 

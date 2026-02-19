@@ -687,6 +687,20 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
         return True, user.queries_today, weekly_limit
 
 
+def _raise_quota_exceeded(queries_today: int, weekly_limit: int) -> None:
+    """Raise a standardized 402 quota-exceeded error."""
+    raise HTTPException(
+        status_code=402,
+        detail={
+            "code": "QUOTA_EXCEEDED",
+            "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
+            "queries_used": queries_today,
+            "queries_limit": weekly_limit,
+            "upgrade_url": "/billing/create-checkout",
+        },
+    )
+
+
 @app.post("/decide", response_model=DecisionResponse)
 async def make_decision(
     request: DecisionRequest,
@@ -718,15 +732,7 @@ async def make_decision(
     if user_id is not None:
         tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
-                    "queries_today": queries_today,
-                    "weekly_limit": weekly_limit,
-                    "upgrade_url": "/billing/create-checkout",
-                },
-            )
+            _raise_quota_exceeded(queries_today, weekly_limit)
 
     # Check if query is sports-related (skip when league connected — clearly fantasy)
     if not request.league_id:
@@ -1173,15 +1179,7 @@ async def draft_decision(
     if user_id is not None:
         tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
-                    "queries_today": queries_today,
-                    "weekly_limit": weekly_limit,
-                    "upgrade_url": "/billing/create-checkout",
-                },
-            )
+            _raise_quota_exceeded(queries_today, weekly_limit)
 
     # Check if query is sports-related (skip when league connected)
     if not request.league_id:
@@ -1375,15 +1373,7 @@ async def make_decision_stream(
     if user_id is not None:
         tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
         if not tier_allowed:
-            raise HTTPException(
-                status_code=402,
-                detail={
-                    "message": f"Weekly query limit reached ({queries_today}/{weekly_limit}). Upgrade to Pro for unlimited queries.",
-                    "queries_today": queries_today,
-                    "weekly_limit": weekly_limit,
-                    "upgrade_url": "/billing/create-checkout",
-                },
-            )
+            _raise_quota_exceeded(queries_today, weekly_limit)
 
     # Check if query is sports-related (skip when league connected)
     if not request.league_id:
