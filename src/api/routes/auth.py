@@ -16,12 +16,15 @@ Usage in other routes:
         return {"user_id": current_user["user_id"]}
 """
 
+import logging
 import os
 import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "router",
@@ -227,6 +230,16 @@ async def get_auth_status():
     )
 
 
+def _get_client_ip(request: Request) -> str:
+    """Extract real client IP, respecting X-Forwarded-For from Fly.io proxy."""
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    if request.client:
+        return request.client.host
+    return "unknown"
+
+
 @router.post("/google", response_model=AuthResponse)
 async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
     """
@@ -244,6 +257,19 @@ async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
     3. Client sends ID token to this endpoint
     4. Server returns JWT for use in Authorization header
     """
+    # Rate limit login attempts by IP
+    from services.rate_limiter import rate_limiter
+
+    client_ip = _get_client_ip(req)
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"auth:{client_ip}")
+    if not allowed:
+        logger.warning("Auth rate limit exceeded for IP %s", client_ip)
+        raise HTTPException(
+            status_code=429,
+            detail="Too many login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     if not db_service.is_configured:
         raise HTTPException(
             status_code=503,
@@ -256,6 +282,7 @@ async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
     except ConfigurationError as e:
         raise HTTPException(status_code=503, detail=str(e))
     except InvalidTokenError as e:
+        logger.warning("Failed Google token verification from %s: %s", client_ip, e)
         raise HTTPException(status_code=401, detail=str(e))
 
     # Verify email is verified

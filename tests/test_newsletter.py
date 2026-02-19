@@ -27,6 +27,7 @@ def _make_request(ip: str = "127.0.0.1") -> MagicMock:
     req = MagicMock()
     req.client = MagicMock()
     req.client.host = ip
+    req.headers = {}  # No X-Forwarded-For in tests — uses client.host
     return req
 
 
@@ -96,23 +97,27 @@ class TestSubscribeRateLimit:
     def setup_method(self):
         _subscribe_timestamps.clear()
 
-    def test_allows_first_request(self):
-        assert _check_subscribe_rate("1.2.3.4") is True
+    @pytest.mark.asyncio
+    async def test_allows_first_request(self):
+        assert await _check_subscribe_rate("1.2.3.4") is True
 
-    def test_allows_up_to_limit(self):
+    @pytest.mark.asyncio
+    async def test_allows_up_to_limit(self):
         for _ in range(5):
-            assert _check_subscribe_rate("1.2.3.5") is True
+            assert await _check_subscribe_rate("1.2.3.5") is True
 
-    def test_blocks_over_limit(self):
+    @pytest.mark.asyncio
+    async def test_blocks_over_limit(self):
         for _ in range(5):
-            _check_subscribe_rate("1.2.3.6")
-        assert _check_subscribe_rate("1.2.3.6") is False
+            await _check_subscribe_rate("1.2.3.6")
+        assert await _check_subscribe_rate("1.2.3.6") is False
 
-    def test_separate_ips_tracked_independently(self):
+    @pytest.mark.asyncio
+    async def test_separate_ips_tracked_independently(self):
         for _ in range(5):
-            _check_subscribe_rate("10.0.0.1")
-        assert _check_subscribe_rate("10.0.0.1") is False
-        assert _check_subscribe_rate("10.0.0.2") is True
+            await _check_subscribe_rate("10.0.0.1")
+        assert await _check_subscribe_rate("10.0.0.1") is False
+        assert await _check_subscribe_rate("10.0.0.2") is True
 
 
 # ---------------------------------------------------------------------------
@@ -203,7 +208,7 @@ class TestSubscribeEndpoint:
         _subscribe_timestamps.clear()
         # Exhaust rate limit
         for _ in range(5):
-            _check_subscribe_rate("9.9.9.9")
+            await _check_subscribe_rate("9.9.9.9")
 
         with patch("routes.newsletter.db_service") as mock_db:
             mock_db.is_configured = True
