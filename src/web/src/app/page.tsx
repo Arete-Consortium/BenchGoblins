@@ -422,7 +422,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/auth/login" className="block">
+              <Link href="/billing" className="block">
                 <Button variant="outline" className="w-full border-primary-500/50 text-primary-400 hover:bg-primary-500/10">
                   {t('landing.pricingChooseWeekly')}
                 </Button>
@@ -459,7 +459,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/auth/login" className="block">
+              <Link href="/billing" className="block">
                 <Button className="w-full shadow-lg shadow-primary-500/20">
                   {t('landing.pricingChooseMonthly')}
                 </Button>
@@ -496,7 +496,7 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/auth/login" className="block">
+              <Link href="/billing" className="block">
                 <Button className="w-full bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20">
                   {t('landing.pricingChooseAnnual')}
                 </Button>
@@ -537,7 +537,7 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/auth/login" className="block">
+                  <Link href="/billing" className="block">
                     <Button variant="outline" className="w-full border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
                       {t('landing.pricingChooseSeasonal')}
                     </Button>
@@ -572,7 +572,7 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/auth/login" className="block">
+                  <Link href="/billing" className="block">
                     <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
                       {t('landing.pricingChooseLeague')}
                     </Button>
