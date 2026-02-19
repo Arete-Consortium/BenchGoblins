@@ -2,6 +2,7 @@
 BenchGoblin API — Fantasy Sports Decision Engine
 """
 
+import asyncio
 import json
 import logging
 import os
@@ -195,9 +196,37 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Admin-Key"],
+    max_age=3600,
 )
+
+
+# Security headers middleware
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=63072000; includeSubDomains; preload"
+        )
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+
+app.add_middleware(SecurityHeadersMiddleware)
+
+# GZip compression for responses > 1KB
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
+
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 # Performance monitoring middleware
 app.add_middleware(MetricsMiddleware)
@@ -595,6 +624,8 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
         # Pro tier has unlimited queries
         if user.subscription_tier == "pro":
             user.queries_today += 1
+            session.add(user)
+            await session.commit()
             return True, user.queries_today, weekly_limit
 
         # Free tier - check limit
@@ -603,6 +634,8 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
 
         # Increment counter
         user.queries_today += 1
+        session.add(user)
+        await session.commit()
         return True, user.queries_today, weekly_limit
 
 
@@ -666,13 +699,13 @@ async def make_decision(
             giving_names, receiving_names = trade_parsed
             sport = request.sport.value
 
-            # Fetch ESPN data for all trade players
-            giving_data = [
-                await espn_service.find_player_by_name(name, sport) for name in giving_names
-            ]
-            receiving_data = [
-                await espn_service.find_player_by_name(name, sport) for name in receiving_names
-            ]
+            # Fetch ESPN data for all trade players (parallel)
+            all_names = giving_names + receiving_names
+            all_results = await asyncio.gather(
+                *(espn_service.find_player_by_name(name, sport) for name in all_names)
+            )
+            giving_data = list(all_results[: len(giving_names)])
+            receiving_data = list(all_results[len(giving_names) :])
 
             trade_complexity = classify_trade_query(request.query, trade_players_found=True)
 
@@ -702,14 +735,19 @@ async def make_decision(
         player_a = player_a or extracted_a
         player_b = player_b or extracted_b
 
-    # Fetch real player data
+    # Fetch real player data (parallel when both present)
     player_a_data = None
     player_b_data = None
     player_context = None
 
-    if player_a:
+    if player_a and player_b:
+        player_a_data, player_b_data = await asyncio.gather(
+            espn_service.find_player_by_name(player_a, request.sport.value),
+            espn_service.find_player_by_name(player_b, request.sport.value),
+        )
+    elif player_a:
         player_a_data = await espn_service.find_player_by_name(player_a, request.sport.value)
-    if player_b:
+    elif player_b:
         player_b_data = await espn_service.find_player_by_name(player_b, request.sport.value)
 
     # Build context string for Claude
@@ -3348,9 +3386,11 @@ async def handle_stripe_webhook(request: Request):
         result = await stripe_billing.handle_webhook(payload, sig_header)
         return result
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.warning("Stripe webhook validation failed: %s", e)
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Webhook processing failed: {e}")
+        logger.error("Stripe webhook processing failed: %s", e, exc_info=True)
+        raise HTTPException(status_code=500, detail="Webhook processing failed")
 
 
 @app.get("/billing/status", response_model=BillingStatusResponse)
