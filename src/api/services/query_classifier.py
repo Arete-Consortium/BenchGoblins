@@ -93,6 +93,7 @@ SPORT_TERMS = {
     "hockey",
     "fantasy",
     "player",
+    "players",
     "team",
     "matchup",
     "season",

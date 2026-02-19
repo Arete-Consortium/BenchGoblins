@@ -647,13 +647,14 @@ async def make_decision(
                 },
             )
 
-    # Check if query is sports-related using smart classifier
-    is_allowed, rejection_reason = _is_sports_query(request.query)
-    if not is_allowed:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
-        )
+    # Check if query is sports-related (skip when league connected — clearly fantasy)
+    if not request.league_id:
+        is_allowed, rejection_reason = _is_sports_query(request.query)
+        if not is_allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+            )
 
     # Assign A/B prompt variant
     variant = assign_variant(session_id)
@@ -1096,13 +1097,14 @@ async def draft_decision(
                 },
             )
 
-    # Check if query is sports-related
-    is_allowed, rejection_reason = _is_sports_query(request.query)
-    if not is_allowed:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
-        )
+    # Check if query is sports-related (skip when league connected)
+    if not request.league_id:
+        is_allowed, rejection_reason = _is_sports_query(request.query)
+        if not is_allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+            )
 
     # Determine player names: explicit list takes priority over query parsing
     player_names: list[str] | None = request.players
@@ -1297,13 +1299,14 @@ async def make_decision_stream(
                 },
             )
 
-    # Check if query is sports-related using smart classifier
-    is_allowed, rejection_reason = _is_sports_query(request.query)
-    if not is_allowed:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
-        )
+    # Check if query is sports-related (skip when league connected)
+    if not request.league_id:
+        is_allowed, rejection_reason = _is_sports_query(request.query)
+        if not is_allowed:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
+            )
 
     if not claude_service.is_available:
         raise HTTPException(
