@@ -96,6 +96,7 @@
     "pricingFeatureExport": "判定履歴のエクスポート",
     "pricingFeatureOneSport": "1スポーツ、フルシーズン",
     "pricingFeatureOneLeague": "1リーグのPro機能",
+    "pricingFeatureLeagueScoped": "クエリはリーグの選手に限定",
     "pricingFeatureNoCommitment": "いつでもキャンセル可能",
     "footerPrivacy": "プライバシー",
     "footerTerms": "利用規約",
