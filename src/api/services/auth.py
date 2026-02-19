@@ -8,6 +8,7 @@ Environment Variables:
     JWT_SECRET_KEY: Secret key for signing JWT tokens (min 32 characters recommended)
 """
 
+import logging
 import os
 from datetime import UTC, datetime, timedelta
 
@@ -18,6 +19,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.database import User
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -272,43 +275,55 @@ def verify_jwt_token(token: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Token Blacklist (for logout)
+# Token Blacklist (for logout) — Redis-backed with in-memory fallback
 # ---------------------------------------------------------------------------
 
-# In-memory blacklist for revoked tokens
-# In production, use Redis or database for persistence across restarts
+_BLACKLIST_PREFIX = "token_blacklist:"
+_BLACKLIST_TTL = JWT_EXPIRATION_HOURS * 3600  # Match JWT expiry
+
+# In-memory fallback for dev / Redis downtime
 _token_blacklist: set[str] = set()
 
+# Redis client injected at startup via set_blacklist_redis
+_blacklist_redis = None
 
-def blacklist_token(token: str) -> None:
-    """
-    Add a token to the blacklist (for logout).
 
-    Args:
-        token: JWT token to blacklist
+def set_blacklist_redis(redis_client) -> None:
+    """Inject Redis client for persistent token blacklist."""
+    global _blacklist_redis
+    _blacklist_redis = redis_client
+
+
+async def blacklist_token(token: str) -> None:
+    """Add a token to the blacklist (for logout).
+
+    Uses Redis if available (persistent across restarts), falls back to in-memory.
     """
+    if _blacklist_redis:
+        try:
+            await _blacklist_redis.setex(
+                f"{_BLACKLIST_PREFIX}{token}", _BLACKLIST_TTL, "1"
+            )
+            return
+        except Exception as e:
+            logger.warning("Redis blacklist write failed, using in-memory: %s", e)
     _token_blacklist.add(token)
 
 
-def is_token_blacklisted(token: str) -> bool:
-    """
-    Check if a token has been blacklisted.
-
-    Args:
-        token: JWT token to check
-
-    Returns:
-        True if token is blacklisted, False otherwise
-    """
+async def is_token_blacklisted(token: str) -> bool:
+    """Check if a token has been blacklisted."""
+    if _blacklist_redis:
+        try:
+            return await _blacklist_redis.get(f"{_BLACKLIST_PREFIX}{token}") is not None
+        except Exception as e:
+            logger.warning("Redis blacklist read failed, checking in-memory: %s", e)
     return token in _token_blacklist
 
 
-def clear_expired_blacklist_entries() -> int:
-    """
-    Remove expired tokens from the blacklist (maintenance task).
+async def clear_expired_blacklist_entries() -> int:
+    """Remove expired tokens from the in-memory blacklist (maintenance task).
 
-    Returns:
-        Number of entries removed
+    Redis entries auto-expire via TTL — this only cleans the in-memory fallback.
     """
     global _token_blacklist
     initial_count = len(_token_blacklist)
@@ -316,11 +331,9 @@ def clear_expired_blacklist_entries() -> int:
     valid_tokens = set()
     for token in _token_blacklist:
         try:
-            # Try to decode - if expired, we can remove it
             verify_jwt_token(token)
             valid_tokens.add(token)
         except InvalidTokenError:
-            # Token is expired or invalid, don't keep it
             pass
 
     _token_blacklist = valid_tokens
