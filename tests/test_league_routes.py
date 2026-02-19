@@ -168,13 +168,6 @@ class TestConnectSleeper:
             user_id="sl_123", sport="nba", season="2025"
         )
 
-    def test_connect_requires_auth(self, test_client):
-        response = test_client.post(
-            "/leagues/connect",
-            json={"username": "test"},
-        )
-        assert response.status_code in (401, 403)
-
 
 # -------------------------------------------------------------------------
 # GET /leagues/{league_id}/roster
@@ -245,13 +238,6 @@ class TestGetRoster:
         data = response.json()
         assert data["reserve"] == ["p3"]
 
-    def test_roster_requires_auth(self, test_client):
-        response = test_client.get(
-            "/leagues/lg_456/roster",
-            params={"sleeper_user_id": "sl_123"},
-        )
-        assert response.status_code in (401, 403)
-
     def test_roster_requires_user_id_param(self, authed_client):
         response = authed_client.get("/leagues/lg_456/roster")
         assert response.status_code == 422  # Missing required query param
@@ -286,6 +272,3 @@ class TestGetLeagueSettings:
         assert response.status_code == 404
         assert "not found" in response.json()["detail"]
 
-    def test_settings_requires_auth(self, test_client):
-        response = test_client.get("/leagues/lg_456/settings")
-        assert response.status_code in (401, 403)

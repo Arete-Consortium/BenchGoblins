@@ -5,10 +5,9 @@ Handles Sleeper league connection, roster retrieval, and league settings.
 Sleeper API is public — no OAuth required, just a username.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from routes.auth import get_current_user
 from services.sleeper import sleeper_service
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
@@ -86,7 +85,6 @@ class RosterResponse(BaseModel):
 @router.post("/connect", response_model=ConnectResponse)
 async def connect_sleeper(
     request: ConnectRequest,
-    current_user: dict = Depends(get_current_user),
 ):
     """
     Connect a Sleeper account by username.
@@ -135,7 +133,6 @@ async def get_roster(
     league_id: str,
     sleeper_user_id: str = Query(..., description="Sleeper user ID"),
     sport: str = Query(default="nfl", description="Sport: nfl, nba, mlb, nhl"),
-    current_user: dict = Depends(get_current_user),
 ):
     """
     Get a user's roster in a league with full player details.
@@ -176,7 +173,6 @@ async def get_roster(
 @router.get("/{league_id}/settings", response_model=LeagueResponse)
 async def get_league_settings(
     league_id: str,
-    current_user: dict = Depends(get_current_user),
 ):
     """
     Get league settings including scoring rules and roster positions.
