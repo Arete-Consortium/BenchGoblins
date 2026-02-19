@@ -165,21 +165,21 @@ export default function LandingPage() {
             </div>
             <div className="flex items-center gap-2">
               <LanguageSelector />
-              <Link href="/history">
-                <Button variant="ghost" size="sm">{t('common.history')}</Button>
-              </Link>
-              <Link href="/auth/login">
-                <Button variant="outline" size="sm" className="gap-1.5 border-dark-700">
+              <Button asChild variant="ghost" size="sm">
+                <Link href="/history">{t('common.history')}</Link>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="gap-1.5 border-dark-700">
+                <Link href="/auth/login">
                   <LogIn className="h-4 w-4" />
                   {t('common.signIn')}
-                </Button>
-              </Link>
-              <Link href="/ask">
-                <Button size="sm" className="shadow-lg shadow-primary-500/20">
+                </Link>
+              </Button>
+              <Button asChild size="sm" className="shadow-lg shadow-primary-500/20">
+                <Link href="/ask">
                   {t('common.getStarted')}
                   <ArrowRight className="ml-1.5 h-4 w-4" />
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </div>
         </div>
@@ -235,18 +235,18 @@ export default function LandingPage() {
             {t('landing.heroSubtitle')}
           </p>
           <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link href="/ask">
-              <Button size="lg" className="gap-2 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-shadow">
+            <Button asChild size="lg" className="gap-2 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-shadow">
+              <Link href="/ask">
                 <Sparkles className="h-5 w-5" />
                 {t('landing.startAsking')}
-              </Button>
-            </Link>
-            <Link href="/auth/login">
-              <Button size="lg" variant="outline" className="gap-2 border-dark-700">
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="gap-2 border-dark-700">
+              <Link href="/auth/login">
                 <LogIn className="h-5 w-5" />
                 {t('common.signIn')}
-              </Button>
-            </Link>
+              </Link>
+            </Button>
           </div>
         </div>
       </section>
@@ -392,11 +392,11 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/ask" className="block">
-                <Button variant="outline" className="w-full border-dark-600">
+              <Button asChild variant="outline" className="w-full border-dark-600">
+                <Link href="/ask">
                   {t('landing.pricingGetStarted')}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -422,11 +422,11 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/billing" className="block">
-                <Button variant="outline" className="w-full border-primary-500/50 text-primary-400 hover:bg-primary-500/10">
+              <Button asChild variant="outline" className="w-full border-primary-500/50 text-primary-400 hover:bg-primary-500/10">
+                <Link href="/billing">
                   {t('landing.pricingChooseWeekly')}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -459,11 +459,11 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/billing" className="block">
-                <Button className="w-full shadow-lg shadow-primary-500/20">
+              <Button asChild className="w-full shadow-lg shadow-primary-500/20">
+                <Link href="/billing">
                   {t('landing.pricingChooseMonthly')}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
 
@@ -496,11 +496,11 @@ export default function LandingPage() {
                   </li>
                 ))}
               </ul>
-              <Link href="/billing" className="block">
-                <Button className="w-full bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20">
+              <Button asChild className="w-full bg-green-600 hover:bg-green-700 shadow-lg shadow-green-500/20">
+                <Link href="/billing">
                   {t('landing.pricingChooseAnnual')}
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </CardContent>
           </Card>
         </div>
@@ -537,11 +537,11 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/billing" className="block">
-                    <Button variant="outline" className="w-full border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+                  <Button asChild variant="outline" className="w-full border-orange-500/50 text-orange-400 hover:bg-orange-500/10">
+                    <Link href="/billing">
                       {t('landing.pricingChooseSeasonal')}
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -572,11 +572,11 @@ export default function LandingPage() {
                       </li>
                     ))}
                   </ul>
-                  <Link href="/billing" className="block">
-                    <Button variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                  <Button asChild variant="outline" className="w-full border-blue-500/50 text-blue-400 hover:bg-blue-500/10">
+                    <Link href="/billing">
                       {t('landing.pricingChooseLeague')}
-                    </Button>
-                  </Link>
+                    </Link>
+                  </Button>
                 </div>
               </CardContent>
             </Card>
@@ -591,12 +591,12 @@ export default function LandingPage() {
           <p className="text-dark-400 mb-8">
             {t('landing.ctaSubtitle')}
           </p>
-          <Link href="/ask">
-            <Button size="lg" className="gap-2">
+          <Button asChild size="lg" className="gap-2">
+            <Link href="/ask">
               <Sparkles className="h-5 w-5" />
               {t('common.startFree')}
-            </Button>
-          </Link>
+            </Link>
+          </Button>
         </div>
       </section>
 

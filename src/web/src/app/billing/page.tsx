@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useCallback } from 'react';
+
 import Link from 'next/link';
 import { CreditCard, Check, Zap, Crown, ArrowLeft, Loader2, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,6 @@ const PAID_PLANS = [
 ];
 
 export default function BillingPage() {
-  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const {
     isPro,
@@ -62,12 +61,6 @@ export default function BillingPage() {
 
   const [purchaseLoading, setPurchaseLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push('/auth/login');
-    }
-  }, [isAuthenticated, router]);
 
   const handleManualPurchase = useCallback(async (packageId: string) => {
     if (!offerings?.current) return;
@@ -99,14 +92,6 @@ export default function BillingPage() {
     ? new Date(activeEntitlement.expirationDate).toLocaleDateString()
     : null;
 
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary-400" />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950 pt-20 pb-12 px-4">
       <div className="max-w-4xl mx-auto">
@@ -128,9 +113,8 @@ export default function BillingPage() {
           </div>
         )}
 
-        {(
-          <>
-            {/* Free Plan */}
+        <>
+          {/* Free Plan */}
             <Card className={`bg-dark-900/80 border-dark-700 ${!isPro ? 'ring-2 ring-primary-500' : ''}`}>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -194,7 +178,17 @@ export default function BillingPage() {
                       ))}
                     </ul>
 
-                    {isPro ? (
+                    {!isAuthenticated ? (
+                      <Button
+                        asChild
+                        className={`w-full gap-2 ${plan.name === 'Annual' ? 'bg-green-600 hover:bg-green-700' : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500'}`}
+                      >
+                        <Link href="/auth/login">
+                          <Crown className="h-4 w-4" />
+                          Sign in to Subscribe
+                        </Link>
+                      </Button>
+                    ) : isPro ? (
                       <Button
                         onClick={() => refreshCustomerInfo()}
                         variant="outline"
@@ -232,35 +226,37 @@ export default function BillingPage() {
             </div>
 
             {/* Usage Stats */}
-            <Card className="mt-8 bg-dark-900/50 border-dark-700">
-              <CardHeader>
-                <CardTitle className="text-lg">Your Usage Today</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4">
-                  <div className="flex-1">
-                    <div className="h-2 bg-dark-700 rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-primary-500 rounded-full transition-all"
-                        style={{
-                          width: isPro ? '0%' : `${Math.min((user.queries_today / user.queries_limit) * 100, 100)}%`,
-                        }}
-                      />
+            {user && (
+              <Card className="mt-8 bg-dark-900/50 border-dark-700">
+                <CardHeader>
+                  <CardTitle className="text-lg">Your Usage Today</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4">
+                    <div className="flex-1">
+                      <div className="h-2 bg-dark-700 rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary-500 rounded-full transition-all"
+                          style={{
+                            width: isPro ? '0%' : `${Math.min((user.queries_today / user.queries_limit) * 100, 100)}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                    <div className="text-sm text-dark-300">
+                      {isPro ? (
+                        <span className="text-primary-400">Unlimited</span>
+                      ) : (
+                        <>
+                          <span className="font-medium">{user.queries_today}</span>
+                          <span className="text-dark-500"> / {user.queries_limit} queries</span>
+                        </>
+                      )}
                     </div>
                   </div>
-                  <div className="text-sm text-dark-300">
-                    {isPro ? (
-                      <span className="text-primary-400">Unlimited</span>
-                    ) : (
-                      <>
-                        <span className="font-medium">{user.queries_today}</span>
-                        <span className="text-dark-500"> / {user.queries_limit} queries</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Subscription Management */}
             {isPro && customerInfo && (
@@ -288,8 +284,7 @@ export default function BillingPage() {
                 </CardContent>
               </Card>
             )}
-          </>
-        )}
+        </>
 
         {/* FAQ */}
         <div className="mt-12 text-center text-sm text-dark-500">
