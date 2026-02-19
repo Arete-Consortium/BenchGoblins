@@ -96,6 +96,64 @@ def apply_migration(conn: psycopg.Connection, version: int, path: Path) -> None:
     conn.commit()
 
 
+async def run_migrations_async(engine) -> int:
+    """
+    Run pending migrations using a SQLAlchemy async engine.
+
+    Called from the FastAPI lifespan after Base.metadata.create_all().
+    Returns the number of migrations applied.
+    """
+    import logging
+
+    from sqlalchemy import text as sa_text
+
+    _logger = logging.getLogger(__name__)
+
+    all_migrations = discover_migrations()
+    if not all_migrations:
+        _logger.info("No migration files found")
+        return 0
+
+    # Ensure tracking table exists
+    async with engine.begin() as conn:
+        await conn.execute(sa_text("""
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                filename TEXT NOT NULL,
+                applied_at TIMESTAMPTZ DEFAULT NOW()
+            )
+        """))
+
+    # Get already-applied versions
+    async with engine.begin() as conn:
+        result = await conn.execute(sa_text("SELECT version FROM schema_migrations"))
+        applied = {row[0] for row in result.fetchall()}
+
+    pending = [(v, p) for v, p in all_migrations if v not in applied]
+    if not pending:
+        _logger.info("All %d migrations already applied", len(applied))
+        return 0
+
+    # Apply each pending migration in its own transaction
+    for version, path in pending:
+        sql = path.read_text()
+        # Strip CONCURRENTLY — can't run inside a transaction
+        sql = sql.replace(" CONCURRENTLY ", " ")
+
+        async with engine.begin() as conn:
+            await conn.execute(sa_text(sql))
+            await conn.execute(
+                sa_text(
+                    "INSERT INTO schema_migrations (version, filename) VALUES (:v, :f)"
+                ),
+                {"v": version, "f": path.name},
+            )
+        _logger.info("Applied migration %d: %s", version, path.name)
+
+    _logger.info("%d migration(s) applied successfully", len(pending))
+    return len(pending)
+
+
 def show_status(conn: psycopg.Connection) -> None:
     """Show status of all migrations."""
     all_migrations = discover_migrations()

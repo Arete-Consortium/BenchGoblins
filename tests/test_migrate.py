@@ -5,9 +5,10 @@ Tests the pure logic — version extraction, ordering, discovery —
 without requiring a real PostgreSQL database.
 """
 
+import asyncio
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -16,6 +17,7 @@ from scripts.migrate import (
     discover_migrations,
     get_applied_versions,
     main,
+    run_migrations_async,
 )
 
 
@@ -53,12 +55,12 @@ class TestDiscoverMigrations:
     def test_discovers_real_migrations(self):
         """Should find the actual migration files in data/migrations/."""
         migrations = discover_migrations()
-        assert len(migrations) == 7
+        assert len(migrations) == 8
         # Should be sorted by version
         versions = [v for v, _ in migrations]
         assert versions == sorted(versions)
         assert versions[0] == 2
-        assert versions[-1] == 8
+        assert versions[-1] == 9
 
     def test_migrations_are_sql_files(self):
         migrations = discover_migrations()
@@ -173,3 +175,119 @@ class TestMainCLI:
                 from scripts.migrate import get_connection_url
 
                 get_connection_url()
+
+
+class TestRunMigrationsAsync:
+    """Tests for the async migration runner used in FastAPI lifespan."""
+
+    def _make_mock_engine(self, applied_versions: list[int] | None = None):
+        """Build a mock async engine with begin() context manager."""
+        if applied_versions is None:
+            applied_versions = []
+
+        mock_conn = AsyncMock()
+        # fetchall for SELECT version query
+        mock_result = MagicMock()
+        mock_result.fetchall.return_value = [(v,) for v in applied_versions]
+        mock_conn.execute = AsyncMock(return_value=mock_result)
+
+        mock_ctx = AsyncMock()
+        mock_ctx.__aenter__ = AsyncMock(return_value=mock_conn)
+        mock_ctx.__aexit__ = AsyncMock(return_value=False)
+
+        mock_engine = MagicMock()
+        mock_engine.begin = MagicMock(return_value=mock_ctx)
+        return mock_engine, mock_conn
+
+    def test_returns_zero_when_no_migration_files(self):
+        """Should return 0 when migrations directory is empty/missing."""
+        engine, _ = self._make_mock_engine()
+        with patch("scripts.migrate.discover_migrations", return_value=[]):
+            result = asyncio.get_event_loop().run_until_complete(
+                run_migrations_async(engine)
+            )
+        assert result == 0
+
+    def test_returns_zero_when_all_applied(self):
+        """Should return 0 when all migrations are already tracked."""
+        engine, _ = self._make_mock_engine(applied_versions=[2, 3, 4, 5, 6, 7, 8, 9])
+        result = asyncio.get_event_loop().run_until_complete(
+            run_migrations_async(engine)
+        )
+        assert result == 0
+
+    def test_applies_pending_migrations(self, tmp_path):
+        """Should apply only unapplied migrations and return count."""
+        # Create two fake migration files
+        m1 = tmp_path / "010_test_a.sql"
+        m1.write_text("CREATE TABLE test_a (id INT);")
+        m2 = tmp_path / "011_test_b.sql"
+        m2.write_text("CREATE TABLE test_b (id INT);")
+
+        fake_migrations = [(10, m1), (11, m2)]
+        # Version 10 already applied
+        engine, mock_conn = self._make_mock_engine(applied_versions=[10])
+
+        with patch("scripts.migrate.discover_migrations", return_value=fake_migrations):
+            result = asyncio.get_event_loop().run_until_complete(
+                run_migrations_async(engine)
+            )
+
+        # Only migration 11 should be applied
+        assert result == 1
+        # engine.begin() called 3 times: tracking table, get applied, apply migration 11
+        assert engine.begin.call_count == 3
+
+    def test_creates_tracking_table(self):
+        """Should execute CREATE TABLE IF NOT EXISTS for schema_migrations."""
+        engine, mock_conn = self._make_mock_engine(applied_versions=[2, 3, 4, 5, 6, 7, 8, 9])
+
+        asyncio.get_event_loop().run_until_complete(
+            run_migrations_async(engine)
+        )
+
+        # First call to execute should be CREATE TABLE
+        first_call_sql = str(mock_conn.execute.call_args_list[0][0][0])
+        assert "schema_migrations" in first_call_sql
+        assert "CREATE TABLE IF NOT EXISTS" in first_call_sql
+
+    def test_strips_concurrently_from_sql(self, tmp_path):
+        """Should strip CONCURRENTLY keyword from migration SQL."""
+        m1 = tmp_path / "020_with_concurrently.sql"
+        m1.write_text("CREATE INDEX CONCURRENTLY idx_test ON test (id);")
+
+        fake_migrations = [(20, m1)]
+        engine, mock_conn = self._make_mock_engine(applied_versions=[])
+
+        with patch("scripts.migrate.discover_migrations", return_value=fake_migrations):
+            asyncio.get_event_loop().run_until_complete(
+                run_migrations_async(engine)
+            )
+
+        # Find the execute call that ran the migration SQL (not tracking table or SELECT)
+        # The migration apply transaction is the third begin() call
+        # Within it, first execute is the SQL, second is the INSERT
+        migration_sql_call = mock_conn.execute.call_args_list[2]
+        sql_text = str(migration_sql_call[0][0])
+        assert "CONCURRENTLY" not in sql_text
+
+    def test_records_applied_version(self, tmp_path):
+        """Should INSERT into schema_migrations after applying."""
+        m1 = tmp_path / "030_record_test.sql"
+        m1.write_text("SELECT 1;")
+
+        fake_migrations = [(30, m1)]
+        engine, mock_conn = self._make_mock_engine(applied_versions=[])
+
+        with patch("scripts.migrate.discover_migrations", return_value=fake_migrations):
+            asyncio.get_event_loop().run_until_complete(
+                run_migrations_async(engine)
+            )
+
+        # The INSERT call should reference the version and filename
+        insert_call = mock_conn.execute.call_args_list[3]
+        insert_sql = str(insert_call[0][0])
+        assert "INSERT INTO schema_migrations" in insert_sql
+        params = insert_call[0][1]
+        assert params["v"] == 30
+        assert params["f"] == "030_record_test.sql"
