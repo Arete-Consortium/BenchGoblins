@@ -530,6 +530,56 @@ class APIClient {
     return response.data;
   }
 
+  // Yahoo Fantasy endpoints
+  async getYahooAuthUrl(redirectUri: string): Promise<{ auth_url: string; state: string }> {
+    const response = await this.client.get('/integrations/yahoo/auth', {
+      params: { redirect_uri: redirectUri },
+    });
+    return response.data;
+  }
+
+  async syncYahoo(
+    accessToken: string,
+    refreshToken: string,
+    expiresAt: number,
+    leagueKey: string,
+    teamKey: string,
+    sport = 'nfl'
+  ): Promise<{
+    yahoo_league_key: string;
+    yahoo_team_key: string;
+    sport: string;
+    roster_player_count: number;
+    synced_at: string;
+  }> {
+    const response = await this.client.post('/leagues/sync-yahoo', {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_at: expiresAt,
+      league_key: leagueKey,
+      team_key: teamKey,
+      sport,
+    });
+    return response.data;
+  }
+
+  async getMyYahoo(): Promise<{
+    connected: boolean;
+    yahoo_league_key: string | null;
+    yahoo_team_key: string | null;
+    sport: string | null;
+    roster_player_count: number;
+    synced_at: string | null;
+  }> {
+    const response = await this.client.get('/leagues/me/yahoo');
+    return response.data;
+  }
+
+  async disconnectYahoo(): Promise<{ disconnected: boolean }> {
+    const response = await this.client.delete('/leagues/me/yahoo');
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

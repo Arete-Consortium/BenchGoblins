@@ -895,6 +895,28 @@ async def make_decision(
         except Exception:
             logger.debug("Failed to inject ESPN roster context")
 
+    # Auto-inject Yahoo roster context if no Sleeper/ESPN and user has Yahoo connection
+    if not request.league_id and current_user and not (user and user.espn_league_id):
+        try:
+            if not user:
+                user = await _get_user_by_id(current_user["user_id"])
+            if user and user.yahoo_league_key and user.yahoo_roster_snapshot:
+                player_lines = []
+                for p in user.yahoo_roster_snapshot:
+                    player_lines.append(
+                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
+                    )
+                yahoo_ctx = (
+                    f"Yahoo League {user.yahoo_league_key} ({user.yahoo_sport or 'nfl'})\n\nUser's roster:\n"
+                    + "\n".join(player_lines)
+                )
+                if player_context:
+                    player_context = f"{player_context}\n\n{yahoo_ctx}"
+                else:
+                    player_context = yahoo_ctx
+        except Exception:
+            logger.debug("Failed to inject Yahoo roster context")
+
     # Classify query complexity
     complexity = classify_query(
         query=request.query,
@@ -1548,6 +1570,28 @@ async def make_decision_stream(
                     player_context = espn_ctx
         except Exception:
             logger.debug("Failed to inject ESPN roster context")
+
+    # Auto-inject Yahoo roster context if no Sleeper/ESPN and user has Yahoo connection
+    if not request.league_id and current_user and not (user and user.espn_league_id):
+        try:
+            if not user:
+                user = await _get_user_by_id(current_user["user_id"])
+            if user and user.yahoo_league_key and user.yahoo_roster_snapshot:
+                player_lines = []
+                for p in user.yahoo_roster_snapshot:
+                    player_lines.append(
+                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
+                    )
+                yahoo_ctx = (
+                    f"Yahoo League {user.yahoo_league_key} ({user.yahoo_sport or 'nfl'})\n\nUser's roster:\n"
+                    + "\n".join(player_lines)
+                )
+                if player_context:
+                    player_context = f"{player_context}\n\n{yahoo_ctx}"
+                else:
+                    player_context = yahoo_ctx
+        except Exception:
+            logger.debug("Failed to inject Yahoo roster context")
 
     # Capture metadata for persistence after streaming
     stream_metadata: dict = {}

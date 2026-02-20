@@ -16,6 +16,7 @@ from routes.auth import get_current_user
 from services.database import db_service
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.sleeper import sleeper_service
+from services.yahoo import yahoo_service
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
 
@@ -499,6 +500,152 @@ async def disconnect_espn(
         user.espn_sport = None
         user.espn_roster_snapshot = None
         user.espn_synced_at = None
+        session.add(user)
+        await session.commit()
+
+    return {"disconnected": True}
+
+
+# -------------------------------------------------------------------------
+# Yahoo Fantasy Integration (persist to user profile)
+# -------------------------------------------------------------------------
+
+
+class YahooSyncRequest(BaseModel):
+    """Request to persist Yahoo Fantasy connection to user profile."""
+
+    access_token: str = Field(..., description="Yahoo OAuth access token")
+    refresh_token: str = Field(..., description="Yahoo OAuth refresh token")
+    expires_at: float = Field(..., description="Token expiry (Unix timestamp)")
+    league_key: str = Field(..., description="Yahoo league key (e.g., '449.l.12345')")
+    team_key: str = Field(..., description="Yahoo team key (e.g., '449.l.12345.t.1')")
+    sport: str = Field(default="nfl", description="Sport: nfl, nba, mlb, nhl")
+
+
+class YahooSyncResponse(BaseModel):
+    """Response after syncing Yahoo connection to user profile."""
+
+    yahoo_league_key: str
+    yahoo_team_key: str
+    sport: str
+    roster_player_count: int
+    synced_at: str
+
+
+class MyYahooResponse(BaseModel):
+    """Current user's Yahoo connection status."""
+
+    connected: bool
+    yahoo_league_key: str | None = None
+    yahoo_team_key: str | None = None
+    sport: str | None = None
+    roster_player_count: int = 0
+    synced_at: str | None = None
+
+
+@router.post("/sync-yahoo", response_model=YahooSyncResponse)
+async def sync_yahoo(
+    request: YahooSyncRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Persist a Yahoo Fantasy connection to the authenticated user's profile.
+
+    Validates the access token, fetches roster snapshot, and stores on User
+    record so /decide can auto-inject Yahoo roster context.
+    """
+    # Fetch roster snapshot using the provided token
+    roster_snapshot = []
+    try:
+        players = await yahoo_service.get_team_roster(request.access_token, request.team_key)
+        roster_snapshot = [
+            {
+                "player_key": p.player_key,
+                "name": p.name,
+                "position": p.position,
+                "team": p.team_abbrev or "?",
+                "status": p.status,
+            }
+            for p in players
+        ]
+    except Exception:
+        # Roster fetch may fail but sync should still succeed
+        pass
+
+    now = datetime.now(UTC)
+
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.yahoo_access_token = request.access_token
+        user.yahoo_refresh_token = request.refresh_token
+        user.yahoo_token_expires_at = datetime.fromtimestamp(request.expires_at, tz=UTC)
+        user.yahoo_league_key = request.league_key
+        user.yahoo_team_key = request.team_key
+        user.yahoo_sport = request.sport
+        user.yahoo_roster_snapshot = roster_snapshot
+        user.yahoo_synced_at = now
+        session.add(user)
+        await session.commit()
+
+    return YahooSyncResponse(
+        yahoo_league_key=request.league_key,
+        yahoo_team_key=request.team_key,
+        sport=request.sport,
+        roster_player_count=len(roster_snapshot),
+        synced_at=now.isoformat(),
+    )
+
+
+@router.get("/me/yahoo", response_model=MyYahooResponse)
+async def get_my_yahoo(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Check if the authenticated user has a connected Yahoo Fantasy league.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    connected = user.yahoo_league_key is not None
+    return MyYahooResponse(
+        connected=connected,
+        yahoo_league_key=user.yahoo_league_key,
+        yahoo_team_key=user.yahoo_team_key,
+        sport=user.yahoo_sport,
+        roster_player_count=len(user.yahoo_roster_snapshot) if user.yahoo_roster_snapshot else 0,
+        synced_at=user.yahoo_synced_at.isoformat() if user.yahoo_synced_at else None,
+    )
+
+
+@router.delete("/me/yahoo")
+async def disconnect_yahoo_profile(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Disconnect the authenticated user's Yahoo Fantasy connection.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.yahoo_access_token = None
+        user.yahoo_refresh_token = None
+        user.yahoo_token_expires_at = None
+        user.yahoo_user_guid = None
+        user.yahoo_league_key = None
+        user.yahoo_team_key = None
+        user.yahoo_sport = None
+        user.yahoo_roster_snapshot = None
+        user.yahoo_synced_at = None
         session.add(user)
         await session.commit()
 

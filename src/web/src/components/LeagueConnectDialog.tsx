@@ -25,8 +25,8 @@ const SPORT_NAMES: Record<Sport, string> = {
   soccer: 'Soccer',
 };
 
-type Platform = 'sleeper' | 'espn';
-type Step = 'platform' | 'leagues' | 'roster' | 'espn-creds' | 'espn-done';
+type Platform = 'sleeper' | 'espn' | 'yahoo';
+type Step = 'platform' | 'leagues' | 'roster' | 'espn-creds' | 'espn-done' | 'yahoo-info';
 
 interface LeagueConnectDialogProps {
   open: boolean;
@@ -157,8 +157,13 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
               >
                 ESPN
               </Button>
-              <Button variant="outline" className="flex-1 opacity-50 cursor-not-allowed" size="sm" disabled>
-                Yahoo <span className="text-xs ml-1 text-dark-500">Soon</span>
+              <Button
+                className={cn('flex-1', platform === 'yahoo' ? 'bg-primary-600 hover:bg-primary-700' : '')}
+                variant={platform === 'yahoo' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPlatform('yahoo')}
+              >
+                Yahoo
               </Button>
             </div>
 
@@ -257,6 +262,38 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
                 <p className="text-xs text-dark-500 flex items-center gap-1.5">
                   <Shield className="h-3 w-3" />
                   Your ESPN cookies are stored securely and only used to fetch your roster.
+                </p>
+              </div>
+            )}
+
+            {platform === 'yahoo' && (
+              <div className="space-y-3">
+                <p className="text-sm text-dark-400">
+                  Connect your Yahoo Fantasy account via OAuth to sync your league and roster.
+                </p>
+                <p className="text-xs text-dark-500">
+                  Yahoo requires OAuth authentication. Click below to authorize BenchGoblin
+                  to read your fantasy leagues and rosters.
+                </p>
+
+                <Button
+                  onClick={async () => {
+                    try {
+                      const redirectUri = `${window.location.origin}/auth/yahoo/callback`;
+                      const { auth_url } = await api.getYahooAuthUrl(redirectUri);
+                      window.open(auth_url, '_blank', 'width=600,height=700');
+                    } catch {
+                      setEspnError('Failed to start Yahoo OAuth flow.');
+                    }
+                  }}
+                  className="w-full"
+                >
+                  Connect with Yahoo
+                </Button>
+
+                <p className="text-xs text-dark-500 flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" />
+                  We only request read access to your fantasy leagues and rosters.
                 </p>
               </div>
             )}
