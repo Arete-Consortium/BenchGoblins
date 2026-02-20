@@ -40,6 +40,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Import after path setup
+from models.database import Player  # noqa: E402
 from services.database import db_service  # noqa: E402
 from services.espn import espn_service  # noqa: E402
 from services.redis import redis_service  # noqa: E402
@@ -136,8 +137,7 @@ async def sync_player_stats(
 
         # Upsert player to database
         if db_service.is_configured:
-            # Build player record
-            _player_record = {  # noqa: F841 (TODO: pass to db_service.upsert_player)
+            player_record = {
                 "espn_id": player_id,
                 "name": name,
                 "team": player_data.get("team_name"),
@@ -151,8 +151,26 @@ async def sync_player_stats(
                 "headshot_url": player_data.get("headshot"),
             }
 
-            # Upsert player (would need to add this to db_service)
-            # For now, log success
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+
+            async with db_service.session() as session:
+                stmt = pg_insert(Player).values(**player_record)
+                stmt = stmt.on_conflict_do_update(
+                    index_elements=["espn_id"],
+                    set_={
+                        "name": stmt.excluded.name,
+                        "team": stmt.excluded.team,
+                        "team_abbrev": stmt.excluded.team_abbrev,
+                        "position": stmt.excluded.position,
+                        "jersey": stmt.excluded.jersey,
+                        "height": stmt.excluded.height,
+                        "weight": stmt.excluded.weight,
+                        "age": stmt.excluded.age,
+                        "headshot_url": stmt.excluded.headshot_url,
+                    },
+                )
+                await session.execute(stmt)
+
             logger.debug(f"Synced: {name} ({team})")
             return True
         else:
