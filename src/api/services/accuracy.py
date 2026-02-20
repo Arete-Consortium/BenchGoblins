@@ -2,11 +2,16 @@
 Decision Accuracy Tracking Service.
 
 Records outcomes for past decisions and computes accuracy metrics.
+Persists outcomes to the decisions table (actual_points_a, actual_points_b, feedback_at).
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
+
+from sqlalchemy import update
+from sqlalchemy.ext.asyncio import AsyncSession
 
 
 @dataclass
@@ -80,20 +85,60 @@ class AccuracyTracker:
     """
     Tracks decision outcomes and computes accuracy metrics.
 
-    Designed to work with in-memory decision store (list of dicts)
-    or database Decision rows.
+    Persists outcomes to the decisions table via SQLAlchemy async sessions.
     """
 
-    def __init__(self):
-        # In-memory store for portfolio demo; production would use DB
-        self._outcomes: dict[str, DecisionOutcome] = {}
+    async def record_outcome(self, db: AsyncSession, outcome: DecisionOutcome) -> bool:
+        """Record the actual outcome for a decision by updating the decisions row."""
+        from models.database import Decision
 
-    def record_outcome(self, outcome: DecisionOutcome) -> None:
-        """Record the actual outcome for a decision."""
-        self._outcomes[outcome.decision_id] = outcome
+        # Determine outcome label
+        actual_outcome = None
+        if outcome.actual_points_a is not None and outcome.actual_points_b is not None:
+            diff = abs(outcome.actual_points_a - outcome.actual_points_b)
+            if diff < 1.0:
+                actual_outcome = "push"
+            elif outcome.actual_points_a > outcome.actual_points_b:
+                actual_outcome = "a_higher"
+            else:
+                actual_outcome = "b_higher"
 
-    def get_outcome(self, decision_id: str) -> DecisionOutcome | None:
-        return self._outcomes.get(decision_id)
+        stmt = (
+            update(Decision)
+            .where(Decision.id == outcome.decision_id)
+            .values(
+                actual_points_a=outcome.actual_points_a,
+                actual_points_b=outcome.actual_points_b,
+                actual_outcome=actual_outcome,
+                feedback_at=datetime.now(UTC),
+            )
+        )
+        result = await db.execute(stmt)
+        return result.rowcount > 0
+
+    async def get_outcome(self, db: AsyncSession, decision_id: str) -> DecisionOutcome | None:
+        """Retrieve the recorded outcome for a decision from the DB."""
+        from sqlalchemy import select
+
+        from models.database import Decision
+
+        stmt = select(
+            Decision.actual_points_a,
+            Decision.actual_points_b,
+            Decision.actual_outcome,
+            Decision.feedback_at,
+        ).where(Decision.id == decision_id)
+        result = await db.execute(stmt)
+        row = result.first()
+
+        if not row or (row.actual_points_a is None and row.actual_points_b is None):
+            return None
+
+        return DecisionOutcome(
+            decision_id=decision_id,
+            actual_points_a=float(row.actual_points_a) if row.actual_points_a is not None else None,
+            actual_points_b=float(row.actual_points_b) if row.actual_points_b is not None else None,
+        )
 
     def compute_metrics(self, decisions: list[dict]) -> AccuracyMetrics:
         """
@@ -101,19 +146,20 @@ class AccuracyTracker:
 
         Each decision dict should have:
         - id, sport, confidence, source, decision, player_a_name, player_b_name
+        - actual_points_a, actual_points_b (from DB, included in the dict)
         """
         metrics = AccuracyMetrics()
         metrics.total_decisions = len(decisions)
 
         for dec in decisions:
-            dec_id = str(dec.get("id", ""))
-            outcome = self._outcomes.get(dec_id)
-            if not outcome or (outcome.actual_points_a is None and outcome.actual_points_b is None):
+            pts_a = dec.get("actual_points_a")
+            pts_b = dec.get("actual_points_b")
+            if pts_a is None and pts_b is None:
                 continue
 
             metrics.decisions_with_outcomes += 1
-            pts_a = outcome.actual_points_a or 0.0
-            pts_b = outcome.actual_points_b or 0.0
+            pts_a = float(pts_a or 0.0)
+            pts_b = float(pts_b or 0.0)
 
             # Determine which player was recommended
             decision_text = dec.get("decision", "")
