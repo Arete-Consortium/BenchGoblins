@@ -194,8 +194,8 @@ npx eas-cli submit --platform ios
    - Settings/subscription screen
 2. **App Description** — 4000 chars max, focus on fantasy sports decision-making
 3. **Keywords** — 100 chars: "fantasy,sports,nba,nfl,mlb,nhl,soccer,fpl,start,sit,roster,decision"
-4. **Privacy URL** — `https://aretedriver.github.io/BenchGoblins/legal/privacy-policy.html`
-5. **Support URL** — `https://github.com/AreteDriver/BenchGoblins/issues`
+4. **Privacy URL** — `https://arete-consortium.github.io/BenchGoblins/legal/privacy-policy.html`
+5. **Support URL** — `https://github.com/Arete-Consortium/BenchGoblins/issues`
 6. **App Category** — Sports
 7. **Age Rating** — 4+ (no objectionable content)
 

@@ -85,7 +85,7 @@ Utilities
 
 ## Support URL
 
-https://github.com/AreteDriver/BenchGoblins/issues
+https://github.com/Arete-Consortium/BenchGoblins/issues
 
 ## Privacy Policy URL
 
