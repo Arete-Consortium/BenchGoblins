@@ -1,8 +1,8 @@
 'use client';
 
 import { cn, formatRelativeTime, getConfidenceColor } from '@/lib/utils';
-import { Message, DecisionResponse, StartSitDetailsData, TradeDetailsData, DraftDetailsData } from '@/types';
-import { Bot, User, TrendingUp, TrendingDown, Minus, ArrowRightLeft, Trophy, Zap } from 'lucide-react';
+import { Message, DecisionResponse, StartSitDetailsData, TradeDetailsData, DraftDetailsData, WaiverDetailsData } from '@/types';
+import { Bot, User, TrendingUp, TrendingDown, Minus, ArrowRightLeft, Trophy, Zap, UserPlus, UserMinus, AlertCircle } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: Message;
@@ -25,15 +25,21 @@ function IndexBar({ label, value, max = 100 }: { label: string; value: number; m
 }
 
 function isTradeDetails(
-  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData
+  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData | WaiverDetailsData
 ): details is TradeDetailsData {
   return 'side_giving' in details;
 }
 
 function isDraftDetails(
-  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData
+  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData | WaiverDetailsData
 ): details is DraftDetailsData {
   return 'ranked_players' in details;
+}
+
+function isWaiverDetails(
+  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData | WaiverDetailsData
+): details is WaiverDetailsData {
+  return 'recommendations' in details && 'drop_candidates' in details;
 }
 
 function TradeDetails({ decision }: { decision: DecisionResponse }) {
@@ -200,8 +206,114 @@ function DraftDetails({ decision }: { decision: DecisionResponse }) {
   );
 }
 
+function WaiverDetails({ decision }: { decision: DecisionResponse }) {
+  const details = decision.details as WaiverDetailsData;
+
+  return (
+    <div className="mt-4 p-4 bg-dark-800/50 rounded-lg border border-dark-700">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <UserPlus className="w-4 h-4 text-primary-400" />
+          <span className="font-semibold text-primary-300">
+            Waiver Recommendations
+          </span>
+          <span className={cn('text-xs', getConfidenceColor(decision.confidence))}>
+            {decision.confidence.toUpperCase()}
+          </span>
+        </div>
+        <span className="text-xs text-dark-400">
+          via {decision.source === 'local' ? 'Local Engine' : 'Claude AI'}
+        </span>
+      </div>
+
+      {/* Position needs badges */}
+      {details.position_needs.length > 0 && (
+        <div className="flex items-center gap-2 mb-4">
+          <AlertCircle className="w-3.5 h-3.5 text-yellow-400" />
+          <span className="text-xs text-dark-400">Needs:</span>
+          <div className="flex gap-1.5">
+            {details.position_needs.map((pos) => (
+              <span
+                key={pos}
+                className="text-xs px-2 py-0.5 rounded-full bg-yellow-500/15 text-yellow-400 font-medium"
+              >
+                {pos}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pickup recommendations */}
+      {details.recommendations.length > 0 && (
+        <div className="mb-4">
+          <div className="text-xs font-medium text-dark-400 uppercase mb-2 flex items-center gap-1.5">
+            <UserPlus className="w-3 h-3" /> Add
+          </div>
+          <div className="space-y-2">
+            {details.recommendations.map((r, i) => (
+              <div
+                key={r.name}
+                className={cn(
+                  'p-3 rounded-lg',
+                  i === 0
+                    ? 'bg-green-500/10 border border-green-500/30'
+                    : 'bg-dark-700/50'
+                )}
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className={cn(
+                      'text-sm font-bold w-5 text-center',
+                      i === 0 ? 'text-green-400' : 'text-dark-400'
+                    )}>
+                      {r.priority}
+                    </span>
+                    <span className="font-semibold text-sm">{r.name}</span>
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-dark-600 text-dark-300">
+                      {r.position}
+                    </span>
+                  </div>
+                  <span className="text-xs text-dark-400">{r.team}</span>
+                </div>
+                <p className="text-xs text-dark-300 ml-7">{r.rationale}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Drop candidates */}
+      {details.drop_candidates.length > 0 && (
+        <div>
+          <div className="text-xs font-medium text-dark-400 uppercase mb-2 flex items-center gap-1.5">
+            <UserMinus className="w-3 h-3" /> Consider Dropping
+          </div>
+          <div className="space-y-2">
+            {details.drop_candidates.map((d) => (
+              <div key={d.name} className="p-3 rounded-lg bg-red-500/5 border border-red-500/20">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="font-semibold text-sm text-red-300">{d.name}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-dark-600 text-dark-300">
+                    {d.position}
+                  </span>
+                </div>
+                <p className="text-xs text-dark-400">{d.reason}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DecisionDetails({ decision }: { decision: DecisionResponse }) {
   if (!decision.details) return null;
+
+  if (isWaiverDetails(decision.details)) {
+    return <WaiverDetails decision={decision} />;
+  }
 
   if (isDraftDetails(decision.details)) {
     return <DraftDetails decision={decision} />;

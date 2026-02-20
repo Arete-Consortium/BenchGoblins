@@ -10,6 +10,8 @@ import type {
   RiskMode,
   Confidence,
   DraftDetailsData,
+  WaiverCandidate,
+  WaiverDetailsData,
   SleeperConnectResponse,
   SleeperLeague,
   RosterResponse,
@@ -342,6 +344,27 @@ class APIClient {
   }> {
     await this.ensureSession();
     const response = await this.client.post('/draft', request);
+    return response.data;
+  }
+
+  // Waiver endpoint
+  async waiverRecommend(request: {
+    sport: Sport;
+    risk_mode: RiskMode;
+    query: string;
+    league_id: string;
+    sleeper_user_id: string;
+    position_filter?: string;
+  }): Promise<{
+    recommendations: WaiverCandidate[];
+    drop_candidates: { name: string; position: string; reason: string }[];
+    position_needs: string[];
+    confidence: Confidence;
+    rationale: string;
+    source: 'claude';
+  }> {
+    await this.ensureSession();
+    const response = await this.client.post('/waiver/recommend', request);
     return response.data;
   }
 

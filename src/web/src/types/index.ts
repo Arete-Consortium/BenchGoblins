@@ -76,6 +76,21 @@ export interface DraftDetailsData {
   position_needs: string[] | null;
 }
 
+// Waiver wire types
+export interface WaiverCandidate {
+  name: string;
+  position: string;
+  team: string;
+  rationale: string;
+  priority: number;
+}
+
+export interface WaiverDetailsData {
+  recommendations: WaiverCandidate[];
+  drop_candidates: { name: string; position: string; reason: string }[];
+  position_needs: string[];
+}
+
 // Decision request to API
 export interface DecisionRequest {
   sport: Sport;
@@ -135,7 +150,7 @@ export interface DecisionResponse {
   confidence: Confidence;
   rationale: string;
   source: 'local' | 'claude';
-  details?: StartSitDetailsData | TradeDetailsData | DraftDetailsData;
+  details?: StartSitDetailsData | TradeDetailsData | DraftDetailsData | WaiverDetailsData;
 }
 
 // Chat message
