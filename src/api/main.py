@@ -11,6 +11,7 @@ import sys
 import time
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from enum import Enum
 
 # Add parent directory to path for imports
@@ -913,7 +914,7 @@ async def make_decision(
                 else:
                     player_context = league_ctx
         except Exception:
-            logger.debug("Failed to fetch Sleeper league context for %s", request.league_id)
+            logger.warning("Failed to fetch Sleeper league context for %s", request.league_id)
 
     # Auto-inject ESPN roster context if no Sleeper and user has ESPN connection
     if not request.league_id and current_user:
@@ -936,7 +937,7 @@ async def make_decision(
                 else:
                     player_context = espn_ctx
         except Exception:
-            logger.debug("Failed to inject ESPN roster context")
+            logger.warning("Failed to inject ESPN roster context")
 
     # Auto-inject Yahoo roster context if no Sleeper/ESPN and user has Yahoo connection
     if not request.league_id and current_user and not (user and user.espn_league_id):
@@ -958,7 +959,7 @@ async def make_decision(
                 else:
                     player_context = yahoo_ctx
         except Exception:
-            logger.debug("Failed to inject Yahoo roster context")
+            logger.warning("Failed to inject Yahoo roster context")
 
     # Classify query complexity
     complexity = classify_query(
@@ -1728,7 +1729,7 @@ async def make_decision_stream(
                 else:
                     player_context = league_ctx
         except Exception:
-            logger.debug("Failed to fetch Sleeper league context for %s", request.league_id)
+            logger.warning("Failed to fetch Sleeper league context for %s", request.league_id)
 
     # Auto-inject ESPN roster context if no Sleeper and user has ESPN connection
     if not request.league_id and current_user:
@@ -1751,7 +1752,7 @@ async def make_decision_stream(
                 else:
                     player_context = espn_ctx
         except Exception:
-            logger.debug("Failed to inject ESPN roster context")
+            logger.warning("Failed to inject ESPN roster context")
 
     # Auto-inject Yahoo roster context if no Sleeper/ESPN and user has Yahoo connection
     if not request.league_id and current_user and not (user and user.espn_league_id):
@@ -1773,7 +1774,7 @@ async def make_decision_stream(
                 else:
                     player_context = yahoo_ctx
         except Exception:
-            logger.debug("Failed to inject Yahoo roster context")
+            logger.warning("Failed to inject Yahoo roster context")
 
     # Capture metadata for persistence after streaming
     stream_metadata: dict = {}
@@ -2166,7 +2167,7 @@ async def set_budget(request: BudgetConfigRequest, _admin=Depends(require_admin_
             now = datetime.now(UTC)
             if config:
                 # Update existing
-                config.monthly_limit_usd = request.monthly_limit_usd  # type: ignore[assignment]
+                config.monthly_limit_usd = Decimal(str(request.monthly_limit_usd))
                 config.alert_threshold_pct = request.alert_threshold_pct
                 config.alerts_enabled = request.alerts_enabled
                 config.slack_webhook_url = request.slack_webhook_url
@@ -2175,7 +2176,7 @@ async def set_budget(request: BudgetConfigRequest, _admin=Depends(require_admin_
             else:
                 # Create new
                 config = BudgetConfig(
-                    monthly_limit_usd=request.monthly_limit_usd,  # type: ignore[arg-type]
+                    monthly_limit_usd=Decimal(str(request.monthly_limit_usd)),
                     alert_threshold_pct=request.alert_threshold_pct,
                     alerts_enabled=request.alerts_enabled,
                     slack_webhook_url=request.slack_webhook_url,

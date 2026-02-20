@@ -29,6 +29,7 @@ def authed_client(test_client):
 def _mock_db_session():
     """Create a mock async db session context manager."""
     mock_session = AsyncMock()
+    mock_session.add = MagicMock()  # .add() is synchronous in SQLAlchemy
     mock_cm = AsyncMock()
     mock_cm.__aenter__ = AsyncMock(return_value=mock_session)
     mock_cm.__aexit__ = AsyncMock(return_value=False)

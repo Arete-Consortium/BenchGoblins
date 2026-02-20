@@ -18,6 +18,12 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+
+try:
+    from redis.exceptions import RedisError
+except ImportError:  # redis not installed locally
+    RedisError = Exception  # type: ignore[assignment,misc]
 
 logger = logging.getLogger(__name__)
 
@@ -146,7 +152,7 @@ class NotificationScheduler:
                     """)
                 )
                 rows = result.all()
-        except Exception:
+        except (SQLAlchemyError, AttributeError):
             logger.exception("Failed to query eligible users for %s", notification_type)
             return []
 
@@ -184,7 +190,7 @@ class NotificationScheduler:
         key = f"notif:cooldown:{user_id}:{notif_type}:{reference_id}"
         try:
             return await redis_service._client.exists(key) > 0
-        except Exception:
+        except RedisError:
             return False
 
     async def _set_cooldown(self, user_id: str, notif_type: str, reference_id: str) -> None:
@@ -197,7 +203,7 @@ class NotificationScheduler:
         key = f"notif:cooldown:{user_id}:{notif_type}:{reference_id}"
         try:
             await redis_service._client.setex(key, NOTIFICATION_COOLDOWN, "1")
-        except Exception:
+        except RedisError:
             pass
 
     # =========================================================================
@@ -222,7 +228,7 @@ class NotificationScheduler:
                     """),
                     {"user_id": user_id, "type": notification_type, "ref_id": reference_id},
                 )
-        except Exception:
+        except (SQLAlchemyError, AttributeError):
             logger.exception("Failed to log notification")
 
     # =========================================================================
@@ -264,7 +270,7 @@ class NotificationScheduler:
 
                     try:
                         cached_status = await redis_service._client.get(cache_key) or ""
-                    except Exception:
+                    except RedisError:
                         cached_status = ""
 
                     if current_status != cached_status and current_status:
@@ -287,7 +293,7 @@ class NotificationScheduler:
                         await redis_service._client.setex(
                             cache_key, INJURY_CACHE_TTL, current_status
                         )
-                    except Exception:
+                    except RedisError:
                         pass
 
             except Exception:
@@ -331,7 +337,7 @@ class NotificationScheduler:
                 # Check if already reminded today
                 try:
                     already_sent = await redis_service._client.exists(sent_key) > 0
-                except Exception:
+                except RedisError:
                     already_sent = False
 
                 if already_sent:
@@ -372,7 +378,7 @@ class NotificationScheduler:
 
                     try:
                         await redis_service._client.setex(sent_key, LINEUP_SENT_TTL, "1")
-                    except Exception:
+                    except RedisError:
                         pass
 
                     sent_count += 1
@@ -423,7 +429,7 @@ class NotificationScheduler:
             try:
                 cached = await redis_service._client.get(cache_key)
                 previous_ids = json.loads(cached) if cached else []
-            except Exception:
+            except (RedisError, json.JSONDecodeError):
                 previous_ids = []
 
             # Find new entries
@@ -469,7 +475,7 @@ class NotificationScheduler:
                 await redis_service._client.setex(
                     cache_key, TRENDING_CACHE_TTL, json.dumps(current_ids)
                 )
-            except Exception:
+            except RedisError:
                 pass
 
         except Exception:
