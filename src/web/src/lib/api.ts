@@ -459,6 +459,36 @@ class APIClient {
     return response.data;
   }
 
+  // Accuracy endpoints
+  async getAccuracyMetrics(
+    sport?: string,
+    limit = 500
+  ): Promise<{
+    total_decisions: number;
+    decisions_with_outcomes: number;
+    correct_decisions: number;
+    incorrect_decisions: number;
+    pushes: number;
+    accuracy_pct: number;
+    coverage_pct: number;
+    by_confidence: Record<string, { total: number; correct: number; accuracy: number }>;
+    by_source: Record<string, { total: number; correct: number }>;
+    by_sport: Record<string, { total: number; correct: number }>;
+  }> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (sport) params.append('sport', sport);
+    const response = await this.client.get(`/accuracy/metrics?${params}`);
+    return response.data;
+  }
+
+  async syncOutcomes(daysBack = 2, sport?: string): Promise<{ status: string; total_decisions_processed: number; total_outcomes_recorded: number }> {
+    const response = await this.client.post('/accuracy/sync', {
+      days_back: daysBack,
+      ...(sport && { sport }),
+    });
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');
