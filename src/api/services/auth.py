@@ -303,9 +303,7 @@ async def blacklist_token(token: str) -> None:
     """
     if _blacklist_redis:
         try:
-            await _blacklist_redis.setex(
-                f"{_BLACKLIST_PREFIX}{token}", _BLACKLIST_TTL, "1"
-            )
+            await _blacklist_redis.setex(f"{_BLACKLIST_PREFIX}{token}", _BLACKLIST_TTL, "1")
             return
         except Exception as e:
             logger.warning("Redis blacklist write failed, using in-memory: %s", e)

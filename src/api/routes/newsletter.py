@@ -87,6 +87,7 @@ class CountResponse(BaseModel):
 # Simple IP-based rate limiting for newsletter (no session required)
 # ---------------------------------------------------------------------------
 
+
 def _get_client_ip(request: Request) -> str:
     """Extract real client IP, respecting X-Forwarded-For from Fly.io proxy."""
     forwarded = request.headers.get("X-Forwarded-For")
