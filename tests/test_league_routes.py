@@ -1,10 +1,11 @@
-"""Tests for league integration routes (Sleeper)."""
+"""Tests for league integration routes (Sleeper + ESPN)."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from services.espn_fantasy import RosterPlayer as ESPNRosterPlayer
 from services.sleeper import SleeperLeague, SleeperPlayer, SleeperRoster, SleeperUser
 
 VALID_USER = {
@@ -20,6 +21,7 @@ VALID_USER = {
 def authed_client(test_client):
     """Test client with auth bypassed."""
     from api.main import app
+
     from routes.auth import get_current_user
 
     app.dependency_overrides[get_current_user] = lambda: VALID_USER
@@ -155,9 +157,7 @@ class TestConnectSleeper:
     @patch("routes.leagues.sleeper_service")
     def test_connect_nba(self, mock_svc, authed_client):
         mock_svc.get_user = AsyncMock(return_value=_make_sleeper_user())
-        mock_svc.get_user_leagues = AsyncMock(
-            return_value=[_make_sleeper_league(sport="nba")]
-        )
+        mock_svc.get_user_leagues = AsyncMock(return_value=[_make_sleeper_league(sport="nba")])
 
         response = authed_client.post(
             "/leagues/connect",
@@ -219,9 +219,7 @@ class TestGetRoster:
 
     @patch("routes.leagues.sleeper_service")
     def test_roster_with_reserve(self, mock_svc, authed_client):
-        mock_svc.get_user_roster = AsyncMock(
-            return_value=_make_sleeper_roster(reserve=["p3"])
-        )
+        mock_svc.get_user_roster = AsyncMock(return_value=_make_sleeper_roster(reserve=["p3"]))
         mock_svc.get_players_by_ids = AsyncMock(
             return_value=[
                 _make_sleeper_player("p1"),
@@ -299,7 +297,7 @@ def _mock_db_session(mock_user=None):
 
 
 def _make_mock_user(**overrides):
-    """Create a mock User ORM object with Sleeper columns."""
+    """Create a mock User ORM object with Sleeper and ESPN columns."""
     user = MagicMock()
     user.id = overrides.get("id", 1)
     user.sleeper_username = overrides.get("sleeper_username", None)
@@ -307,6 +305,14 @@ def _make_mock_user(**overrides):
     user.sleeper_league_id = overrides.get("sleeper_league_id", None)
     user.roster_snapshot = overrides.get("roster_snapshot", None)
     user.sleeper_synced_at = overrides.get("sleeper_synced_at", None)
+    # ESPN columns
+    user.espn_swid = overrides.get("espn_swid", None)
+    user.espn_s2 = overrides.get("espn_s2", None)
+    user.espn_league_id = overrides.get("espn_league_id", None)
+    user.espn_team_id = overrides.get("espn_team_id", None)
+    user.espn_sport = overrides.get("espn_sport", None)
+    user.espn_roster_snapshot = overrides.get("espn_roster_snapshot", None)
+    user.espn_synced_at = overrides.get("espn_synced_at", None)
     return user
 
 
@@ -477,4 +483,201 @@ class TestDisconnectLeague:
 
     def test_disconnect_unauthenticated(self, test_client):
         response = test_client.delete("/leagues/me")
+        assert response.status_code == 401
+
+
+# -------------------------------------------------------------------------
+# ESPN Fantasy Integration Tests
+# -------------------------------------------------------------------------
+
+
+def _make_espn_roster_player(**overrides):
+    defaults = {
+        "player_id": "12345",
+        "espn_id": "12345",
+        "name": "Josh Allen",
+        "position": "QB",
+        "team": "BUF",
+        "lineup_slot": "STARTER",
+        "acquisition_type": "DRAFT",
+        "projected_points": None,
+        "actual_points": None,
+    }
+    defaults.update(overrides)
+    return ESPNRosterPlayer(**defaults)
+
+
+# -------------------------------------------------------------------------
+# POST /leagues/sync-espn
+# -------------------------------------------------------------------------
+
+
+class TestSyncESPN:
+    @patch("routes.leagues.db_service")
+    @patch("routes.leagues.espn_fantasy_service")
+    def test_sync_espn_success(self, mock_espn, mock_db_svc, authed_client):
+        mock_espn.verify_credentials = AsyncMock(return_value=True)
+        mock_espn.get_roster = AsyncMock(
+            return_value=[
+                _make_espn_roster_player(player_id="1", name="Josh Allen", position="QB"),
+                _make_espn_roster_player(player_id="2", name="Stefon Diggs", position="WR"),
+            ]
+        )
+
+        mock_db, mock_session = _mock_db_session(_make_mock_user())
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.post(
+            "/leagues/sync-espn",
+            json={
+                "swid": "{ABCD-1234}",
+                "espn_s2": "long_s2_cookie",
+                "league_id": "espn_lg_1",
+                "team_id": "3",
+                "sport": "nfl",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["espn_league_id"] == "espn_lg_1"
+        assert data["espn_team_id"] == "3"
+        assert data["sport"] == "nfl"
+        assert data["roster_player_count"] == 2
+        assert data["synced_at"]
+        mock_session.commit.assert_called_once()
+
+    @patch("routes.leagues.db_service")
+    @patch("routes.leagues.espn_fantasy_service")
+    def test_sync_espn_invalid_credentials(self, mock_espn, mock_db_svc, authed_client):
+        mock_espn.verify_credentials = AsyncMock(return_value=False)
+
+        response = authed_client.post(
+            "/leagues/sync-espn",
+            json={
+                "swid": "{INVALID}",
+                "espn_s2": "bad_cookie",
+                "league_id": "lg_1",
+                "team_id": "3",
+            },
+        )
+
+        assert response.status_code == 401
+        assert "Invalid ESPN credentials" in response.json()["detail"]
+
+    @patch("routes.leagues.db_service")
+    @patch("routes.leagues.espn_fantasy_service")
+    def test_sync_espn_empty_roster(self, mock_espn, mock_db_svc, authed_client):
+        mock_espn.verify_credentials = AsyncMock(return_value=True)
+        mock_espn.get_roster = AsyncMock(return_value=[])
+
+        mock_db, _ = _mock_db_session(_make_mock_user())
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.post(
+            "/leagues/sync-espn",
+            json={
+                "swid": "{ABCD-1234}",
+                "espn_s2": "long_s2_cookie",
+                "league_id": "espn_lg_1",
+                "team_id": "3",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["roster_player_count"] == 0
+
+    def test_sync_espn_unauthenticated(self, test_client):
+        response = test_client.post(
+            "/leagues/sync-espn",
+            json={
+                "swid": "{ABCD}",
+                "espn_s2": "cookie",
+                "league_id": "lg_1",
+                "team_id": "3",
+            },
+        )
+        assert response.status_code == 401
+
+
+# -------------------------------------------------------------------------
+# GET /leagues/me/espn
+# -------------------------------------------------------------------------
+
+
+class TestGetMyESPN:
+    @patch("routes.leagues.db_service")
+    def test_connected_espn(self, mock_db_svc, authed_client):
+        synced = datetime(2025, 2, 1, 12, 0, 0, tzinfo=UTC)
+        mock_user = _make_mock_user(
+            espn_swid="{ABCD}",
+            espn_s2="s2_cookie",
+            espn_league_id="espn_lg_1",
+            espn_team_id="3",
+            espn_sport="nfl",
+            espn_roster_snapshot=[{"player_id": "1"}, {"player_id": "2"}],
+            espn_synced_at=synced,
+        )
+        mock_db, _ = _mock_db_session(mock_user)
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.get("/leagues/me/espn")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connected"] is True
+        assert data["espn_league_id"] == "espn_lg_1"
+        assert data["espn_team_id"] == "3"
+        assert data["sport"] == "nfl"
+        assert data["roster_player_count"] == 2
+        assert data["synced_at"] is not None
+
+    @patch("routes.leagues.db_service")
+    def test_no_espn_connection(self, mock_db_svc, authed_client):
+        mock_db, _ = _mock_db_session(_make_mock_user())
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.get("/leagues/me/espn")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connected"] is False
+        assert data["espn_league_id"] is None
+        assert data["roster_player_count"] == 0
+
+    def test_espn_unauthenticated(self, test_client):
+        response = test_client.get("/leagues/me/espn")
+        assert response.status_code == 401
+
+
+# -------------------------------------------------------------------------
+# DELETE /leagues/me/espn
+# -------------------------------------------------------------------------
+
+
+class TestDisconnectESPN:
+    @patch("routes.leagues.db_service")
+    def test_disconnect_espn_success(self, mock_db_svc, authed_client):
+        mock_user = _make_mock_user(
+            espn_swid="{ABCD}",
+            espn_league_id="espn_lg_1",
+        )
+        mock_db, mock_session = _mock_db_session(mock_user)
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.delete("/leagues/me/espn")
+
+        assert response.status_code == 200
+        assert response.json() == {"disconnected": True}
+        assert mock_user.espn_swid is None
+        assert mock_user.espn_s2 is None
+        assert mock_user.espn_league_id is None
+        assert mock_user.espn_team_id is None
+        assert mock_user.espn_sport is None
+        assert mock_user.espn_roster_snapshot is None
+        assert mock_user.espn_synced_at is None
+        mock_session.commit.assert_called_once()
+
+    def test_disconnect_espn_unauthenticated(self, test_client):
+        response = test_client.delete("/leagues/me/espn")
         assert response.status_code == 401

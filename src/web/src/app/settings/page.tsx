@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { Header } from '@/components/layout/Header';
@@ -18,7 +18,9 @@ import {
   Sun,
   Link2,
   Unlink,
+  Loader2,
 } from 'lucide-react';
+import api from '@/lib/api';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useAuthStore } from '@/stores/authStore';
 import { LeagueConnectDialog } from '@/components/LeagueConnectDialog';
@@ -51,6 +53,42 @@ export default function SettingsPage() {
   const [notifications, setNotifications] = useState(true);
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
 
+  // ESPN connection status
+  const [espnStatus, setEspnStatus] = useState<{
+    connected: boolean;
+    espn_league_id: string | null;
+    sport: string | null;
+    roster_player_count: number;
+  } | null>(null);
+  const [espnLoading, setEspnLoading] = useState(false);
+
+  const fetchEspnStatus = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await api.getMyESPN();
+      setEspnStatus(data);
+    } catch {
+      // Silently ignore — user may not have ESPN
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchEspnStatus();
+  }, [fetchEspnStatus]);
+
+  const handleDisconnectESPN = async () => {
+    if (!confirm('Disconnect your ESPN league? You can reconnect anytime.')) return;
+    setEspnLoading(true);
+    try {
+      await api.disconnectESPN();
+      setEspnStatus({ connected: false, espn_league_id: null, sport: null, roster_player_count: 0 });
+    } catch {
+      // ignore
+    } finally {
+      setEspnLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -81,52 +119,90 @@ export default function SettingsPage() {
               </div>
             </SettingsSection>
 
-            {/* Connected League */}
+            {/* Connected Leagues */}
             {isAuthenticated && (
               <SettingsSection
-                title="Connected League"
-                description="Sleeper league synced to your profile for personalized recommendations"
+                title="Connected Leagues"
+                description="Fantasy platforms synced to your profile for personalized recommendations"
               >
-                {connection && selectedLeagueIds[sport] ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-3 p-4 bg-dark-700/50 rounded-lg">
-                      <Link2 className="w-5 h-5 text-primary-400 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium">{connection.sleeperUsername}</div>
-                        <div className="text-sm text-dark-400 truncate">
-                          League: {selectedLeagueIds[sport]}
+                <div className="space-y-4">
+                  {/* Sleeper Connection */}
+                  <div>
+                    <h3 className="text-sm font-medium text-dark-300 mb-2">Sleeper</h3>
+                    {connection && selectedLeagueIds[sport] ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 p-3 bg-dark-700/50 rounded-lg">
+                          <Link2 className="w-4 h-4 text-primary-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium">{connection.sleeperUsername}</div>
+                            <div className="text-xs text-dark-400 truncate">
+                              League: {selectedLeagueIds[sport]}
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-primary-600/20 text-primary-400 text-xs">
+                            Connected
+                          </span>
                         </div>
+                        <button
+                          onClick={() => {
+                            if (confirm('Disconnect your Sleeper league? You can reconnect anytime.')) {
+                              disconnect();
+                            }
+                          }}
+                          className="flex items-center gap-2 text-xs text-dark-400 hover:text-red-400 transition-all"
+                        >
+                          <Unlink className="w-3.5 h-3.5" />
+                          Disconnect
+                        </button>
                       </div>
-                      <span className="px-2 py-1 rounded-full bg-primary-600/20 text-primary-400 text-xs">
-                        Connected
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (confirm('Disconnect your Sleeper league? You can reconnect anytime.')) {
-                          disconnect();
-                        }
-                      }}
-                      className="flex items-center gap-2 text-sm text-dark-400 hover:text-red-400 transition-all"
-                    >
-                      <Unlink className="w-4 h-4" />
-                      Disconnect League
-                    </button>
+                    ) : (
+                      <button
+                        onClick={() => setLeagueDialogOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-700/50 border border-dark-700 text-sm text-dark-300 hover:border-primary-600 hover:text-primary-400 transition-all w-full"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        Connect Sleeper
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <p className="text-sm text-dark-400">
-                      No league connected. Connect your Sleeper league for roster-aware decisions.
-                    </p>
-                    <button
-                      onClick={() => setLeagueDialogOpen(true)}
-                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-500 transition-all"
-                    >
-                      <Link2 className="w-4 h-4" />
-                      Connect League
-                    </button>
+
+                  {/* ESPN Connection */}
+                  <div>
+                    <h3 className="text-sm font-medium text-dark-300 mb-2">ESPN Fantasy</h3>
+                    {espnStatus?.connected ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 p-3 bg-dark-700/50 rounded-lg">
+                          <Link2 className="w-4 h-4 text-primary-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium">ESPN League</div>
+                            <div className="text-xs text-dark-400 truncate">
+                              {espnStatus.espn_league_id} &middot; {espnStatus.sport?.toUpperCase()} &middot; {espnStatus.roster_player_count} players
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-primary-600/20 text-primary-400 text-xs">
+                            Connected
+                          </span>
+                        </div>
+                        <button
+                          onClick={handleDisconnectESPN}
+                          disabled={espnLoading}
+                          className="flex items-center gap-2 text-xs text-dark-400 hover:text-red-400 transition-all"
+                        >
+                          {espnLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
+                          Disconnect
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setLeagueDialogOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-700/50 border border-dark-700 text-sm text-dark-300 hover:border-primary-600 hover:text-primary-400 transition-all w-full"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        Connect ESPN
+                      </button>
+                    )}
                   </div>
-                )}
+                </div>
               </SettingsSection>
             )}
 

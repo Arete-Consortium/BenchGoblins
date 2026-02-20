@@ -825,7 +825,8 @@ async def make_decision(
             )
         player_context = "\n\n".join(context_parts)
 
-    # Auto-fill Sleeper context from authenticated user's profile
+    # Auto-fill league context from authenticated user's profile
+    user = None
     if not request.league_id and current_user:
         user = await _get_user_by_id(current_user["user_id"])
         if user and user.sleeper_league_id:
@@ -870,6 +871,29 @@ async def make_decision(
                     player_context = league_ctx
         except Exception:
             logger.debug("Failed to fetch Sleeper league context for %s", request.league_id)
+
+    # Auto-inject ESPN roster context if no Sleeper and user has ESPN connection
+    if not request.league_id and current_user:
+        try:
+            if not user:
+                user = await _get_user_by_id(current_user["user_id"])
+            if user and user.espn_league_id and user.espn_roster_snapshot:
+                player_lines = []
+                for p in user.espn_roster_snapshot:
+                    slot = f" [{p.get('lineup_slot', 'ROSTER')}]"
+                    player_lines.append(
+                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}){slot}"
+                    )
+                espn_ctx = (
+                    f"ESPN League {user.espn_league_id} ({user.espn_sport or 'nfl'})\n\nUser's roster:\n"
+                    + "\n".join(player_lines)
+                )
+                if player_context:
+                    player_context = f"{player_context}\n\n{espn_ctx}"
+                else:
+                    player_context = espn_ctx
+        except Exception:
+            logger.debug("Failed to inject ESPN roster context")
 
     # Classify query complexity
     complexity = classify_query(
@@ -1456,7 +1480,8 @@ async def make_decision_stream(
         if context_parts:
             player_context = "\n\n".join(context_parts)
 
-    # Auto-fill Sleeper context from authenticated user's profile
+    # Auto-fill league context from authenticated user's profile
+    user = None
     if not request.league_id and current_user:
         user = await _get_user_by_id(current_user["user_id"])
         if user and user.sleeper_league_id:
@@ -1500,6 +1525,29 @@ async def make_decision_stream(
                     player_context = league_ctx
         except Exception:
             logger.debug("Failed to fetch Sleeper league context for %s", request.league_id)
+
+    # Auto-inject ESPN roster context if no Sleeper and user has ESPN connection
+    if not request.league_id and current_user:
+        try:
+            if not user:
+                user = await _get_user_by_id(current_user["user_id"])
+            if user and user.espn_league_id and user.espn_roster_snapshot:
+                player_lines = []
+                for p in user.espn_roster_snapshot:
+                    slot = f" [{p.get('lineup_slot', 'ROSTER')}]"
+                    player_lines.append(
+                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}){slot}"
+                    )
+                espn_ctx = (
+                    f"ESPN League {user.espn_league_id} ({user.espn_sport or 'nfl'})\n\nUser's roster:\n"
+                    + "\n".join(player_lines)
+                )
+                if player_context:
+                    player_context = f"{player_context}\n\n{espn_ctx}"
+                else:
+                    player_context = espn_ctx
+        except Exception:
+            logger.debug("Failed to inject ESPN roster context")
 
     # Capture metadata for persistence after streaming
     stream_metadata: dict = {}

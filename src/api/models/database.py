@@ -58,6 +58,14 @@ class User(Base):
     sleeper_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+    # ESPN Fantasy integration
+    espn_swid: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    espn_s2: Mapped[str | None] = mapped_column(Text, nullable=True)
+    espn_league_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    espn_team_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    espn_sport: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    espn_roster_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    espn_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), onupdate=func.now()
