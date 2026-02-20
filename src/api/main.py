@@ -2826,7 +2826,9 @@ async def register_push_token(request: PushTokenRequest):
 
     The token should be an Expo push token from expo-notifications.
     """
-    notification_service.register_token(request.token)
+    if db_service.is_configured:
+        async with db_service.session() as session:
+            await notification_service.register_token(session, request.token)
     return {"status": "registered", "token": request.token}
 
 
@@ -2835,7 +2837,9 @@ async def unregister_push_token(request: PushTokenRequest):
     """
     Unregister a device from push notifications.
     """
-    notification_service.unregister_token(request.token)
+    if db_service.is_configured:
+        async with db_service.session() as session:
+            await notification_service.unregister_token(session, request.token)
     return {"status": "unregistered"}
 
 
@@ -2862,11 +2866,15 @@ async def broadcast_notification(
     request: SendNotificationRequest, _admin=Depends(require_admin_key)
 ):
     """Send a notification to all registered devices. Requires admin API key."""
-    results = await notification_service.send_to_all(
-        title=request.title,
-        body=request.body,
-        data=request.data,
-    )
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    async with db_service.session() as session:
+        results = await notification_service.send_to_all(
+            session,
+            title=request.title,
+            body=request.body,
+            data=request.data,
+        )
 
     return {
         "sent": len(results),
@@ -2877,7 +2885,10 @@ async def broadcast_notification(
 @app.get("/notifications/tokens", tags=["Admin"])
 async def list_registered_tokens(_admin=Depends(require_admin_key)):
     """List all registered push tokens. Requires admin API key."""
-    tokens = notification_service.get_all_tokens()
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    async with db_service.session() as session:
+        tokens = await notification_service.get_all_tokens(session)
     return {"count": len(tokens), "tokens": tokens}
 
 

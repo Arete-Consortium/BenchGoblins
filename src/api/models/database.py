@@ -589,3 +589,27 @@ class NewsletterSubscriber(Base):
             postgresql_where=text("unsubscribed_at IS NULL"),
         ),
     )
+
+
+class DeviceToken(Base):
+    """Registered device token for push notifications."""
+
+    __tablename__ = "device_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    preferences: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        Index("idx_device_tokens_token", "token"),
+        Index(
+            "idx_device_tokens_user",
+            "user_id",
+            postgresql_where=text("user_id IS NOT NULL"),
+        ),
+    )

@@ -2,14 +2,16 @@
 Push Notification Service — Sends notifications via Expo Push API.
 
 Uses Expo's push notification service for cross-platform delivery.
-In production, this could be replaced with Firebase Cloud Messaging directly.
+Device tokens are persisted in the device_tokens table.
 """
 
 from dataclasses import dataclass
-from datetime import datetime
 from enum import Enum
 
 import httpx
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Expo Push API endpoint
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
@@ -38,16 +40,6 @@ class PushNotification:
     badge: int | None = None
 
 
-@dataclass
-class DeviceToken:
-    """Registered device for push notifications."""
-
-    token: str
-    user_id: str | None
-    created_at: datetime
-    preferences: dict | None = None
-
-
 class NotificationService:
     """
     Push notification service using Expo's Push API.
@@ -55,13 +47,11 @@ class NotificationService:
     Supports:
     - Sending single notifications
     - Sending batch notifications
-    - Device token management
+    - Device token management (persisted to DB)
     """
 
     def __init__(self):
         self._client: httpx.AsyncClient | None = None
-        # In-memory token storage (should be database in production)
-        self._tokens: dict[str, DeviceToken] = {}
 
     async def _get_client(self) -> httpx.AsyncClient:
         """Get or create HTTP client."""
@@ -83,29 +73,41 @@ class NotificationService:
             self._client = None
 
     # =========================================================================
-    # Token Management
+    # Token Management (DB-backed)
     # =========================================================================
 
-    def register_token(self, token: str, user_id: str | None = None) -> None:
+    async def register_token(
+        self, db: AsyncSession, token: str, user_id: str | None = None
+    ) -> None:
         """Register a device token for push notifications."""
-        self._tokens[token] = DeviceToken(
-            token=token,
-            user_id=user_id,
-            created_at=datetime.utcnow(),
+        from models.database import DeviceToken
+
+        stmt = pg_insert(DeviceToken).values(token=token, user_id=user_id)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["token"],
+            set_={"user_id": user_id},
         )
+        await db.execute(stmt)
 
-    def unregister_token(self, token: str) -> None:
+    async def unregister_token(self, db: AsyncSession, token: str) -> None:
         """Unregister a device token."""
-        if token in self._tokens:
-            del self._tokens[token]
+        from models.database import DeviceToken
 
-    def get_all_tokens(self) -> list[str]:
+        await db.execute(delete(DeviceToken).where(DeviceToken.token == token))
+
+    async def get_all_tokens(self, db: AsyncSession) -> list[str]:
         """Get all registered tokens."""
-        return list(self._tokens.keys())
+        from models.database import DeviceToken
 
-    def get_user_tokens(self, user_id: str) -> list[str]:
+        result = await db.execute(select(DeviceToken.token))
+        return [row[0] for row in result.all()]
+
+    async def get_user_tokens(self, db: AsyncSession, user_id: str) -> list[str]:
         """Get tokens for a specific user."""
-        return [dt.token for dt in self._tokens.values() if dt.user_id == user_id]
+        from models.database import DeviceToken
+
+        result = await db.execute(select(DeviceToken.token).where(DeviceToken.user_id == user_id))
+        return [row[0] for row in result.all()]
 
     # =========================================================================
     # Sending Notifications
@@ -251,12 +253,13 @@ class NotificationService:
 
     async def send_to_all(
         self,
+        db: AsyncSession,
         title: str,
         body: str,
         data: dict | None = None,
     ) -> list[dict]:
         """Send notification to all registered devices."""
-        tokens = self.get_all_tokens()
+        tokens = await self.get_all_tokens(db)
 
         if not tokens:
             return []
