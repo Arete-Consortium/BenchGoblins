@@ -61,52 +61,79 @@ export const useAppStore = create<AppState>()(
 
         try {
           // Determine decision type from query
-          let decisionType: 'start_sit' | 'trade' | 'waiver' | 'explain' = 'start_sit';
           const lowerContent = content.toLowerCase();
-          if (lowerContent.includes('trade')) {
-            decisionType = 'trade';
-          } else if (lowerContent.includes('waiver') || lowerContent.includes('pickup') || lowerContent.includes('pick up')) {
-            decisionType = 'waiver';
-          } else if (lowerContent.includes('explain') || lowerContent.includes('why') || lowerContent.includes('how')) {
-            decisionType = 'explain';
-          }
+          const isDraft = lowerContent.includes('draft') ||
+            lowerContent.includes('pick from') ||
+            lowerContent.includes('choose from') ||
+            lowerContent.includes('rank these');
 
-          // Inject league context if connected
-          const leagueState = useLeagueStore.getState();
-          const activeLeagueId = leagueState.selectedLeagueIds[sport];
-          const sleeperUserId = leagueState.connection?.sleeperUserId;
+          let assistantMessage: Message;
 
-          // Use streaming API for real-time response
-          let fullContent = '';
-          const responseHolder: { value: DecisionResponse | null } = { value: null };
-
-          await api.decideStream(
-            {
+          if (isDraft) {
+            // Draft uses dedicated /draft endpoint (non-streaming)
+            const draftResponse = await api.draft({
               sport,
               risk_mode: riskMode,
-              decision_type: decisionType,
               query: content,
-              ...(activeLeagueId ? { league_id: activeLeagueId, sleeper_user_id: sleeperUserId } : {}),
-            },
-            // Accumulate chunks silently (Claude returns JSON, not display text)
-            (chunk) => {
-              fullContent += chunk;
-            },
-            // On complete, get the parsed response
-            (response) => {
-              responseHolder.value = response;
-            }
-          );
+            });
 
-          // Add completed assistant message
-          const finalResponse = responseHolder.value;
-          const assistantMessage: Message = {
-            id: assistantMessageId,
-            role: 'assistant',
-            content: finalResponse?.rationale || fullContent,
-            timestamp: new Date(),
-            decision: finalResponse || undefined,
-          };
+            assistantMessage = {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: draftResponse.rationale,
+              timestamp: new Date(),
+              decision: {
+                decision: draftResponse.recommended_pick,
+                confidence: draftResponse.confidence,
+                rationale: draftResponse.rationale,
+                source: draftResponse.source,
+                details: draftResponse.details || undefined,
+              },
+            };
+          } else {
+            let decisionType: 'start_sit' | 'trade' | 'waiver' | 'explain' = 'start_sit';
+            if (lowerContent.includes('trade')) {
+              decisionType = 'trade';
+            } else if (lowerContent.includes('waiver') || lowerContent.includes('pickup') || lowerContent.includes('pick up')) {
+              decisionType = 'waiver';
+            } else if (lowerContent.includes('explain') || lowerContent.includes('why') || lowerContent.includes('how')) {
+              decisionType = 'explain';
+            }
+
+            // Inject league context if connected
+            const leagueState = useLeagueStore.getState();
+            const activeLeagueId = leagueState.selectedLeagueIds[sport];
+            const sleeperUserId = leagueState.connection?.sleeperUserId;
+
+            // Use streaming API for real-time response
+            let fullContent = '';
+            const responseHolder: { value: DecisionResponse | null } = { value: null };
+
+            await api.decideStream(
+              {
+                sport,
+                risk_mode: riskMode,
+                decision_type: decisionType,
+                query: content,
+                ...(activeLeagueId ? { league_id: activeLeagueId, sleeper_user_id: sleeperUserId } : {}),
+              },
+              (chunk) => {
+                fullContent += chunk;
+              },
+              (response) => {
+                responseHolder.value = response;
+              }
+            );
+
+            const finalResponse = responseHolder.value;
+            assistantMessage = {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: finalResponse?.rationale || fullContent,
+              timestamp: new Date(),
+              decision: finalResponse || undefined,
+            };
+          }
 
           set((state) => ({
             messages: [...state.messages, assistantMessage],
