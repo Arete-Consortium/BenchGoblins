@@ -13,7 +13,7 @@ from typing import Any
 try:
     from services.redis import redis_service
 except ImportError:
-    redis_service = None  # type: ignore[assignment]
+    redis_service: Any = None
 
 
 # Configuration via environment variables

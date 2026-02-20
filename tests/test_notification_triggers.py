@@ -12,6 +12,7 @@ from datetime import UTC, datetime, timedelta
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
+from sqlalchemy.exc import SQLAlchemyError
 
 from services.notification_triggers import (
     INJURY_CACHE_TTL,
@@ -264,7 +265,7 @@ class TestEligibleUsers:
             mock_db.is_configured = True
             mock_db.session = MagicMock(
                 return_value=AsyncMock(
-                    __aenter__=AsyncMock(side_effect=RuntimeError("DB down")),
+                    __aenter__=AsyncMock(side_effect=SQLAlchemyError("DB down")),
                     __aexit__=AsyncMock(return_value=False),
                 )
             )
@@ -381,7 +382,7 @@ class TestNotificationLog:
             mock_db.is_configured = True
             mock_db.session = MagicMock(
                 return_value=AsyncMock(
-                    __aenter__=AsyncMock(side_effect=RuntimeError("DB write error")),
+                    __aenter__=AsyncMock(side_effect=SQLAlchemyError("DB write error")),
                     __aexit__=AsyncMock(return_value=False),
                 )
             )
