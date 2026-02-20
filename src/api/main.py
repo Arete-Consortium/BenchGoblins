@@ -379,6 +379,12 @@ class DraftRequest(BaseModel):
     league_type: str | None = Field(
         None, max_length=50, description="e.g., 'points', 'categories', 'half-ppr'"
     )
+    league_id: str | None = Field(
+        None, max_length=50, description="Sleeper league ID for roster and scoring context"
+    )
+    sleeper_user_id: str | None = Field(
+        None, max_length=50, description="Sleeper user ID for roster lookup"
+    )
 
 
 class DraftResponse(BaseModel):
@@ -1317,6 +1323,8 @@ async def _claude_draft_fallback(
         decision_type=DecisionType.DRAFT,
         query=request.query,
         league_type=request.league_type,
+        league_id=request.league_id,
+        sleeper_user_id=request.sleeper_user_id,
     )
 
     variant = assign_variant(session_id)
