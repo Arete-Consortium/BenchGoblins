@@ -407,6 +407,44 @@ class APIClient {
     return response.data;
   }
 
+  async syncLeague(
+    username: string,
+    leagueId: string,
+    sport = 'nfl',
+    season = '2025'
+  ): Promise<{
+    sleeper_username: string;
+    sleeper_user_id: string;
+    sleeper_league_id: string;
+    roster_player_count: number;
+    synced_at: string;
+  }> {
+    const response = await this.client.post('/leagues/sync', {
+      username,
+      league_id: leagueId,
+      sport,
+      season,
+    });
+    return response.data;
+  }
+
+  async getMyLeague(): Promise<{
+    connected: boolean;
+    sleeper_username: string | null;
+    sleeper_league_id: string | null;
+    sleeper_user_id: string | null;
+    roster_player_count: number;
+    synced_at: string | null;
+  }> {
+    const response = await this.client.get('/leagues/me');
+    return response.data;
+  }
+
+  async disconnectLeague(): Promise<{ disconnected: boolean }> {
+    const response = await this.client.delete('/leagues/me');
+    return response.data;
+  }
+
   // Newsletter
   async subscribeNewsletter(
     email: string,

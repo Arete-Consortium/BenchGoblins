@@ -3,6 +3,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import api from '@/lib/api';
+import { useLeagueStore } from '@/stores/leagueStore';
 
 // Helper to get cookie by name
 function getCookie(name: string): string | null {
@@ -91,6 +92,9 @@ export const useAuthStore = create<AuthState>()(
             isAuthenticated: true,
             isLoading: false,
           });
+
+          // Restore Sleeper connection from backend (non-blocking)
+          useLeagueStore.getState().restoreFromBackend();
         } catch (error) {
           console.error('Google sign-in failed:', error);
           get().clearAuth();
@@ -171,8 +175,10 @@ export const useAuthStore = create<AuthState>()(
         if (state?.accessToken) {
           // Set the token in API client
           api.setAuthToken(state.accessToken);
-          // Refresh user data in background
-          state.refreshUser();
+          // Refresh user data, then restore Sleeper connection
+          state.refreshUser().then(() => {
+            useLeagueStore.getState().restoreFromBackend();
+          });
         }
       },
     }

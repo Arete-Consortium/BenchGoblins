@@ -28,15 +28,22 @@ Save. Wait 1-5 minutes. Retry the OAuth flow.
 
 ---
 
-## Task 3 — Sleeper League Sync (Subscription Value Core Feature) — IN PROGRESS
+## Task 3 — Sleeper League Sync (Subscription Value Core Feature) — BACKEND DONE
 
-**Status:** Database schema ready. Migration 011 adds `sleeper_username`, `sleeper_user_id`, `sleeper_league_id`, `roster_snapshot`, and `sleeper_synced_at` columns to users table. User ORM model updated.
+**Status:** Full backend complete.
+
+**Done:**
+1. Backend Sleeper service (`services/sleeper.py`) — API client for Sleeper endpoints ✅
+2. League routes (`routes/leagues.py`) — `POST /connect`, `GET /{id}/roster`, `GET /{id}/settings` ✅
+3. Sync/persistence — `POST /leagues/sync`, `GET /leagues/me`, `DELETE /leagues/me` ✅
+4. Auto-inject — `/decide` and `/decide/stream` auto-fill Sleeper context from user profile ✅
+5. Database schema — Migration 011 (Sleeper columns on User model) ✅
+6. Tests — 20 league route tests, all passing ✅
 
 **Remaining work:**
-1. Backend Sleeper service (`services/sleeper.py`) — API client for Sleeper endpoints
-2. API route `POST /api/user/sleeper-sync` — validates username, fetches leagues/rosters, persists
-3. Frontend onboarding step — Sleeper username input after signup
-4. Chat system prompt injection — prepend roster context to every `/decide` request
+1. Frontend onboarding step — Sleeper username input after signup
+2. Frontend league selector — UI to pick league after connect
+3. Frontend sync status — show connected league in settings/profile
 
 ---
 
@@ -46,7 +53,7 @@ Save. Wait 1-5 minutes. Retry the OAuth flow.
 |---|------|--------|
 | 1 | Google OAuth fix | Done (manual GCP Console step remains) |
 | 2 | NFL Draft countdown | Superseded (rotating countdown already covers it) |
-| 3 | Sleeper sync | DB schema ready, service/frontend pending |
+| 3 | Sleeper sync | Backend complete, frontend pending |
 
 ---
 
