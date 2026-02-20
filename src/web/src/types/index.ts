@@ -22,11 +22,39 @@ export interface PlayerIndices {
   msf: number; // Matchup Space Fit
 }
 
-// Player stats for comparison
+// Player stats for comparison (start/sit)
 export interface PlayerDetails {
   name: string;
   score: number;
   indices: PlayerIndices;
+}
+
+// Trade analyzer types
+export interface TradePlayerDetails {
+  name: string;
+  team: string;
+  score: number;
+  indices: PlayerIndices;
+}
+
+export interface TradeSideDetails {
+  players: TradePlayerDetails[];
+  total_score: number;
+}
+
+export interface TradeDetailsData {
+  side_giving: TradeSideDetails;
+  side_receiving: TradeSideDetails;
+  net_value: number;
+  margin: number;
+  risk_mode: string;
+  sport: string;
+}
+
+export interface StartSitDetailsData {
+  player_a: PlayerDetails;
+  player_b: PlayerDetails;
+  margin: number;
 }
 
 // Decision request to API
@@ -88,11 +116,7 @@ export interface DecisionResponse {
   confidence: Confidence;
   rationale: string;
   source: 'local' | 'claude';
-  details?: {
-    player_a: PlayerDetails;
-    player_b: PlayerDetails;
-    margin: number;
-  };
+  details?: StartSitDetailsData | TradeDetailsData;
 }
 
 // Chat message

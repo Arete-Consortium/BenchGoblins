@@ -1,8 +1,8 @@
 'use client';
 
 import { cn, formatRelativeTime, getConfidenceColor } from '@/lib/utils';
-import { Message, DecisionResponse } from '@/types';
-import { Bot, User, TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { Message, DecisionResponse, StartSitDetailsData, TradeDetailsData } from '@/types';
+import { Bot, User, TrendingUp, TrendingDown, Minus, ArrowRightLeft } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: Message;
@@ -24,8 +24,106 @@ function IndexBar({ label, value, max = 100 }: { label: string; value: number; m
   );
 }
 
+function isTradeDetails(
+  details: StartSitDetailsData | TradeDetailsData
+): details is TradeDetailsData {
+  return 'side_giving' in details;
+}
+
+function TradeDetails({ decision }: { decision: DecisionResponse }) {
+  const details = decision.details as TradeDetailsData;
+  const accept = details.net_value > 0;
+
+  return (
+    <div className="mt-4 p-4 bg-dark-800/50 rounded-lg border border-dark-700">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <ArrowRightLeft className="w-4 h-4 text-primary-400" />
+          <span className={cn('font-semibold', accept ? 'text-green-400' : 'text-red-400')}>
+            {decision.decision}
+          </span>
+          <span className={cn('text-xs', getConfidenceColor(decision.confidence))}>
+            {decision.confidence.toUpperCase()}
+          </span>
+        </div>
+        <span className="text-xs text-dark-400">
+          via {decision.source === 'local' ? 'Local Engine' : 'Claude AI'}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        {/* Giving side */}
+        <div>
+          <div className="text-xs font-medium text-dark-400 uppercase mb-2">You Give</div>
+          <div className="space-y-3">
+            {details.side_giving.players.map((p) => (
+              <div key={p.name} className="p-3 rounded-lg bg-dark-700/50">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="font-semibold text-sm">{p.name}</div>
+                    {p.team && <div className="text-xs text-dark-400">{p.team}</div>}
+                  </div>
+                  <span className="text-lg font-bold text-primary-400">{p.score.toFixed(1)}</span>
+                </div>
+                <div className="space-y-1">
+                  <IndexBar label="SCI" value={p.indices.sci} />
+                  <IndexBar label="RMI" value={p.indices.rmi} />
+                  <IndexBar label="GIS" value={p.indices.gis} />
+                  <IndexBar label="OD" value={p.indices.od} max={50} />
+                  <IndexBar label="MSF" value={p.indices.msf} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-center text-sm text-dark-300">
+            Total: <span className="font-semibold">{details.side_giving.total_score.toFixed(1)}</span>
+          </div>
+        </div>
+
+        {/* Receiving side */}
+        <div>
+          <div className="text-xs font-medium text-dark-400 uppercase mb-2">You Get</div>
+          <div className="space-y-3">
+            {details.side_receiving.players.map((p) => (
+              <div key={p.name} className="p-3 rounded-lg bg-dark-700/50">
+                <div className="flex items-center justify-between mb-2">
+                  <div>
+                    <div className="font-semibold text-sm">{p.name}</div>
+                    {p.team && <div className="text-xs text-dark-400">{p.team}</div>}
+                  </div>
+                  <span className="text-lg font-bold text-primary-400">{p.score.toFixed(1)}</span>
+                </div>
+                <div className="space-y-1">
+                  <IndexBar label="SCI" value={p.indices.sci} />
+                  <IndexBar label="RMI" value={p.indices.rmi} />
+                  <IndexBar label="GIS" value={p.indices.gis} />
+                  <IndexBar label="OD" value={p.indices.od} max={50} />
+                  <IndexBar label="MSF" value={p.indices.msf} />
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-2 text-center text-sm text-dark-300">
+            Total: <span className="font-semibold">{details.side_receiving.total_score.toFixed(1)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-dark-700 flex items-center justify-center gap-2 text-sm">
+        <span className={cn('font-semibold', accept ? 'text-green-400' : 'text-red-400')}>
+          Net: {details.net_value > 0 ? '+' : ''}{details.net_value.toFixed(1)} pts
+        </span>
+      </div>
+    </div>
+  );
+}
+
 function DecisionDetails({ decision }: { decision: DecisionResponse }) {
   if (!decision.details) return null;
+
+  if (isTradeDetails(decision.details)) {
+    return <TradeDetails decision={decision} />;
+  }
 
   const { player_a, player_b, margin } = decision.details;
   const aWins = player_a.score > player_b.score;
