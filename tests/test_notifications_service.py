@@ -16,6 +16,11 @@ def svc():
     return NotificationService()
 
 
+@pytest.fixture
+def mock_db():
+    return AsyncMock()
+
+
 class TestNotificationType:
     def test_enum_values(self):
         assert NotificationType.INJURY == "injury"
@@ -42,30 +47,42 @@ class TestPushNotification:
 
 
 class TestTokenManagement:
-    def test_register_token(self, svc):
-        svc.register_token("tok1", user_id="user1")
-        assert "tok1" in svc.get_all_tokens()
+    @pytest.mark.asyncio
+    async def test_register_token(self, svc, mock_db):
+        await svc.register_token(mock_db, "tok1", user_id="user1")
+        mock_db.execute.assert_called_once()
 
-    def test_unregister_token(self, svc):
-        svc.register_token("tok1")
-        svc.unregister_token("tok1")
-        assert "tok1" not in svc.get_all_tokens()
+    @pytest.mark.asyncio
+    async def test_unregister_token(self, svc, mock_db):
+        await svc.unregister_token(mock_db, "tok1")
+        mock_db.execute.assert_called_once()
 
-    def test_unregister_nonexistent(self, svc):
-        svc.unregister_token("nonexistent")  # Should not raise
+    @pytest.mark.asyncio
+    async def test_get_all_tokens(self, svc, mock_db):
+        mock_result = MagicMock()
+        mock_result.all.return_value = [("tok1",), ("tok2",)]
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
-    def test_get_user_tokens(self, svc):
-        svc.register_token("tok1", user_id="user1")
-        svc.register_token("tok2", user_id="user2")
-        svc.register_token("tok3", user_id="user1")
-        assert set(svc.get_user_tokens("user1")) == {"tok1", "tok3"}
-        assert svc.get_user_tokens("user2") == ["tok2"]
-        assert svc.get_user_tokens("user3") == []
+        tokens = await svc.get_all_tokens(mock_db)
+        assert set(tokens) == {"tok1", "tok2"}
 
-    def test_get_all_tokens(self, svc):
-        svc.register_token("a")
-        svc.register_token("b")
-        assert set(svc.get_all_tokens()) == {"a", "b"}
+    @pytest.mark.asyncio
+    async def test_get_user_tokens(self, svc, mock_db):
+        mock_result = MagicMock()
+        mock_result.all.return_value = [("tok1",), ("tok3",)]
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        tokens = await svc.get_user_tokens(mock_db, "user1")
+        assert set(tokens) == {"tok1", "tok3"}
+
+    @pytest.mark.asyncio
+    async def test_get_user_tokens_empty(self, svc, mock_db):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        tokens = await svc.get_user_tokens(mock_db, "user_none")
+        assert tokens == []
 
 
 class TestSendNotification:
@@ -184,14 +201,20 @@ class TestNotificationTemplates:
         assert "Mahomes" in payload[0]["body"]
 
     @pytest.mark.asyncio
-    async def test_send_to_all_no_tokens(self, svc):
-        result = await svc.send_to_all("Title", "Body")
+    async def test_send_to_all_no_tokens(self, svc, mock_db):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+        mock_db.execute = AsyncMock(return_value=mock_result)
+
+        result = await svc.send_to_all(mock_db, "Title", "Body")
         assert result == []
 
     @pytest.mark.asyncio
-    async def test_send_to_all_with_tokens(self, svc):
-        svc.register_token("tok1")
-        svc.register_token("tok2")
+    async def test_send_to_all_with_tokens(self, svc, mock_db):
+        # Mock get_all_tokens to return tokens
+        mock_result = MagicMock()
+        mock_result.all.return_value = [("tok1",), ("tok2",)]
+        mock_db.execute = AsyncMock(return_value=mock_result)
 
         mock_response = MagicMock()
         mock_response.json.return_value = {"data": [{"status": "ok"}, {"status": "ok"}]}
@@ -201,7 +224,7 @@ class TestNotificationTemplates:
         mock_client.is_closed = False
         svc._client = mock_client
 
-        result = await svc.send_to_all("Title", "Body", data={"key": "val"})
+        result = await svc.send_to_all(mock_db, "Title", "Body", data={"key": "val"})
         assert len(result) == 2
 
 
