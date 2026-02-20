@@ -5,7 +5,7 @@ export type Sport = 'nba' | 'nfl' | 'mlb' | 'nhl' | 'soccer';
 export type RiskMode = 'floor' | 'median' | 'ceiling';
 
 // Decision types
-export type DecisionType = 'start_sit' | 'trade' | 'waiver' | 'explain';
+export type DecisionType = 'start_sit' | 'trade' | 'waiver' | 'explain' | 'draft';
 
 // Confidence levels
 export type Confidence = 'low' | 'medium' | 'high';
@@ -55,6 +55,25 @@ export interface StartSitDetailsData {
   player_a: PlayerDetails;
   player_b: PlayerDetails;
   margin: number;
+}
+
+// Draft assistant types
+export interface DraftPickDetails {
+  rank: number;
+  name: string;
+  team: string;
+  position: string;
+  score: number;
+  base_score: number;
+  indices: PlayerIndices;
+  position_boosted: boolean;
+}
+
+export interface DraftDetailsData {
+  ranked_players: DraftPickDetails[];
+  risk_mode: string;
+  sport: string;
+  position_needs: string[] | null;
 }
 
 // Decision request to API
@@ -116,7 +135,7 @@ export interface DecisionResponse {
   confidence: Confidence;
   rationale: string;
   source: 'local' | 'claude';
-  details?: StartSitDetailsData | TradeDetailsData;
+  details?: StartSitDetailsData | TradeDetailsData | DraftDetailsData;
 }
 
 // Chat message

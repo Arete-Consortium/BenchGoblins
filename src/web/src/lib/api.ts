@@ -7,6 +7,9 @@ import type {
   UsageStats,
   HealthResponse,
   Sport,
+  RiskMode,
+  Confidence,
+  DraftDetailsData,
   SleeperConnectResponse,
   SleeperLeague,
   RosterResponse,
@@ -320,6 +323,25 @@ class APIClient {
   async getPlayer(playerId: string, sport: Sport): Promise<Player> {
     await this.ensureSession();
     const response = await this.client.get<Player>(`/players/${sport}/${playerId}`);
+    return response.data;
+  }
+
+  // Draft endpoint
+  async draft(request: {
+    sport: Sport;
+    risk_mode: RiskMode;
+    query: string;
+    players?: string[];
+    position_needs?: string[];
+  }): Promise<{
+    recommended_pick: string;
+    confidence: Confidence;
+    rationale: string;
+    details: DraftDetailsData | null;
+    source: 'local' | 'claude';
+  }> {
+    await this.ensureSession();
+    const response = await this.client.post('/draft', request);
     return response.data;
   }
 

@@ -1,8 +1,8 @@
 'use client';
 
 import { cn, formatRelativeTime, getConfidenceColor } from '@/lib/utils';
-import { Message, DecisionResponse, StartSitDetailsData, TradeDetailsData } from '@/types';
-import { Bot, User, TrendingUp, TrendingDown, Minus, ArrowRightLeft } from 'lucide-react';
+import { Message, DecisionResponse, StartSitDetailsData, TradeDetailsData, DraftDetailsData } from '@/types';
+import { Bot, User, TrendingUp, TrendingDown, Minus, ArrowRightLeft, Trophy, Zap } from 'lucide-react';
 
 interface MessageBubbleProps {
   message: Message;
@@ -25,9 +25,15 @@ function IndexBar({ label, value, max = 100 }: { label: string; value: number; m
 }
 
 function isTradeDetails(
-  details: StartSitDetailsData | TradeDetailsData
+  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData
 ): details is TradeDetailsData {
   return 'side_giving' in details;
+}
+
+function isDraftDetails(
+  details: StartSitDetailsData | TradeDetailsData | DraftDetailsData
+): details is DraftDetailsData {
+  return 'ranked_players' in details;
 }
 
 function TradeDetails({ decision }: { decision: DecisionResponse }) {
@@ -118,8 +124,88 @@ function TradeDetails({ decision }: { decision: DecisionResponse }) {
   );
 }
 
+function DraftDetails({ decision }: { decision: DecisionResponse }) {
+  const details = decision.details as DraftDetailsData;
+
+  return (
+    <div className="mt-4 p-4 bg-dark-800/50 rounded-lg border border-dark-700">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-primary-400" />
+          <span className="font-semibold text-primary-300">
+            Pick: {decision.decision}
+          </span>
+          <span className={cn('text-xs', getConfidenceColor(decision.confidence))}>
+            {decision.confidence.toUpperCase()}
+          </span>
+        </div>
+        <span className="text-xs text-dark-400">
+          via {decision.source === 'local' ? 'Local Engine' : 'Claude AI'}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        {details.ranked_players.map((p, i) => (
+          <div
+            key={p.name}
+            className={cn(
+              'p-3 rounded-lg flex items-start gap-3',
+              i === 0
+                ? 'bg-green-500/10 border border-green-500/30'
+                : 'bg-dark-700/50'
+            )}
+          >
+            <span className={cn(
+              'text-lg font-bold w-7 text-center flex-shrink-0',
+              i === 0 ? 'text-green-400' : 'text-dark-400'
+            )}>
+              {p.rank}
+            </span>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-sm">{p.name}</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-dark-600 text-dark-300">
+                    {p.position}
+                  </span>
+                  {p.position_boosted && (
+                    <span title="Position boosted">
+                      <Zap className="w-3 h-3 text-yellow-400" />
+                    </span>
+                  )}
+                </div>
+                <span className="text-lg font-bold text-primary-400">{p.score.toFixed(1)}</span>
+              </div>
+              {p.team && (
+                <div className="text-xs text-dark-400 mb-2">{p.team}</div>
+              )}
+              <div className="space-y-1">
+                <IndexBar label="SCI" value={p.indices.sci} />
+                <IndexBar label="RMI" value={p.indices.rmi} />
+                <IndexBar label="GIS" value={p.indices.gis} />
+                <IndexBar label="OD" value={p.indices.od} max={50} />
+                <IndexBar label="MSF" value={p.indices.msf} />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {details.position_needs && details.position_needs.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-dark-700 text-xs text-dark-400">
+          Position needs: {details.position_needs.join(', ')}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function DecisionDetails({ decision }: { decision: DecisionResponse }) {
   if (!decision.details) return null;
+
+  if (isDraftDetails(decision.details)) {
+    return <DraftDetails decision={decision} />;
+  }
 
   if (isTradeDetails(decision.details)) {
     return <TradeDetails decision={decision} />;
