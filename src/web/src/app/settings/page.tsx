@@ -449,7 +449,7 @@ export default function SettingsPage() {
             {/* About */}
             <SettingsSection title="About">
               <div className="text-sm text-dark-400 space-y-1">
-                <p>BenchGoblin v0.8.0</p>
+                <p>BenchGoblin v0.9.0</p>
                 <p>Fantasy Sports Decision Engine</p>
                 <p className="pt-2">
                   Built with the five-index scoring system for smarter fantasy decisions.
