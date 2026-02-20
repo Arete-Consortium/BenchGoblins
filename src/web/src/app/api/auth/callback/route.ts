@@ -81,8 +81,8 @@ export async function GET(request: NextRequest) {
 
     const userInfo: GoogleUserInfo = await userResponse.json();
 
-    // Create response with redirect to /ask
-    const response = NextResponse.redirect(`${APP_URL}/ask`);
+    // Create response with redirect to onboarding (skips to /ask if already completed)
+    const response = NextResponse.redirect(`${APP_URL}/onboarding`);
 
     // Store user info directly in cookies (temporary workaround while DB is being fixed)
     // In production, this should create a session in the backend

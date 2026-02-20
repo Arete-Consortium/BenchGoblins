@@ -27,7 +27,7 @@ export default function LoginPage() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated) {
-      router.push('/ask');
+      router.push('/onboarding');
     }
   }, [isAuthenticated, router]);
 
@@ -40,7 +40,7 @@ export default function LoginPage() {
 
     try {
       await signInWithGoogle(credentialResponse.credential);
-      router.push('/ask');
+      router.push('/onboarding');
     } catch (err) {
       console.error('Login failed:', err);
       setError(err instanceof Error ? err.message : t('login.signInFailed'));
@@ -52,7 +52,7 @@ export default function LoginPage() {
   };
 
   const handleContinueAsGuest = () => {
-    router.push('/ask');
+    router.push('/onboarding');
   };
 
   return (
