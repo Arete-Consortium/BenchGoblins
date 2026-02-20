@@ -50,6 +50,14 @@ class User(Base):
     stripe_subscription_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     queries_today: Mapped[int] = mapped_column(default=0)
     queries_reset_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    # Sleeper integration
+    sleeper_username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sleeper_user_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    sleeper_league_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    roster_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    sleeper_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), onupdate=func.now()

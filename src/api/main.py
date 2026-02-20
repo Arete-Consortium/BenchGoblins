@@ -2989,8 +2989,12 @@ async def get_accuracy_metrics(
                         "decision": d.decision,
                         "player_a_name": d.player_a_name,
                         "prompt_variant": d.prompt_variant,
-                        "actual_points_a": float(d.actual_points_a) if d.actual_points_a is not None else None,
-                        "actual_points_b": float(d.actual_points_b) if d.actual_points_b is not None else None,
+                        "actual_points_a": float(d.actual_points_a)
+                        if d.actual_points_a is not None
+                        else None,
+                        "actual_points_b": float(d.actual_points_b)
+                        if d.actual_points_b is not None
+                        else None,
                     }
                     for d in rows
                 ]
