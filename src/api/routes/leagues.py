@@ -5,9 +5,15 @@ Handles Sleeper league connection, roster retrieval, and league settings.
 Sleeper API is public — no OAuth required, just a username.
 """
 
-from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, Field
+from datetime import UTC, datetime
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+
+from models.database import User
+from routes.auth import get_current_user
+from services.database import db_service
 from services.sleeper import sleeper_service
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
@@ -75,6 +81,36 @@ class RosterResponse(BaseModel):
     players: list[RosterPlayerResponse]
     starters: list[str]
     reserve: list[str] | None = None
+
+
+class SyncRequest(BaseModel):
+    """Request to persist Sleeper connection to user profile."""
+
+    username: str = Field(..., description="Sleeper username")
+    league_id: str = Field(..., description="Sleeper league ID")
+    sport: str = Field(default="nfl", description="Sport: nfl, nba, mlb, nhl")
+    season: str = Field(default="2025", description="Season year")
+
+
+class SyncResponse(BaseModel):
+    """Response after syncing Sleeper to user profile."""
+
+    sleeper_username: str
+    sleeper_user_id: str
+    sleeper_league_id: str
+    roster_player_count: int
+    synced_at: str
+
+
+class MyLeagueResponse(BaseModel):
+    """Current user's Sleeper connection status."""
+
+    connected: bool
+    sleeper_username: str | None = None
+    sleeper_league_id: str | None = None
+    sleeper_user_id: str | None = None
+    roster_player_count: int = 0
+    synced_at: str | None = None
 
 
 # -------------------------------------------------------------------------
@@ -194,3 +230,125 @@ async def get_league_settings(
         roster_positions=league.roster_positions,
         scoring_settings=league.scoring_settings,
     )
+
+
+# -------------------------------------------------------------------------
+# Sleeper Sync (persist to user profile)
+# -------------------------------------------------------------------------
+
+
+@router.post("/sync", response_model=SyncResponse)
+async def sync_sleeper(
+    request: SyncRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Persist a Sleeper connection to the authenticated user's profile.
+
+    Validates the username and league, fetches the roster snapshot,
+    and stores everything on the User record so /decide can auto-inject context.
+    """
+    # Validate Sleeper username
+    sleeper_user = await sleeper_service.get_user(request.username)
+    if not sleeper_user:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Sleeper user '{request.username}' not found",
+        )
+
+    # Validate league exists
+    league = await sleeper_service.get_league(request.league_id)
+    if not league:
+        raise HTTPException(
+            status_code=404,
+            detail=f"League '{request.league_id}' not found",
+        )
+
+    # Fetch roster snapshot (may be None if user hasn't joined yet)
+    roster_snapshot = []
+    roster = await sleeper_service.get_user_roster(request.league_id, sleeper_user.user_id)
+    if roster and roster.players:
+        players = await sleeper_service.get_players_by_ids(roster.players, request.sport)
+        starter_set = set(roster.starters or [])
+        roster_snapshot = [
+            {
+                "player_id": p.player_id,
+                "full_name": p.full_name,
+                "position": p.position,
+                "team": p.team,
+                "is_starter": p.player_id in starter_set,
+            }
+            for p in players
+        ]
+
+    now = datetime.now(UTC)
+
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.sleeper_username = sleeper_user.username
+        user.sleeper_user_id = sleeper_user.user_id
+        user.sleeper_league_id = request.league_id
+        user.roster_snapshot = roster_snapshot
+        user.sleeper_synced_at = now
+        session.add(user)
+        await session.commit()
+
+    return SyncResponse(
+        sleeper_username=sleeper_user.username,
+        sleeper_user_id=sleeper_user.user_id,
+        sleeper_league_id=request.league_id,
+        roster_player_count=len(roster_snapshot),
+        synced_at=now.isoformat(),
+    )
+
+
+@router.get("/me", response_model=MyLeagueResponse)
+async def get_my_league(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Check if the authenticated user has a connected Sleeper league.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    connected = user.sleeper_league_id is not None
+    return MyLeagueResponse(
+        connected=connected,
+        sleeper_username=user.sleeper_username,
+        sleeper_league_id=user.sleeper_league_id,
+        sleeper_user_id=user.sleeper_user_id,
+        roster_player_count=len(user.roster_snapshot) if user.roster_snapshot else 0,
+        synced_at=user.sleeper_synced_at.isoformat() if user.sleeper_synced_at else None,
+    )
+
+
+@router.delete("/me")
+async def disconnect_league(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Disconnect the authenticated user's Sleeper league.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.sleeper_username = None
+        user.sleeper_user_id = None
+        user.sleeper_league_id = None
+        user.roster_snapshot = None
+        user.sleeper_synced_at = None
+        session.add(user)
+        await session.commit()
+
+    return {"disconnected": True}
