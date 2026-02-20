@@ -538,8 +538,11 @@ class TestAdminEndpointProtection:
         # Test a few representative endpoints (not all need DB)
         safe_endpoints = [
             ("POST", "/cache/clear"),
-            ("GET", "/notifications/tokens"),
             ("GET", "/metrics"),
+        ]
+        # Endpoints that return 503 when DB is not configured (expected in test env)
+        db_required_endpoints = [
+            ("GET", "/notifications/tokens"),
         ]
         for method, path in safe_endpoints:
             response = self._request(
@@ -551,4 +554,15 @@ class TestAdminEndpointProtection:
             # Should not be 403 or 503 (may be 200 or 500 due to no DB — that's fine)
             assert response.status_code not in (403, 503), (
                 f"{method} {path} should not be 403/503 with valid key, got {response.status_code}"
+            )
+        for method, path in db_required_endpoints:
+            response = self._request(
+                test_client,
+                method,
+                path,
+                headers=self.ADMIN_HEADERS,
+            )
+            # 503 is expected without DB; should not be 403 (auth rejection)
+            assert response.status_code != 403, (
+                f"{method} {path} should not be 403 with valid key, got {response.status_code}"
             )

@@ -55,12 +55,12 @@ class TestDiscoverMigrations:
     def test_discovers_real_migrations(self):
         """Should find the actual migration files in data/migrations/."""
         migrations = discover_migrations()
-        assert len(migrations) == 8
+        assert len(migrations) == 10
         # Should be sorted by version
         versions = [v for v, _ in migrations]
         assert versions == sorted(versions)
         assert versions[0] == 2
-        assert versions[-1] == 9
+        assert versions[-1] == 11
 
     def test_migrations_are_sql_files(self):
         migrations = discover_migrations()
@@ -210,7 +210,9 @@ class TestRunMigrationsAsync:
 
     def test_returns_zero_when_all_applied(self):
         """Should return 0 when all migrations are already tracked."""
-        engine, _ = self._make_mock_engine(applied_versions=[2, 3, 4, 5, 6, 7, 8, 9])
+        engine, _ = self._make_mock_engine(
+            applied_versions=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
+        )
         result = asyncio.get_event_loop().run_until_complete(
             run_migrations_async(engine)
         )
@@ -240,11 +242,11 @@ class TestRunMigrationsAsync:
 
     def test_creates_tracking_table(self):
         """Should execute CREATE TABLE IF NOT EXISTS for schema_migrations."""
-        engine, mock_conn = self._make_mock_engine(applied_versions=[2, 3, 4, 5, 6, 7, 8, 9])
-
-        asyncio.get_event_loop().run_until_complete(
-            run_migrations_async(engine)
+        engine, mock_conn = self._make_mock_engine(
+            applied_versions=[2, 3, 4, 5, 6, 7, 8, 9, 10, 11]
         )
+
+        asyncio.get_event_loop().run_until_complete(run_migrations_async(engine))
 
         # First call to execute should be CREATE TABLE
         first_call_sql = str(mock_conn.execute.call_args_list[0][0][0])
@@ -260,9 +262,7 @@ class TestRunMigrationsAsync:
         engine, mock_conn = self._make_mock_engine(applied_versions=[])
 
         with patch("scripts.migrate.discover_migrations", return_value=fake_migrations):
-            asyncio.get_event_loop().run_until_complete(
-                run_migrations_async(engine)
-            )
+            asyncio.get_event_loop().run_until_complete(run_migrations_async(engine))
 
         # Find the execute call that ran the migration SQL (not tracking table or SELECT)
         # The migration apply transaction is the third begin() call
@@ -280,9 +280,7 @@ class TestRunMigrationsAsync:
         engine, mock_conn = self._make_mock_engine(applied_versions=[])
 
         with patch("scripts.migrate.discover_migrations", return_value=fake_migrations):
-            asyncio.get_event_loop().run_until_complete(
-                run_migrations_async(engine)
-            )
+            asyncio.get_event_loop().run_until_complete(run_migrations_async(engine))
 
         # The INSERT call should reference the version and filename
         insert_call = mock_conn.execute.call_args_list[3]
