@@ -66,6 +66,18 @@ class User(Base):
     espn_sport: Mapped[str | None] = mapped_column(String(10), nullable=True)
     espn_roster_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     espn_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Yahoo Fantasy integration
+    yahoo_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    yahoo_refresh_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    yahoo_token_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    yahoo_user_guid: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    yahoo_league_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    yahoo_team_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    yahoo_sport: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    yahoo_roster_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    yahoo_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), onupdate=func.now()

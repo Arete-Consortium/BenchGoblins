@@ -89,6 +89,42 @@ export default function SettingsPage() {
     }
   };
 
+  // Yahoo connection status
+  const [yahooStatus, setYahooStatus] = useState<{
+    connected: boolean;
+    yahoo_league_key: string | null;
+    sport: string | null;
+    roster_player_count: number;
+  } | null>(null);
+  const [yahooLoading, setYahooLoading] = useState(false);
+
+  const fetchYahooStatus = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await api.getMyYahoo();
+      setYahooStatus(data);
+    } catch {
+      // Silently ignore
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchYahooStatus();
+  }, [fetchYahooStatus]);
+
+  const handleDisconnectYahoo = async () => {
+    if (!confirm('Disconnect your Yahoo league? You can reconnect anytime.')) return;
+    setYahooLoading(true);
+    try {
+      await api.disconnectYahoo();
+      setYahooStatus({ connected: false, yahoo_league_key: null, sport: null, roster_player_count: 0 });
+    } catch {
+      // ignore
+    } finally {
+      setYahooLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -199,6 +235,43 @@ export default function SettingsPage() {
                       >
                         <Link2 className="w-4 h-4" />
                         Connect ESPN
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Yahoo Connection */}
+                  <div>
+                    <h3 className="text-sm font-medium text-dark-300 mb-2">Yahoo Fantasy</h3>
+                    {yahooStatus?.connected ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-3 p-3 bg-dark-700/50 rounded-lg">
+                          <Link2 className="w-4 h-4 text-primary-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium">Yahoo League</div>
+                            <div className="text-xs text-dark-400 truncate">
+                              {yahooStatus.yahoo_league_key} &middot; {yahooStatus.sport?.toUpperCase()} &middot; {yahooStatus.roster_player_count} players
+                            </div>
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full bg-primary-600/20 text-primary-400 text-xs">
+                            Connected
+                          </span>
+                        </div>
+                        <button
+                          onClick={handleDisconnectYahoo}
+                          disabled={yahooLoading}
+                          className="flex items-center gap-2 text-xs text-dark-400 hover:text-red-400 transition-all"
+                        >
+                          {yahooLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Unlink className="w-3.5 h-3.5" />}
+                          Disconnect
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setLeagueDialogOpen(true)}
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-dark-700/50 border border-dark-700 text-sm text-dark-300 hover:border-primary-600 hover:text-primary-400 transition-all w-full"
+                      >
+                        <Link2 className="w-4 h-4" />
+                        Connect Yahoo
                       </button>
                     )}
                   </div>

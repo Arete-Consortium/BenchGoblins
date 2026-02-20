@@ -7,6 +7,7 @@ import pytest
 
 from services.espn_fantasy import RosterPlayer as ESPNRosterPlayer
 from services.sleeper import SleeperLeague, SleeperPlayer, SleeperRoster, SleeperUser
+from services.yahoo import YahooPlayer
 
 VALID_USER = {
     "user_id": 1,
@@ -313,6 +314,16 @@ def _make_mock_user(**overrides):
     user.espn_sport = overrides.get("espn_sport", None)
     user.espn_roster_snapshot = overrides.get("espn_roster_snapshot", None)
     user.espn_synced_at = overrides.get("espn_synced_at", None)
+    # Yahoo columns
+    user.yahoo_access_token = overrides.get("yahoo_access_token", None)
+    user.yahoo_refresh_token = overrides.get("yahoo_refresh_token", None)
+    user.yahoo_token_expires_at = overrides.get("yahoo_token_expires_at", None)
+    user.yahoo_user_guid = overrides.get("yahoo_user_guid", None)
+    user.yahoo_league_key = overrides.get("yahoo_league_key", None)
+    user.yahoo_team_key = overrides.get("yahoo_team_key", None)
+    user.yahoo_sport = overrides.get("yahoo_sport", None)
+    user.yahoo_roster_snapshot = overrides.get("yahoo_roster_snapshot", None)
+    user.yahoo_synced_at = overrides.get("yahoo_synced_at", None)
     return user
 
 
@@ -680,4 +691,181 @@ class TestDisconnectESPN:
 
     def test_disconnect_espn_unauthenticated(self, test_client):
         response = test_client.delete("/leagues/me/espn")
+        assert response.status_code == 401
+
+
+# -------------------------------------------------------------------------
+# Yahoo Fantasy Integration Tests
+# -------------------------------------------------------------------------
+
+
+def _make_yahoo_player(**overrides):
+    defaults = {
+        "player_key": "449.p.1234",
+        "player_id": "1234",
+        "name": "Lamar Jackson",
+        "team_abbrev": "BAL",
+        "position": "QB",
+        "status": "Active",
+        "injury_status": None,
+        "bye_week": 14,
+        "headshot_url": None,
+    }
+    defaults.update(overrides)
+    return YahooPlayer(**defaults)
+
+
+# -------------------------------------------------------------------------
+# POST /leagues/sync-yahoo
+# -------------------------------------------------------------------------
+
+
+class TestSyncYahoo:
+    @patch("routes.leagues.db_service")
+    @patch("routes.leagues.yahoo_service")
+    def test_sync_yahoo_success(self, mock_yahoo, mock_db_svc, authed_client):
+        mock_yahoo.get_team_roster = AsyncMock(
+            return_value=[
+                _make_yahoo_player(player_key="449.p.1", name="Lamar Jackson", position="QB"),
+                _make_yahoo_player(player_key="449.p.2", name="Derrick Henry", position="RB"),
+            ]
+        )
+
+        mock_db, mock_session = _mock_db_session(_make_mock_user())
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.post(
+            "/leagues/sync-yahoo",
+            json={
+                "access_token": "yahoo_access_123",
+                "refresh_token": "yahoo_refresh_456",
+                "expires_at": 9999999999.0,
+                "league_key": "449.l.12345",
+                "team_key": "449.l.12345.t.1",
+                "sport": "nfl",
+            },
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["yahoo_league_key"] == "449.l.12345"
+        assert data["yahoo_team_key"] == "449.l.12345.t.1"
+        assert data["sport"] == "nfl"
+        assert data["roster_player_count"] == 2
+        assert data["synced_at"]
+        mock_session.commit.assert_called_once()
+
+    @patch("routes.leagues.db_service")
+    @patch("routes.leagues.yahoo_service")
+    def test_sync_yahoo_roster_fetch_fails(self, mock_yahoo, mock_db_svc, authed_client):
+        """Sync succeeds even if roster fetch fails."""
+        mock_yahoo.get_team_roster = AsyncMock(side_effect=Exception("API error"))
+
+        mock_db, _ = _mock_db_session(_make_mock_user())
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.post(
+            "/leagues/sync-yahoo",
+            json={
+                "access_token": "token",
+                "refresh_token": "refresh",
+                "expires_at": 9999999999.0,
+                "league_key": "449.l.12345",
+                "team_key": "449.l.12345.t.1",
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["roster_player_count"] == 0
+
+    def test_sync_yahoo_unauthenticated(self, test_client):
+        response = test_client.post(
+            "/leagues/sync-yahoo",
+            json={
+                "access_token": "token",
+                "refresh_token": "refresh",
+                "expires_at": 9999999999.0,
+                "league_key": "449.l.12345",
+                "team_key": "449.l.12345.t.1",
+            },
+        )
+        assert response.status_code == 401
+
+
+# -------------------------------------------------------------------------
+# GET /leagues/me/yahoo
+# -------------------------------------------------------------------------
+
+
+class TestGetMyYahoo:
+    @patch("routes.leagues.db_service")
+    def test_connected_yahoo(self, mock_db_svc, authed_client):
+        synced = datetime(2025, 2, 1, 12, 0, 0, tzinfo=UTC)
+        mock_user = _make_mock_user(
+            yahoo_league_key="449.l.12345",
+            yahoo_team_key="449.l.12345.t.1",
+            yahoo_sport="nfl",
+            yahoo_roster_snapshot=[{"player_key": "449.p.1"}, {"player_key": "449.p.2"}],
+            yahoo_synced_at=synced,
+        )
+        mock_db, _ = _mock_db_session(mock_user)
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.get("/leagues/me/yahoo")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connected"] is True
+        assert data["yahoo_league_key"] == "449.l.12345"
+        assert data["yahoo_team_key"] == "449.l.12345.t.1"
+        assert data["sport"] == "nfl"
+        assert data["roster_player_count"] == 2
+
+    @patch("routes.leagues.db_service")
+    def test_no_yahoo_connection(self, mock_db_svc, authed_client):
+        mock_db, _ = _mock_db_session(_make_mock_user())
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.get("/leagues/me/yahoo")
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["connected"] is False
+        assert data["yahoo_league_key"] is None
+
+    def test_yahoo_unauthenticated(self, test_client):
+        response = test_client.get("/leagues/me/yahoo")
+        assert response.status_code == 401
+
+
+# -------------------------------------------------------------------------
+# DELETE /leagues/me/yahoo
+# -------------------------------------------------------------------------
+
+
+class TestDisconnectYahoo:
+    @patch("routes.leagues.db_service")
+    def test_disconnect_yahoo_success(self, mock_db_svc, authed_client):
+        mock_user = _make_mock_user(
+            yahoo_league_key="449.l.12345",
+            yahoo_team_key="449.l.12345.t.1",
+        )
+        mock_db, mock_session = _mock_db_session(mock_user)
+        mock_db_svc.session = mock_db.session
+
+        response = authed_client.delete("/leagues/me/yahoo")
+
+        assert response.status_code == 200
+        assert response.json() == {"disconnected": True}
+        assert mock_user.yahoo_access_token is None
+        assert mock_user.yahoo_refresh_token is None
+        assert mock_user.yahoo_league_key is None
+        assert mock_user.yahoo_team_key is None
+        assert mock_user.yahoo_sport is None
+        assert mock_user.yahoo_roster_snapshot is None
+        assert mock_user.yahoo_synced_at is None
+        mock_session.commit.assert_called_once()
+
+    def test_disconnect_yahoo_unauthenticated(self, test_client):
+        response = test_client.delete("/leagues/me/yahoo")
         assert response.status_code == 401
