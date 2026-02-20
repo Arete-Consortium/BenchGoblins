@@ -641,3 +641,19 @@ class DeviceToken(Base):
             postgresql_where=text("user_id IS NOT NULL"),
         ),
     )
+
+
+class NotificationLog(Base):
+    """Log of sent notifications for dedup and cooldown tracking."""
+
+    __tablename__ = "notification_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[str] = mapped_column(Text, nullable=False)
+    notification_type: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    __table_args__ = (
+        Index("idx_notification_log_user_type", "user_id", "notification_type", "sent_at"),
+    )

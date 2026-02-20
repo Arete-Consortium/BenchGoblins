@@ -49,6 +49,7 @@ from services.draft_assistant import draft_assistant, extract_draft_players
 from services.engagement import engagement_tracker
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
+from services.notification_triggers import notification_scheduler
 from services.notifications import PushNotification, notification_service
 from services.query_classifier import QueryCategory
 from services.query_classifier import classify_query as classify_sports_query
@@ -178,9 +179,18 @@ async def lifespan(app: FastAPI):
         logger.warning("REDIS_URL not set - caching disabled")
 
     logger.info("ESPN data service ready")
+
+    # Start notification scheduler if both DB and Redis are available
+    if db_service.is_configured and redis_service.is_connected:
+        await notification_scheduler.start()
+        logger.info("Notification scheduler started")
+    else:
+        logger.info("Notification scheduler skipped (requires DB + Redis)")
+
     yield
 
     # Cleanup
+    await notification_scheduler.stop()
     await espn_service.close()
     await espn_fantasy_service.close()
     await sleeper_service.close()
