@@ -67,6 +67,17 @@ export const useAppStore = create<AppState>()(
             lowerContent.includes('choose from') ||
             lowerContent.includes('rank these');
 
+          const isWaiver = lowerContent.includes('waiver') ||
+            lowerContent.includes('pickup') ||
+            lowerContent.includes('pick up') ||
+            lowerContent.includes('who should i add') ||
+            lowerContent.includes('free agent');
+
+          // Check if league is connected for waiver routing
+          const leagueState = useLeagueStore.getState();
+          const activeLeagueId = leagueState.selectedLeagueIds[sport];
+          const sleeperUserId = leagueState.connection?.sleeperUserId;
+
           let assistantMessage: Message;
 
           if (isDraft) {
@@ -90,20 +101,44 @@ export const useAppStore = create<AppState>()(
                 details: draftResponse.details || undefined,
               },
             };
+          } else if (isWaiver && activeLeagueId && sleeperUserId) {
+            // Waiver uses dedicated /waiver/recommend endpoint when league connected
+            const waiverResponse = await api.waiverRecommend({
+              sport,
+              risk_mode: riskMode,
+              query: content,
+              league_id: activeLeagueId,
+              sleeper_user_id: sleeperUserId,
+            });
+
+            assistantMessage = {
+              id: assistantMessageId,
+              role: 'assistant',
+              content: waiverResponse.rationale,
+              timestamp: new Date(),
+              decision: {
+                decision: waiverResponse.recommendations[0]?.name
+                  ? `Add ${waiverResponse.recommendations[0].name}`
+                  : 'No urgent pickups needed',
+                confidence: waiverResponse.confidence,
+                rationale: waiverResponse.rationale,
+                source: waiverResponse.source,
+                details: {
+                  recommendations: waiverResponse.recommendations,
+                  drop_candidates: waiverResponse.drop_candidates,
+                  position_needs: waiverResponse.position_needs,
+                },
+              },
+            };
           } else {
             let decisionType: 'start_sit' | 'trade' | 'waiver' | 'explain' = 'start_sit';
             if (lowerContent.includes('trade')) {
               decisionType = 'trade';
-            } else if (lowerContent.includes('waiver') || lowerContent.includes('pickup') || lowerContent.includes('pick up')) {
+            } else if (isWaiver) {
               decisionType = 'waiver';
             } else if (lowerContent.includes('explain') || lowerContent.includes('why') || lowerContent.includes('how')) {
               decisionType = 'explain';
             }
-
-            // Inject league context if connected
-            const leagueState = useLeagueStore.getState();
-            const activeLeagueId = leagueState.selectedLeagueIds[sport];
-            const sleeperUserId = leagueState.connection?.sleeperUserId;
 
             // Use streaming API for real-time response
             let fullContent = '';

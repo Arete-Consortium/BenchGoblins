@@ -71,6 +71,7 @@ from services.variants import (
     get_experiment_config,
     get_experiment_history,
 )
+from services.waiver_wire import analyze_roster, build_waiver_prompt
 from services.websocket import connection_manager
 from services.yahoo import yahoo_service
 
@@ -399,6 +400,34 @@ class DraftResponse(BaseModel):
     rationale: str
     details: dict | None = None
     source: str = Field(..., description="'local' or 'claude'")
+
+
+class WaiverRequest(BaseModel):
+    """Request body for /waiver/recommend endpoint"""
+
+    sport: Sport
+    risk_mode: RiskMode = RiskMode.MEDIAN
+    query: str = Field(
+        default="Who should I pick up?",
+        max_length=1000,
+        description="Waiver wire question",
+    )
+    league_id: str = Field(..., max_length=50, description="Sleeper league ID (required)")
+    sleeper_user_id: str = Field(..., max_length=50, description="Sleeper user ID (required)")
+    position_filter: str | None = Field(
+        None, max_length=10, description="Filter to specific position, e.g., 'RB'"
+    )
+
+
+class WaiverResponse(BaseModel):
+    """Response from /waiver/recommend endpoint"""
+
+    recommendations: list[dict]
+    drop_candidates: list[dict]
+    position_needs: list[str]
+    confidence: Confidence
+    rationale: str
+    source: str = Field(default="claude", description="'claude'")
 
 
 class PlayerSearchRequest(BaseModel):
@@ -1289,6 +1318,145 @@ async def draft_decision(
 
     # Fall back to Claude for complex queries or missing ESPN data
     return await _claude_draft_fallback(request, session_id)
+
+
+@app.post("/waiver/recommend", response_model=WaiverResponse)
+async def waiver_recommend(
+    request: WaiverRequest,
+    session_id: str | None = Query(default=None, description="Session ID for variant assignment"),
+    current_user: dict | None = Depends(get_optional_user),
+):
+    """
+    Generate waiver wire recommendations based on roster analysis.
+
+    Requires a connected Sleeper league to analyze the user's roster.
+    Uses Claude to generate recommendations tailored to position needs.
+
+    Rate limits:
+    - Free tier: 5 queries per day
+    - Pro tier: unlimited queries
+    """
+    # Check rate limit
+    effective_session = session_id or "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(effective_session)
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after} seconds.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    # Check tier-based daily limit if authenticated
+    user_id = current_user["user_id"] if current_user else None
+    if user_id is not None:
+        tier_allowed, queries_today, weekly_limit = await _check_and_increment_query_count(user_id)
+        if not tier_allowed:
+            _raise_quota_exceeded(queries_today, weekly_limit)
+
+    # Fetch user roster from Sleeper
+    roster = await sleeper_service.get_user_roster(request.league_id, request.sleeper_user_id)
+    if not roster or not roster.players:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not find your roster. Make sure your Sleeper league is connected.",
+        )
+
+    # Enrich roster with player details
+    players = await sleeper_service.get_players_by_ids(roster.players, request.sport.value)
+    if not players:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not load player data for your roster.",
+        )
+
+    # Analyze roster composition
+    starter_ids = set(roster.starters or [])
+    analysis = analyze_roster(players, starter_ids, request.sport.value)
+
+    # Build Claude prompt with roster context
+    prompt = build_waiver_prompt(
+        analysis,
+        request.sport.value,
+        request.risk_mode.value,
+        request.query,
+        position_filter=request.position_filter,
+    )
+
+    # Check budget before calling Claude
+    budget_exceeded, budget_msg = await _check_budget_exceeded()
+    if budget_exceeded:
+        raise HTTPException(
+            status_code=402,
+            detail=budget_msg or "Monthly API budget exceeded",
+        )
+
+    # Call Claude for recommendations
+    try:
+        result = await claude_service.make_decision(
+            query=prompt,
+            sport=request.sport.value,
+            risk_mode=request.risk_mode.value,
+            decision_type="waiver",
+            player_context=prompt,
+            use_cache=False,
+        )
+
+        # Parse JSON from Claude's response
+        response_text = result.get("rationale", "") or result.get("decision", "")
+
+        # Extract JSON block from response
+        json_start = response_text.find("{")
+        json_end = response_text.rfind("}") + 1
+        if json_start >= 0 and json_end > json_start:
+            parsed = json.loads(response_text[json_start:json_end])
+        else:
+            parsed = {"recommendations": [], "drop_candidates": [], "summary": response_text}
+
+        recommendations = parsed.get("recommendations", [])
+        drop_candidates = parsed.get("drop_candidates", [])
+        summary = parsed.get("summary", "")
+
+        # Build rationale from analysis + Claude summary
+        rationale_parts = []
+        if analysis.position_needs:
+            rationale_parts.append(f"Position needs: {', '.join(analysis.position_needs)}.")
+        if analysis.injured:
+            injured_names = [p["name"] for p in analysis.injured]
+            rationale_parts.append(f"Injured: {', '.join(injured_names)}.")
+        if summary:
+            rationale_parts.append(summary)
+        rationale = " ".join(rationale_parts) if rationale_parts else "No urgent needs identified."
+
+        # Determine confidence
+        confidence = Confidence.MEDIUM
+        if analysis.position_needs and len(analysis.position_needs) >= 2:
+            confidence = Confidence.HIGH
+        elif analysis.injured:
+            confidence = Confidence.HIGH
+        elif not recommendations:
+            confidence = Confidence.LOW
+
+        await check_and_send_alerts()
+
+        return WaiverResponse(
+            recommendations=recommendations,
+            drop_candidates=drop_candidates,
+            position_needs=analysis.position_needs,
+            confidence=confidence,
+            rationale=rationale,
+            source="claude",
+        )
+
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to parse waiver recommendations from AI response.",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error generating waiver recommendations: {str(e)}",
+        )
 
 
 async def _local_draft_decision(
