@@ -27,6 +27,8 @@ interface LeagueState {
   connectSleeper: (username: string, sport: Sport) => Promise<void>;
   selectLeague: (leagueId: string, sport: Sport) => Promise<void>;
   fetchRoster: (leagueId: string, sport: Sport) => Promise<void>;
+  syncToBackend: (leagueId: string, sport: Sport) => Promise<void>;
+  restoreFromBackend: () => Promise<void>;
   onSportChange: (sport: Sport) => Promise<void>;
   disconnect: () => void;
   clearError: () => void;
@@ -83,6 +85,9 @@ export const useLeagueStore = create<LeagueState>()(
         }));
 
         await get().fetchRoster(leagueId, sport);
+
+        // Persist to backend (non-blocking)
+        get().syncToBackend(leagueId, sport).catch(() => {});
       },
 
       fetchRoster: async (leagueId: string, sport: Sport) => {
@@ -105,6 +110,42 @@ export const useLeagueStore = create<LeagueState>()(
             roster: [],
             error: 'Failed to load roster.',
           });
+        }
+      },
+
+      syncToBackend: async (leagueId: string, sport: Sport) => {
+        const { connection } = get();
+        if (!connection || !api.isUserAuthenticated()) return;
+
+        try {
+          await api.syncLeague(connection.sleeperUsername, leagueId, sport);
+        } catch (error) {
+          console.error('Failed to sync league to backend:', error);
+        }
+      },
+
+      restoreFromBackend: async () => {
+        if (!api.isUserAuthenticated()) return;
+
+        // Don't overwrite existing local connection
+        const { connection } = get();
+        if (connection) return;
+
+        try {
+          const data = await api.getMyLeague();
+          if (data.connected && data.sleeper_username && data.sleeper_user_id && data.sleeper_league_id) {
+            set({
+              connection: {
+                sleeperUserId: data.sleeper_user_id,
+                sleeperUsername: data.sleeper_username,
+                displayName: data.sleeper_username,
+                avatar: null,
+              },
+              selectedLeagueIds: { nfl: data.sleeper_league_id },
+            });
+          }
+        } catch (error) {
+          console.error('Failed to restore league from backend:', error);
         }
       },
 
@@ -149,6 +190,13 @@ export const useLeagueStore = create<LeagueState>()(
       },
 
       disconnect: () => {
+        // Clear backend connection (fire-and-forget)
+        if (api.isUserAuthenticated()) {
+          api.disconnectLeague().catch((err) =>
+            console.error('Failed to disconnect league on backend:', err)
+          );
+        }
+
         set({
           connection: null,
           leaguesBySport: {},

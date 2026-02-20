@@ -16,7 +16,12 @@ import {
   Trash2,
   Moon,
   Sun,
+  Link2,
+  Unlink,
 } from 'lucide-react';
+import { useLeagueStore } from '@/stores/leagueStore';
+import { useAuthStore } from '@/stores/authStore';
+import { LeagueConnectDialog } from '@/components/LeagueConnectDialog';
 
 function SettingsSection({
   title,
@@ -40,8 +45,11 @@ export default function SettingsPage() {
   const router = useRouter();
   const { theme, setTheme } = useTheme();
   const { sport, riskMode, setSport, setRiskMode, clearMessages } = useAppStore();
+  const { connection, selectedLeagueIds, disconnect } = useLeagueStore();
+  const { isAuthenticated } = useAuthStore();
   const darkMode = theme === 'dark';
   const [notifications, setNotifications] = useState(true);
+  const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
 
   return (
     <div className="min-h-screen">
@@ -72,6 +80,57 @@ export default function SettingsPage() {
                 </div>
               </div>
             </SettingsSection>
+
+            {/* Connected League */}
+            {isAuthenticated && (
+              <SettingsSection
+                title="Connected League"
+                description="Sleeper league synced to your profile for personalized recommendations"
+              >
+                {connection && selectedLeagueIds[sport] ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3 p-4 bg-dark-700/50 rounded-lg">
+                      <Link2 className="w-5 h-5 text-primary-400 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium">{connection.sleeperUsername}</div>
+                        <div className="text-sm text-dark-400 truncate">
+                          League: {selectedLeagueIds[sport]}
+                        </div>
+                      </div>
+                      <span className="px-2 py-1 rounded-full bg-primary-600/20 text-primary-400 text-xs">
+                        Connected
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (confirm('Disconnect your Sleeper league? You can reconnect anytime.')) {
+                          disconnect();
+                        }
+                      }}
+                      className="flex items-center gap-2 text-sm text-dark-400 hover:text-red-400 transition-all"
+                    >
+                      <Unlink className="w-4 h-4" />
+                      Disconnect League
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-sm text-dark-400">
+                      No league connected. Connect your Sleeper league for roster-aware decisions.
+                    </p>
+                    <button
+                      onClick={() => setLeagueDialogOpen(true)}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-600 text-white text-sm font-medium hover:bg-primary-500 transition-all"
+                    >
+                      <Link2 className="w-4 h-4" />
+                      Connect League
+                    </button>
+                  </div>
+                )}
+              </SettingsSection>
+            )}
+
+            <LeagueConnectDialog open={leagueDialogOpen} onOpenChange={setLeagueDialogOpen} />
 
             {/* Appearance */}
             <SettingsSection title="Appearance">
