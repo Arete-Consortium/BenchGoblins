@@ -825,6 +825,17 @@ async def make_decision(
             )
         player_context = "\n\n".join(context_parts)
 
+    # Auto-fill Sleeper context from authenticated user's profile
+    if not request.league_id and current_user:
+        user = await _get_user_by_id(current_user["user_id"])
+        if user and user.sleeper_league_id:
+            request = request.model_copy(
+                update={
+                    "league_id": user.sleeper_league_id,
+                    "sleeper_user_id": user.sleeper_user_id,
+                }
+            )
+
     # Inject Sleeper league context (roster + scoring)
     if request.league_id:
         try:
@@ -1444,6 +1455,17 @@ async def make_decision_stream(
                 )
         if context_parts:
             player_context = "\n\n".join(context_parts)
+
+    # Auto-fill Sleeper context from authenticated user's profile
+    if not request.league_id and current_user:
+        user = await _get_user_by_id(current_user["user_id"])
+        if user and user.sleeper_league_id:
+            request = request.model_copy(
+                update={
+                    "league_id": user.sleeper_league_id,
+                    "sleeper_user_id": user.sleeper_user_id,
+                }
+            )
 
     # Inject Sleeper league context (roster + scoring)
     if request.league_id:
