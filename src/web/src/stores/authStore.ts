@@ -35,12 +35,15 @@ interface AuthState {
   isAuthenticated: boolean;
   accessToken: string | null;
 
+  onboardingComplete: boolean;
+
   // Actions
   signInWithGoogle: (idToken: string) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
   setLoading: (loading: boolean) => void;
   clearAuth: () => void;
+  completeOnboarding: () => void;
 }
 
 // Storage key for JWT
@@ -54,6 +57,7 @@ export const useAuthStore = create<AuthState>()(
       isLoading: false,
       isAuthenticated: false,
       accessToken: null,
+      onboardingComplete: false,
 
       // Set loading state
       setLoading: (loading: boolean) => set({ isLoading: loading }),
@@ -68,6 +72,7 @@ export const useAuthStore = create<AuthState>()(
           isAuthenticated: false,
           accessToken: null,
           isLoading: false,
+          onboardingComplete: false,
         });
       },
 
@@ -139,6 +144,9 @@ export const useAuthStore = create<AuthState>()(
           get().clearAuth();
         }
       },
+
+      // Mark onboarding as complete
+      completeOnboarding: () => set({ onboardingComplete: true }),
     }),
     {
       name: 'benchgoblin-auth',
@@ -146,6 +154,7 @@ export const useAuthStore = create<AuthState>()(
         accessToken: state.accessToken,
         user: state.user,
         isAuthenticated: state.isAuthenticated,
+        onboardingComplete: state.onboardingComplete,
       }),
       onRehydrateStorage: () => (state) => {
         // First check for cookie-based session (OAuth workaround)
