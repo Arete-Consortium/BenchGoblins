@@ -37,6 +37,7 @@ from routes.auth import get_current_user, get_optional_user, require_admin_key
 from routes.auth import router as auth_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
+from routes.notifications import router as notifications_router
 from routes.sessions import router as sessions_router
 from routes.verdicts import router as verdicts_router
 from services import stripe_billing
@@ -287,6 +288,9 @@ app.include_router(verdicts_router)
 
 # Newsletter routes (email capture)
 app.include_router(newsletter_router)
+
+# Push notification routes
+app.include_router(notifications_router)
 
 
 # ---------------------------------------------------------------------------
