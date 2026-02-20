@@ -24,16 +24,6 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from pydantic import BaseModel, Field
 
-logger = logging.getLogger(__name__)
-
-__all__ = [
-    "router",
-    "get_current_user",
-    "get_current_user_token",
-    "get_optional_user",
-    "require_admin_key",
-]
-
 from services.auth import (
     ConfigurationError,
     InvalidTokenError,
@@ -47,6 +37,16 @@ from services.auth import (
     verify_jwt_token,
 )
 from services.database import db_service
+
+logger = logging.getLogger(__name__)
+
+__all__ = [
+    "router",
+    "get_current_user",
+    "get_current_user_token",
+    "get_optional_user",
+    "require_admin_key",
+]
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

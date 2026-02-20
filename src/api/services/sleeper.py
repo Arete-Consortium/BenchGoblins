@@ -346,7 +346,11 @@ class SleeperService:
                 data = response.json()
                 self._players_cache[sport] = data or {}
                 self._players_cache_ts[sport] = now
-                logger.info("Refreshed Sleeper players cache for %s (%d players)", sport, len(self._players_cache[sport]))
+                logger.info(
+                    "Refreshed Sleeper players cache for %s (%d players)",
+                    sport,
+                    len(self._players_cache[sport]),
+                )
                 return self._players_cache[sport]
 
         except httpx.HTTPError as e:

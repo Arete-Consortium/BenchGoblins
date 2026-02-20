@@ -45,9 +45,7 @@ class SessionService:
 
                 self._encryption_key = base64.b64decode(key_b64)
                 if len(self._encryption_key) != 32:
-                    raise ValueError(
-                        "SESSION_ENCRYPTION_KEY must decode to 32 bytes"
-                    )
+                    raise ValueError("SESSION_ENCRYPTION_KEY must decode to 32 bytes")
             elif os.getenv("ENVIRONMENT", "development") == "development":
                 # Development only — generate a temporary key
                 self._encryption_key = secrets.token_bytes(32)
