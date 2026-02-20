@@ -2947,7 +2947,11 @@ async def record_outcome(request: OutcomeRequest):
         user_followed=request.user_followed,
         feedback_note=request.feedback_note,
     )
-    accuracy_tracker.record_outcome(outcome)
+    if db_service.is_configured:
+        async with db_service.session() as session:
+            found = await accuracy_tracker.record_outcome(session, outcome)
+            if not found:
+                raise HTTPException(status_code=404, detail="Decision not found")
     return {"status": "recorded", "decision_id": request.decision_id}
 
 
@@ -2974,6 +2978,8 @@ async def get_accuracy_metrics(
                         "decision": d.decision,
                         "player_a_name": d.player_a_name,
                         "prompt_variant": d.prompt_variant,
+                        "actual_points_a": float(d.actual_points_a) if d.actual_points_a is not None else None,
+                        "actual_points_b": float(d.actual_points_b) if d.actual_points_b is not None else None,
                     }
                     for d in rows
                 ]
@@ -3017,15 +3023,16 @@ async def get_accuracy_metrics(
 @app.get("/accuracy/outcome/{decision_id}")
 async def get_outcome(decision_id: str):
     """Get the recorded outcome for a specific decision."""
-    outcome = accuracy_tracker.get_outcome(decision_id)
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    async with db_service.session() as session:
+        outcome = await accuracy_tracker.get_outcome(session, decision_id)
     if not outcome:
         raise HTTPException(status_code=404, detail="No outcome recorded for this decision")
     return {
         "decision_id": outcome.decision_id,
         "actual_points_a": outcome.actual_points_a,
         "actual_points_b": outcome.actual_points_b,
-        "user_followed": outcome.user_followed,
-        "feedback_note": outcome.feedback_note,
     }
 
 
