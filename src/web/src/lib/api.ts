@@ -489,6 +489,47 @@ class APIClient {
     return response.data;
   }
 
+  // ESPN Fantasy endpoints
+  async syncESPN(
+    swid: string,
+    espnS2: string,
+    leagueId: string,
+    teamId: string,
+    sport = 'nfl'
+  ): Promise<{
+    espn_league_id: string;
+    espn_team_id: string;
+    sport: string;
+    roster_player_count: number;
+    synced_at: string;
+  }> {
+    const response = await this.client.post('/leagues/sync-espn', {
+      swid,
+      espn_s2: espnS2,
+      league_id: leagueId,
+      team_id: teamId,
+      sport,
+    });
+    return response.data;
+  }
+
+  async getMyESPN(): Promise<{
+    connected: boolean;
+    espn_league_id: string | null;
+    espn_team_id: string | null;
+    sport: string | null;
+    roster_player_count: number;
+    synced_at: string | null;
+  }> {
+    const response = await this.client.get('/leagues/me/espn');
+    return response.data;
+  }
+
+  async disconnectESPN(): Promise<{ disconnected: boolean }> {
+    const response = await this.client.delete('/leagues/me/espn');
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

@@ -14,6 +14,7 @@ from sqlalchemy import select
 from models.database import User
 from routes.auth import get_current_user
 from services.database import db_service
+from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.sleeper import sleeper_service
 
 router = APIRouter(prefix="/leagues", tags=["Leagues"])
@@ -348,6 +349,156 @@ async def disconnect_league(
         user.sleeper_league_id = None
         user.roster_snapshot = None
         user.sleeper_synced_at = None
+        session.add(user)
+        await session.commit()
+
+    return {"disconnected": True}
+
+
+# -------------------------------------------------------------------------
+# ESPN Fantasy Integration (persist to user profile)
+# -------------------------------------------------------------------------
+
+
+class ESPNSyncRequest(BaseModel):
+    """Request to persist ESPN Fantasy connection to user profile."""
+
+    swid: str = Field(..., description="ESPN SWID cookie")
+    espn_s2: str = Field(..., description="ESPN espn_s2 cookie")
+    league_id: str = Field(..., description="ESPN league ID")
+    team_id: str = Field(..., description="Team ID within the league")
+    sport: str = Field(default="nfl", description="Sport: nfl, nba, mlb, nhl")
+
+
+class ESPNSyncResponse(BaseModel):
+    """Response after syncing ESPN connection to user profile."""
+
+    espn_league_id: str
+    espn_team_id: str
+    sport: str
+    roster_player_count: int
+    synced_at: str
+
+
+class MyESPNResponse(BaseModel):
+    """Current user's ESPN connection status."""
+
+    connected: bool
+    espn_league_id: str | None = None
+    espn_team_id: str | None = None
+    sport: str | None = None
+    roster_player_count: int = 0
+    synced_at: str | None = None
+
+
+@router.post("/sync-espn", response_model=ESPNSyncResponse)
+async def sync_espn(
+    request: ESPNSyncRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Persist an ESPN Fantasy connection to the authenticated user's profile.
+
+    Validates credentials, fetches roster snapshot, and stores on User record
+    so /decide can auto-inject ESPN roster context.
+    """
+    creds = ESPNCredentials(swid=request.swid, espn_s2=request.espn_s2)
+
+    # Verify credentials
+    valid = await espn_fantasy_service.verify_credentials(creds)
+    if not valid:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid ESPN credentials. Check your SWID and espn_s2 cookies.",
+        )
+
+    # Fetch roster snapshot
+    roster_snapshot = []
+    players = await espn_fantasy_service.get_roster(
+        creds, request.league_id, int(request.team_id), request.sport
+    )
+    roster_snapshot = [
+        {
+            "player_id": p.player_id,
+            "name": p.name,
+            "position": p.position,
+            "team": str(p.team),
+            "lineup_slot": p.lineup_slot,
+        }
+        for p in players
+    ]
+
+    now = datetime.now(UTC)
+
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.espn_swid = request.swid
+        user.espn_s2 = request.espn_s2
+        user.espn_league_id = request.league_id
+        user.espn_team_id = request.team_id
+        user.espn_sport = request.sport
+        user.espn_roster_snapshot = roster_snapshot
+        user.espn_synced_at = now
+        session.add(user)
+        await session.commit()
+
+    return ESPNSyncResponse(
+        espn_league_id=request.league_id,
+        espn_team_id=request.team_id,
+        sport=request.sport,
+        roster_player_count=len(roster_snapshot),
+        synced_at=now.isoformat(),
+    )
+
+
+@router.get("/me/espn", response_model=MyESPNResponse)
+async def get_my_espn(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Check if the authenticated user has a connected ESPN Fantasy league.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    connected = user.espn_league_id is not None
+    return MyESPNResponse(
+        connected=connected,
+        espn_league_id=user.espn_league_id,
+        espn_team_id=user.espn_team_id,
+        sport=user.espn_sport,
+        roster_player_count=len(user.espn_roster_snapshot) if user.espn_roster_snapshot else 0,
+        synced_at=user.espn_synced_at.isoformat() if user.espn_synced_at else None,
+    )
+
+
+@router.delete("/me/espn")
+async def disconnect_espn(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Disconnect the authenticated user's ESPN Fantasy connection.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user.espn_swid = None
+        user.espn_s2 = None
+        user.espn_league_id = None
+        user.espn_team_id = None
+        user.espn_sport = None
+        user.espn_roster_snapshot = None
+        user.espn_synced_at = None
         session.add(user)
         await session.commit()
 

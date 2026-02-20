@@ -13,6 +13,8 @@ import {
 } from '@/components/ui/dialog';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { useAppStore } from '@/stores/appStore';
+import { cn } from '@/lib/utils';
+import api from '@/lib/api';
 import type { Sport, SleeperLeague, RosterPlayer } from '@/types';
 
 const SPORT_NAMES: Record<Sport, string> = {
@@ -23,7 +25,8 @@ const SPORT_NAMES: Record<Sport, string> = {
   soccer: 'Soccer',
 };
 
-type Step = 'platform' | 'leagues' | 'roster';
+type Platform = 'sleeper' | 'espn';
+type Step = 'platform' | 'leagues' | 'roster' | 'espn-creds' | 'espn-done';
 
 interface LeagueConnectDialogProps {
   open: boolean;
@@ -45,7 +48,17 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
   } = useLeagueStore();
 
   const [step, setStep] = useState<Step>('platform');
+  const [platform, setPlatform] = useState<Platform>('sleeper');
   const [username, setUsername] = useState('');
+
+  // ESPN credential state
+  const [espnSwid, setEspnSwid] = useState('');
+  const [espnS2, setEspnS2] = useState('');
+  const [espnLeagueId, setEspnLeagueId] = useState('');
+  const [espnTeamId, setEspnTeamId] = useState('');
+  const [espnLoading, setEspnLoading] = useState(false);
+  const [espnError, setEspnError] = useState<string | null>(null);
+  const [espnResult, setEspnResult] = useState<{ roster_player_count: number } | null>(null);
 
   // Wrap onOpenChange to reset step when dialog opens
   const handleOpenChange = useCallback((nextOpen: boolean) => {
@@ -53,12 +66,15 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
       const state = useLeagueStore.getState();
       if (state.connection && state.selectedLeagueIds[sport]) {
         setStep('roster');
+        setPlatform('sleeper');
       } else if (state.connection && state.leaguesBySport[sport]?.length) {
         setStep('leagues');
+        setPlatform('sleeper');
       } else {
         setStep('platform');
-        setUsername(state.connection?.sleeperUsername || '');
       }
+      setEspnError(null);
+      setEspnResult(null);
       state.clearError();
     }
     onOpenChange(nextOpen);
@@ -87,6 +103,30 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
     if (e.key === 'Enter') handleConnect();
   };
 
+  const handleESPNConnect = async () => {
+    if (!espnSwid.trim() || !espnS2.trim() || !espnLeagueId.trim() || !espnTeamId.trim()) return;
+    setEspnLoading(true);
+    setEspnError(null);
+    try {
+      const result = await api.syncESPN(
+        espnSwid.trim(),
+        espnS2.trim(),
+        espnLeagueId.trim(),
+        espnTeamId.trim(),
+        sport === 'soccer' ? 'nfl' : sport,
+      );
+      setEspnResult(result);
+      setStep('espn-done');
+    } catch (err) {
+      const msg = err instanceof Error && err.message.includes('401')
+        ? 'Invalid ESPN credentials. Check your SWID and espn_s2 cookies.'
+        : 'Failed to connect ESPN. Please try again.';
+      setEspnError(msg);
+    } finally {
+      setEspnLoading(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
@@ -101,55 +141,147 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
 
             {/* Platform selector */}
             <div className="flex gap-2">
-              <Button className="flex-1 bg-primary-600 hover:bg-primary-700" size="sm">
+              <Button
+                className={cn('flex-1', platform === 'sleeper' ? 'bg-primary-600 hover:bg-primary-700' : '')}
+                variant={platform === 'sleeper' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPlatform('sleeper')}
+              >
                 Sleeper
               </Button>
-              <Button variant="outline" className="flex-1 opacity-50 cursor-not-allowed" size="sm" disabled>
-                ESPN <span className="text-xs ml-1 text-dark-500">Soon</span>
+              <Button
+                className={cn('flex-1', platform === 'espn' ? 'bg-primary-600 hover:bg-primary-700' : '')}
+                variant={platform === 'espn' ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => setPlatform('espn')}
+              >
+                ESPN
               </Button>
               <Button variant="outline" className="flex-1 opacity-50 cursor-not-allowed" size="sm" disabled>
                 Yahoo <span className="text-xs ml-1 text-dark-500">Soon</span>
               </Button>
             </div>
 
-            {/* Username input */}
-            <div className="space-y-3">
-              <Input
-                placeholder="Sleeper username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                onKeyDown={handleKeyDown}
-                disabled={isConnecting}
-                autoFocus
-              />
+            {platform === 'sleeper' && (
+              <div className="space-y-3">
+                <Input
+                  placeholder="Sleeper username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  disabled={isConnecting}
+                  autoFocus
+                />
 
-              {error && (
-                <div className="flex items-center gap-2 text-sm text-red-400">
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                  {error}
-                </div>
-              )}
-
-              <Button
-                onClick={handleConnect}
-                disabled={isConnecting || !username.trim()}
-                className="w-full"
-              >
-                {isConnecting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Connecting...
-                  </>
-                ) : (
-                  'Connect'
+                {error && (
+                  <div className="flex items-center gap-2 text-sm text-red-400">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {error}
+                  </div>
                 )}
-              </Button>
 
-              <p className="text-xs text-dark-500 flex items-center gap-1.5">
-                <Shield className="h-3 w-3" />
-                Sleeper&apos;s API is public — we only read your leagues and roster.
+                <Button
+                  onClick={handleConnect}
+                  disabled={isConnecting || !username.trim()}
+                  className="w-full"
+                >
+                  {isConnecting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Connecting...
+                    </>
+                  ) : (
+                    'Connect'
+                  )}
+                </Button>
+
+                <p className="text-xs text-dark-500 flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" />
+                  Sleeper&apos;s API is public — we only read your leagues and roster.
+                </p>
+              </div>
+            )}
+
+            {platform === 'espn' && (
+              <div className="space-y-3">
+                <p className="text-xs text-dark-400">
+                  Paste your ESPN cookies from DevTools &gt; Application &gt; Cookies.
+                </p>
+                <Input
+                  placeholder="SWID (e.g., {ABCD-1234-...})"
+                  value={espnSwid}
+                  onChange={(e) => setEspnSwid(e.target.value)}
+                  disabled={espnLoading}
+                />
+                <Input
+                  placeholder="espn_s2 cookie"
+                  value={espnS2}
+                  onChange={(e) => setEspnS2(e.target.value)}
+                  disabled={espnLoading}
+                />
+                <Input
+                  placeholder="League ID"
+                  value={espnLeagueId}
+                  onChange={(e) => setEspnLeagueId(e.target.value)}
+                  disabled={espnLoading}
+                />
+                <Input
+                  placeholder="Team ID (your team number)"
+                  value={espnTeamId}
+                  onChange={(e) => setEspnTeamId(e.target.value)}
+                  disabled={espnLoading}
+                />
+
+                {espnError && (
+                  <div className="flex items-center gap-2 text-sm text-red-400">
+                    <AlertCircle className="h-4 w-4 shrink-0" />
+                    {espnError}
+                  </div>
+                )}
+
+                <Button
+                  onClick={handleESPNConnect}
+                  disabled={espnLoading || !espnSwid.trim() || !espnS2.trim() || !espnLeagueId.trim() || !espnTeamId.trim()}
+                  className="w-full"
+                >
+                  {espnLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      Connecting...
+                    </>
+                  ) : (
+                    'Connect ESPN'
+                  )}
+                </Button>
+
+                <p className="text-xs text-dark-500 flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" />
+                  Your ESPN cookies are stored securely and only used to fetch your roster.
+                </p>
+              </div>
+            )}
+          </>
+        )}
+
+        {step === 'espn-done' && espnResult && (
+          <>
+            <DialogHeader>
+              <DialogTitle>ESPN Connected</DialogTitle>
+              <DialogDescription>
+                {espnResult.roster_player_count} players synced from your ESPN roster.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="text-center py-4">
+              <div className="text-4xl mb-2">🏈</div>
+              <p className="text-sm text-dark-400">
+                Your ESPN roster will be used for personalized recommendations.
               </p>
             </div>
+
+            <Button onClick={() => onOpenChange(false)} className="w-full">
+              Done
+            </Button>
           </>
         )}
 
