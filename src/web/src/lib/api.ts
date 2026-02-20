@@ -580,6 +580,48 @@ class APIClient {
     return response.data;
   }
 
+  // Push notification endpoints
+  async registerNotificationToken(token: string): Promise<{ registered: boolean; token: string }> {
+    const response = await this.client.post('/notifications/register', { token });
+    return response.data;
+  }
+
+  async unregisterNotificationToken(token: string): Promise<{ unregistered: boolean }> {
+    const response = await this.client.delete('/notifications/register', { data: { token } });
+    return response.data;
+  }
+
+  async getNotificationPreferences(): Promise<{
+    preferences: {
+      injury_alerts: boolean;
+      lineup_reminders: boolean;
+      decision_updates: boolean;
+      trending_players: boolean;
+    };
+    token_count: number;
+  }> {
+    const response = await this.client.get('/notifications/preferences');
+    return response.data;
+  }
+
+  async updateNotificationPreferences(prefs: {
+    injury_alerts: boolean;
+    lineup_reminders: boolean;
+    decision_updates: boolean;
+    trending_players: boolean;
+  }): Promise<{
+    preferences: typeof prefs;
+    token_count: number;
+  }> {
+    const response = await this.client.put('/notifications/preferences', prefs);
+    return response.data;
+  }
+
+  async sendTestNotification(title?: string, body?: string): Promise<{ sent: number; results: unknown[] }> {
+    const response = await this.client.post('/notifications/test', { title, body });
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

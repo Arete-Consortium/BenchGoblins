@@ -50,8 +50,17 @@ export default function SettingsPage() {
   const { connection, selectedLeagueIds, disconnect } = useLeagueStore();
   const { isAuthenticated } = useAuthStore();
   const darkMode = theme === 'dark';
-  const [notifications, setNotifications] = useState(true);
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
+
+  // Notification preferences
+  const [notifPrefs, setNotifPrefs] = useState({
+    injury_alerts: true,
+    lineup_reminders: true,
+    decision_updates: false,
+    trending_players: false,
+  });
+  const [notifTokenCount, setNotifTokenCount] = useState(0);
+  const [notifSaving, setNotifSaving] = useState(false);
 
   // ESPN connection status
   const [espnStatus, setEspnStatus] = useState<{
@@ -122,6 +131,36 @@ export default function SettingsPage() {
       // ignore
     } finally {
       setYahooLoading(false);
+    }
+  };
+
+  // Fetch notification preferences
+  const fetchNotifPrefs = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await api.getNotificationPreferences();
+      setNotifPrefs(data.preferences);
+      setNotifTokenCount(data.token_count);
+    } catch {
+      // Silently ignore
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchNotifPrefs();
+  }, [fetchNotifPrefs]);
+
+  const handleToggleNotifPref = async (key: keyof typeof notifPrefs) => {
+    const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
+    setNotifPrefs(updated);
+    setNotifSaving(true);
+    try {
+      await api.updateNotificationPreferences(updated);
+    } catch {
+      // Revert on failure
+      setNotifPrefs(notifPrefs);
+    } finally {
+      setNotifSaving(false);
     }
   };
 
@@ -313,33 +352,46 @@ export default function SettingsPage() {
             </SettingsSection>
 
             {/* Notifications */}
-            <SettingsSection title="Notifications">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <Bell className="w-5 h-5 text-dark-400" />
-                  <div>
-                    <div className="font-medium">Push Notifications</div>
-                    <div className="text-sm text-dark-400">
-                      Get notified about injury updates and lineup locks
+            {isAuthenticated && (
+              <SettingsSection
+                title="Notifications"
+                description={notifTokenCount > 0 ? `${notifTokenCount} device${notifTokenCount !== 1 ? 's' : ''} registered` : 'Register a device to receive push notifications'}
+              >
+                <div className="space-y-4">
+                  {([
+                    { key: 'injury_alerts' as const, icon: Bell, label: 'Injury Alerts', desc: 'Get notified when your players\' injury status changes' },
+                    { key: 'lineup_reminders' as const, icon: Bell, label: 'Lineup Reminders', desc: 'Reminders before lineup locks' },
+                    { key: 'decision_updates' as const, icon: Bell, label: 'Decision Updates', desc: 'Updates on players you\'ve asked about' },
+                    { key: 'trending_players' as const, icon: Bell, label: 'Trending Players', desc: 'Alerts for trending waiver wire pickups' },
+                  ]).map(({ key, label, desc }) => (
+                    <div key={key} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Bell className="w-5 h-5 text-dark-400" />
+                        <div>
+                          <div className="font-medium">{label}</div>
+                          <div className="text-sm text-dark-400">{desc}</div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleToggleNotifPref(key)}
+                        disabled={notifSaving}
+                        className={cn(
+                          'w-12 h-7 rounded-full transition-all relative',
+                          notifPrefs[key] ? 'bg-primary-600' : 'bg-dark-600'
+                        )}
+                      >
+                        <div
+                          className={cn(
+                            'absolute w-5 h-5 rounded-full bg-white top-1 transition-all',
+                            notifPrefs[key] ? 'left-6' : 'left-1'
+                          )}
+                        />
+                      </button>
                     </div>
-                  </div>
+                  ))}
                 </div>
-                <button
-                  onClick={() => setNotifications(!notifications)}
-                  className={cn(
-                    'w-12 h-7 rounded-full transition-all relative',
-                    notifications ? 'bg-primary-600' : 'bg-dark-600'
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'absolute w-5 h-5 rounded-full bg-white top-1 transition-all',
-                      notifications ? 'left-6' : 'left-1'
-                    )}
-                  />
-                </button>
-              </div>
-            </SettingsSection>
+              </SettingsSection>
+            )}
 
             {/* Subscription */}
             <SettingsSection title="Subscription">
