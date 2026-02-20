@@ -11,7 +11,6 @@ import type {
   Confidence,
   DraftDetailsData,
   WaiverCandidate,
-  WaiverDetailsData,
   SleeperConnectResponse,
   SleeperLeague,
   RosterResponse,

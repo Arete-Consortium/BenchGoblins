@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useCallback } from 'react';
 import { Header } from '@/components/layout/Header';
-import { useAuthStore } from '@/stores/authStore';
 import { Button } from '@/components/ui/button';
 import { Loader2, RefreshCw, Target, TrendingUp, BarChart3, Layers } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -82,7 +81,6 @@ function ConfidenceBar({
 }
 
 export default function AccuracyPage() {
-  const { isAuthenticated } = useAuthStore();
   const [data, setData] = useState<AccuracyData | null>(null);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
