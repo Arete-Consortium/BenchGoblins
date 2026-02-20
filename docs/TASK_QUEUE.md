@@ -17,8 +17,8 @@
 
 | # | Task | Effort | Status |
 |---|------|--------|--------|
-| 1 | Onboarding flow — post-signup wizard for Sleeper/ESPN/Yahoo connect | Medium | Pending |
-| 2 | Trade analyzer frontend — UI for existing `trade_analyzer` service | Medium | Pending |
+| 1 | Onboarding flow — post-signup wizard for Sleeper/ESPN/Yahoo connect | Medium | **Done** |
+| 2 | Trade analyzer frontend — UI for existing `trade_analyzer` service | Medium | **Done** |
 | 3 | Draft assistant frontend — UI for existing `draft_assistant` service | Medium | Pending |
 | 4 | Waiver wire recommendations — "Who should I pick up?" query type | Medium | Pending |
 | 5 | Notification triggers — background jobs for injury/lineup/trending push | Large | Pending |
