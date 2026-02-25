@@ -66,7 +66,10 @@ const AUTH_TOKEN_KEY = 'benchgoblin_auth_token';
 // API base URL: call backend directly (CORS configured on backend).
 // The /bapi proxy through Vercel has a 10s timeout on Hobby plan which
 // is too short for Claude-enriched responses.
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+const API_BASE_URL =
+  process.env.NODE_ENV === 'production'
+    ? 'https://backend.benchgoblins.com'
+    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
 
 class APIClient {
   private client: AxiosInstance;
