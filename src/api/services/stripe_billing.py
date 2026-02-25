@@ -27,7 +27,11 @@ WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET", "")
 
 # Price IDs for subscription tiers
 PRICE_IDS = {
-    "pro_monthly": os.getenv("STRIPE_PRO_MONTHLY_PRICE_ID", "price_xxx"),
+    "pro_weekly": os.getenv("STRIPE_PRO_WEEKLY_PRICE_ID", ""),
+    "pro_monthly": os.getenv("STRIPE_PRO_MONTHLY_PRICE_ID", ""),
+    "pro_annual": os.getenv("STRIPE_PRO_ANNUAL_PRICE_ID", ""),
+    "pro_seasonal": os.getenv("STRIPE_PRO_SEASONAL_PRICE_ID", ""),
+    "pro_league": os.getenv("STRIPE_PRO_LEAGUE_PRICE_ID", ""),
 }
 
 

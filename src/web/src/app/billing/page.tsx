@@ -1,14 +1,14 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 import Link from 'next/link';
-import { CreditCard, Check, Zap, Crown, ArrowLeft, Loader2, RefreshCw, AlertCircle, Calendar, Users2 } from 'lucide-react';
+import { CreditCard, Check, Zap, Crown, ArrowLeft, Loader2, AlertCircle, Calendar, Users2, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
-import { useSubscriptionStore } from '@/stores/subscriptionStore';
-import { RC_ENTITLEMENT_ID } from '@/lib/revenuecat';
+import api from '@/lib/api';
 
 const FREE_FEATURES = [
   '5 queries per week',
@@ -22,7 +22,7 @@ const PAID_PLANS = [
     name: 'Weekly',
     price: '$2.99',
     period: '/week',
-    packageId: '$rc_weekly',
+    priceKey: 'pro_weekly',
     features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Cancel anytime'],
     highlight: false,
     badge: null,
@@ -31,7 +31,7 @@ const PAID_PLANS = [
     name: 'Monthly',
     price: '$7.99',
     period: '/month',
-    packageId: '$rc_monthly',
+    priceKey: 'pro_monthly',
     features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Priority response', 'Cancel anytime'],
     highlight: true,
     badge: 'Most Popular',
@@ -40,7 +40,7 @@ const PAID_PLANS = [
     name: 'Annual',
     price: '$79.99',
     period: '/year',
-    packageId: '$rc_annual',
+    priceKey: 'pro_annual',
     features: ['Unlimited queries', 'All 5 sports', 'Advanced AI analysis', 'Trade & waiver recs', 'Priority response', 'Decision history export'],
     highlight: false,
     badge: 'Best Value — ~$6.67/mo',
@@ -52,7 +52,7 @@ const SPECIALIZED_PLANS = [
     name: 'Seasonal Pass',
     price: '$29.99',
     period: '/season',
-    packageId: '$rc_seasonal',
+    priceKey: 'pro_seasonal',
     features: ['One sport, unlimited queries', 'Advanced AI analysis', 'Trade & waiver recs'],
     icon: Calendar,
     iconBg: 'bg-orange-500/20',
@@ -65,7 +65,7 @@ const SPECIALIZED_PLANS = [
     name: 'League Plan',
     price: '$4.99',
     period: '/mo per league',
-    packageId: '$rc_league',
+    priceKey: 'pro_league',
     features: ['One league, unlimited queries', 'League-scoped analysis', 'Trade & waiver recs'],
     icon: Users2,
     iconBg: 'bg-blue-500/20',
@@ -76,49 +76,87 @@ const SPECIALIZED_PLANS = [
   },
 ];
 
+interface BillingStatus {
+  tier: string;
+  status: string;
+  queries_today: number;
+  weekly_limit: number;
+  queries_remaining: number | null;
+  subscription_id?: string;
+  current_period_end?: string;
+  cancel_at_period_end?: boolean;
+}
+
 export default function BillingPage() {
   const { user, isAuthenticated } = useAuthStore();
-  const {
-    isPro,
-    isLoading: subscriptionLoading,
-    customerInfo,
-    offerings,
-    error: subscriptionError,
-    refreshCustomerInfo,
-    purchase,
-  } = useSubscriptionStore();
+  const searchParams = useSearchParams();
 
-  const [purchaseLoading, setPurchaseLoading] = useState(false);
+  const [prices, setPrices] = useState<Record<string, string>>({});
+  const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const handleManualPurchase = useCallback(async (packageId: string) => {
-    if (!offerings?.current) return;
+  const isPro = billingStatus?.tier === 'pro';
 
-    const pkg =
-      offerings.current.availablePackages.find(
-        (p) => p.identifier === packageId
-      ) ?? null;
+  // Show success/cancel message from Stripe redirect
+  useEffect(() => {
+    if (searchParams.get('success') === 'true') {
+      setSuccessMessage('Subscription activated! Welcome to Pro.');
+    }
+    if (searchParams.get('canceled') === 'true') {
+      setError('Checkout was cancelled.');
+    }
+  }, [searchParams]);
 
-    if (!pkg) {
-      setError(`Package "${packageId}" not found in current offering.`);
+  // Fetch prices and billing status on mount
+  useEffect(() => {
+    api.getBillingPrices()
+      .then((data: { prices: Record<string, string> }) => setPrices(data.prices))
+      .catch(() => { /* prices endpoint may not be available yet */ });
+
+    if (isAuthenticated) {
+      api.getBillingStatus()
+        .then((data: { tier?: string; status?: string; queries_today?: number; weekly_limit?: number; queries_remaining?: number | null; subscription_id?: string; current_period_end?: string; cancel_at_period_end?: boolean }) => setBillingStatus(data as BillingStatus))
+        .catch(() => { /* billing status may fail if not configured */ });
+    }
+  }, [isAuthenticated]);
+
+  const handleCheckout = useCallback(async (priceKey: string) => {
+    const priceId = prices[priceKey];
+    if (!priceId) {
+      setError(`Price not configured for ${priceKey}. Contact support.`);
       return;
     }
 
-    setPurchaseLoading(true);
+    setCheckoutLoading(priceKey);
     setError(null);
 
-    const success = await purchase(pkg, user?.email);
-    setPurchaseLoading(false);
-
-    if (!success) {
-      // User cancelled or error already set in store
+    try {
+      const { checkout_url } = await api.createCheckoutSession(priceId);
+      window.location.href = checkout_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to start checkout');
+      setCheckoutLoading(null);
     }
-  }, [offerings, purchase, user?.email]);
+  }, [prices]);
 
-  // Active subscription details from customer info
-  const activeEntitlement = customerInfo?.entitlements.active[RC_ENTITLEMENT_ID];
-  const expiresDate = activeEntitlement?.expirationDate
-    ? new Date(activeEntitlement.expirationDate).toLocaleDateString()
+  const handleManageSubscription = useCallback(async () => {
+    setPortalLoading(true);
+    setError(null);
+
+    try {
+      const { portal_url } = await api.createPortalSession();
+      window.location.href = portal_url;
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to open billing portal');
+      setPortalLoading(false);
+    }
+  }, []);
+
+  const renewalDate = billingStatus?.current_period_end
+    ? new Date(billingStatus.current_period_end).toLocaleDateString()
     : null;
 
   return (
@@ -135,10 +173,17 @@ export default function BillingPage() {
           <p className="text-dark-400">Unlock unlimited AI-powered fantasy decisions</p>
         </div>
 
-        {(error || subscriptionError) && (
+        {successMessage && (
+          <div className="mb-6 p-4 rounded-lg bg-green-500/10 border border-green-500/20 text-green-400 text-center flex items-center justify-center gap-2">
+            <Check className="h-4 w-4" />
+            {successMessage}
+          </div>
+        )}
+
+        {error && (
           <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-center flex items-center justify-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            {error || subscriptionError}
+            {error}
           </div>
         )}
 
@@ -219,27 +264,27 @@ export default function BillingPage() {
                       </Button>
                     ) : isPro ? (
                       <Button
-                        onClick={() => refreshCustomerInfo()}
+                        onClick={handleManageSubscription}
                         variant="outline"
                         className="w-full gap-2"
-                        disabled={subscriptionLoading}
+                        disabled={portalLoading}
                       >
-                        {subscriptionLoading ? (
+                        {portalLoading ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <>
-                            <RefreshCw className="h-4 w-4" />
-                            Refresh Status
+                            <ExternalLink className="h-4 w-4" />
+                            Manage Subscription
                           </>
                         )}
                       </Button>
                     ) : (
                       <Button
-                        onClick={() => handleManualPurchase(plan.packageId)}
+                        onClick={() => handleCheckout(plan.priceKey)}
                         className={`w-full gap-2 ${plan.name === 'Annual' ? 'bg-green-600 hover:bg-green-700' : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500'}`}
-                        disabled={purchaseLoading || subscriptionLoading}
+                        disabled={checkoutLoading !== null}
                       >
-                        {purchaseLoading || subscriptionLoading ? (
+                        {checkoutLoading === plan.priceKey ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <>
@@ -293,28 +338,28 @@ export default function BillingPage() {
                           </Button>
                         ) : isPro ? (
                           <Button
-                            onClick={() => refreshCustomerInfo()}
+                            onClick={handleManageSubscription}
                             variant="outline"
                             className="w-full gap-2"
-                            disabled={subscriptionLoading}
+                            disabled={portalLoading}
                           >
-                            {subscriptionLoading ? (
+                            {portalLoading ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <>
-                                <RefreshCw className="h-4 w-4" />
-                                Refresh Status
+                                <ExternalLink className="h-4 w-4" />
+                                Manage Subscription
                               </>
                             )}
                           </Button>
                         ) : (
                           <Button
-                            onClick={() => handleManualPurchase(plan.packageId)}
+                            onClick={() => handleCheckout(plan.priceKey)}
                             variant="outline"
                             className={`w-full ${plan.btnClass}`}
-                            disabled={purchaseLoading || subscriptionLoading}
+                            disabled={checkoutLoading !== null}
                           >
-                            {purchaseLoading || subscriptionLoading ? (
+                            {checkoutLoading === plan.priceKey ? (
                               <Loader2 className="h-4 w-4 animate-spin" />
                             ) : (
                               <>
@@ -332,10 +377,10 @@ export default function BillingPage() {
             </div>
 
             {/* Usage Stats */}
-            {user && (
+            {user && billingStatus && (
               <Card className="mt-8 bg-dark-900/50 border-dark-700">
                 <CardHeader>
-                  <CardTitle className="text-lg">Your Usage Today</CardTitle>
+                  <CardTitle className="text-lg">Your Usage This Week</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-4">
@@ -344,7 +389,7 @@ export default function BillingPage() {
                         <div
                           className="h-full bg-primary-500 rounded-full transition-all"
                           style={{
-                            width: isPro ? '0%' : `${Math.min((user.queries_today / user.queries_limit) * 100, 100)}%`,
+                            width: isPro ? '0%' : `${Math.min((billingStatus.queries_today / billingStatus.weekly_limit) * 100, 100)}%`,
                           }}
                         />
                       </div>
@@ -354,8 +399,8 @@ export default function BillingPage() {
                         <span className="text-primary-400">Unlimited</span>
                       ) : (
                         <>
-                          <span className="font-medium">{user.queries_today}</span>
-                          <span className="text-dark-500"> / {user.queries_limit} queries</span>
+                          <span className="font-medium">{billingStatus.queries_today}</span>
+                          <span className="text-dark-500"> / {billingStatus.weekly_limit} queries</span>
                         </>
                       )}
                     </div>
@@ -365,7 +410,7 @@ export default function BillingPage() {
             )}
 
             {/* Subscription Management */}
-            {isPro && customerInfo && (
+            {isPro && (
               <Card className="mt-8 bg-dark-900/50 border-dark-700">
                 <CardHeader>
                   <CardTitle className="text-lg flex items-center gap-2">
@@ -378,15 +423,33 @@ export default function BillingPage() {
                     <span className="text-dark-400">Status</span>
                     <span className="text-green-400 font-medium">Active</span>
                   </div>
-                  {expiresDate && (
+                  {renewalDate && (
                     <div className="flex justify-between text-sm">
                       <span className="text-dark-400">Next renewal</span>
-                      <span className="text-dark-200">{expiresDate}</span>
+                      <span className="text-dark-200">{renewalDate}</span>
                     </div>
                   )}
-                  <p className="text-xs text-dark-500 pt-2">
-                    To manage or cancel your subscription, visit your payment provider&apos;s subscription management page.
-                  </p>
+                  {billingStatus?.cancel_at_period_end && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-dark-400">Note</span>
+                      <span className="text-orange-400">Cancels at end of period</span>
+                    </div>
+                  )}
+                  <Button
+                    onClick={handleManageSubscription}
+                    variant="outline"
+                    className="w-full mt-4 gap-2"
+                    disabled={portalLoading}
+                  >
+                    {portalLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4" />
+                        Manage Subscription
+                      </>
+                    )}
+                  </Button>
                 </CardContent>
               </Card>
             )}

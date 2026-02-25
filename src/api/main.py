@@ -3661,7 +3661,7 @@ class CheckoutRequest(BaseModel):
     """Request to create a Stripe checkout session."""
 
     price_id: str = Field(
-        default=stripe_billing.PRICE_IDS["pro_monthly"],
+        ...,
         description="Stripe Price ID for the subscription",
     )
     success_url: str = Field(
@@ -3713,6 +3713,14 @@ async def _get_user_by_id(user_id: int) -> User | None:
     async with db_service.session() as session:
         result = await session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+
+@app.get("/billing/prices")
+async def get_billing_prices():
+    """Return available Stripe price IDs for checkout."""
+    return {
+        "prices": {k: v for k, v in stripe_billing.PRICE_IDS.items() if v}
+    }
 
 
 @app.post("/billing/create-checkout", response_model=CheckoutResponse)

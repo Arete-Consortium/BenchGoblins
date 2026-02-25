@@ -404,11 +404,17 @@ class APIClient {
   }
 
   // Billing endpoints
-  async createCheckoutSession(): Promise<{ checkout_url: string }> {
+  async createCheckoutSession(priceId: string): Promise<{ checkout_url: string }> {
     const response = await this.client.post<{ checkout_url: string }>('/billing/create-checkout', {
+      price_id: priceId,
       success_url: `${window.location.origin}/billing?success=true`,
       cancel_url: `${window.location.origin}/billing?canceled=true`,
     });
+    return response.data;
+  }
+
+  async getBillingPrices(): Promise<{ prices: Record<string, string> }> {
+    const response = await this.client.get<{ prices: Record<string, string> }>('/billing/prices');
     return response.data;
   }
 
