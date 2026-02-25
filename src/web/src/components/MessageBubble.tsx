@@ -324,6 +324,7 @@ function DecisionDetails({ decision }: { decision: DecisionResponse }) {
   }
 
   const { player_a, player_b, margin } = decision.details;
+  if (!player_a?.score || !player_b?.score) return null;
   const aWins = player_a.score > player_b.score;
 
   return (
