@@ -225,7 +225,7 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-Admin-Key"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-Admin-Key", "X-Session-Token"],
     max_age=3600,
 )
 
