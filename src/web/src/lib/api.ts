@@ -63,12 +63,10 @@ const SESSION_TOKEN_KEY = 'benchgoblin_session_token';
 const SESSION_EXPIRES_KEY = 'benchgoblin_session_expires';
 const AUTH_TOKEN_KEY = 'benchgoblin_auth_token';
 
-// API base URL: use same-origin proxy (/bapi) in the browser to avoid CORS,
-// fall back to the direct backend URL for SSR or when proxy isn't available.
-const API_BASE_URL =
-  typeof window !== 'undefined'
-    ? '/bapi'
-    : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
+// API base URL: call backend directly (CORS configured on backend).
+// The /bapi proxy through Vercel has a 10s timeout on Hobby plan which
+// is too short for Claude-enriched responses.
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
 class APIClient {
   private client: AxiosInstance;
