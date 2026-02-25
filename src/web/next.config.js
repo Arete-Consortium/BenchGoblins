@@ -1,4 +1,5 @@
 /** @type {import('next').NextConfig} */
+// Backend: https://backend.benchgoblins.com
 const nextConfig = {
   reactStrictMode: true,
   async rewrites() {
