@@ -48,7 +48,7 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { sport, riskMode, setSport, setRiskMode, clearMessages } = useAppStore();
   const { connection, selectedLeagueIds, disconnect } = useLeagueStore();
-  const { isAuthenticated, user } = useAuthStore();
+  const { isAuthenticated, user, refreshUser } = useAuthStore();
   const darkMode = theme === 'dark';
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
 
@@ -58,6 +58,13 @@ export default function SettingsPage() {
   const [renewalDate, setRenewalDate] = useState<string | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
+
+  // Refresh user data on mount to pick up subscription changes
+  useEffect(() => {
+    if (isAuthenticated) {
+      refreshUser();
+    }
+  }, [isAuthenticated, refreshUser]);
 
   useEffect(() => {
     if (!isAuthenticated || billingTier !== 'pro') return;
