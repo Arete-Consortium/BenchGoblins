@@ -304,3 +304,391 @@ class TestGatherWeekStats:
         assert stats["avg_confidence"] == "medium"
         assert len(stats["decisions"]) == 3
         assert stats["sport_breakdown"] == {"nfl": 2, "nba": 1}
+
+
+# ---------------------------------------------------------------------------
+# generate_weekly_recap
+# ---------------------------------------------------------------------------
+
+
+class TestGenerateWeeklyRecap:
+    """Tests for the main generate_weekly_recap function."""
+
+    @pytest.mark.asyncio
+    async def test_cached_recap_returned(self):
+        """Should return cached recap if one already exists."""
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+        cached_recap = MagicMock()
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = cached_recap
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        ws = datetime(2026, 2, 23, tzinfo=UTC)
+        we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+        result = await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+        assert result == cached_recap
+        # Should not call commit (no new recap created)
+        mock_session.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_second_cache_check_returns_recap(self):
+        """Should return recap found on second cache query."""
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+        cached_recap = MagicMock()
+
+        # First query returns None, second returns cached
+        first_result = MagicMock()
+        first_result.scalar_one_or_none.return_value = None
+        second_result = MagicMock()
+        second_result.scalar_one_or_none.return_value = cached_recap
+
+        mock_session.execute = AsyncMock(side_effect=[first_result, second_result])
+
+        ws = datetime(2026, 2, 23, tzinfo=UTC)
+        we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+        result = await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+        assert result == cached_recap
+        mock_session.commit.assert_not_awaited()
+
+    @pytest.mark.asyncio
+    async def test_no_decisions_returns_none(self):
+        """Should return None when no decisions found for the week."""
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        # Both cache checks return None
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        # Stats query returns empty
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = []
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        ws = datetime(2026, 2, 23, tzinfo=UTC)
+        we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+        result = await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_claude_available_success(self):
+        """Should generate narrative via Claude when available."""
+        from unittest.mock import patch
+
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        # Both cache checks return None
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        # Stats query returns decisions
+        d1 = MagicMock()
+        d1.sport = "nfl"
+        d1.confidence = "high"
+        d1.actual_outcome = "correct"
+        d1.decision_type = "start_sit"
+        d1.query = "Start Mahomes?"
+        d1.decision = "Start Mahomes"
+        d1.source = "claude"
+        d1.player_a_name = "Mahomes"
+        d1.player_b_name = None
+
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = [d1]
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        # Mock Claude service
+        mock_response = MagicMock()
+        mock_response.content = [MagicMock(text="Great week!")]
+        mock_response.usage.input_tokens = 100
+        mock_response.usage.output_tokens = 50
+
+        with (
+            patch("services.weekly_recap.claude_service") as mock_claude,
+            patch("services.weekly_recap.track_claude_request") as mock_track,
+        ):
+            mock_claude.is_available = True
+            mock_claude.client.messages.create.return_value = mock_response
+
+            ws = datetime(2026, 2, 23, tzinfo=UTC)
+            we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+            result = await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+
+        assert result is not None
+        mock_session.add.assert_called_once()
+        mock_session.commit.assert_awaited_once()
+        mock_session.refresh.assert_awaited_once()
+        mock_track.assert_called_once_with(100, 50, success=True, variant="recap")
+
+    @pytest.mark.asyncio
+    async def test_claude_error_uses_fallback(self):
+        """Should use fallback narrative when Claude raises an error."""
+        from unittest.mock import patch
+
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        d1 = MagicMock()
+        d1.sport = "nfl"
+        d1.confidence = "medium"
+        d1.actual_outcome = "correct"
+        d1.decision_type = "start_sit"
+        d1.query = "Start Mahomes?"
+        d1.decision = "Start Mahomes"
+        d1.source = "claude"
+        d1.player_a_name = None
+        d1.player_b_name = None
+
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = [d1]
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        with patch("services.weekly_recap.claude_service") as mock_claude:
+            mock_claude.is_available = True
+            mock_claude.client.messages.create.side_effect = RuntimeError("API down")
+
+            ws = datetime(2026, 2, 23, tzinfo=UTC)
+            we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+            result = await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+
+        assert result is not None
+        mock_session.add.assert_called_once()
+        # The recap should have been created with fallback narrative
+        added_recap = mock_session.add.call_args[0][0]
+        assert (
+            "1 decisions" in added_recap.narrative
+            or "decisions" in added_recap.narrative
+        )
+
+    @pytest.mark.asyncio
+    async def test_claude_unavailable_uses_fallback(self):
+        """Should use fallback narrative when Claude is not available."""
+        from unittest.mock import patch
+
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        d1 = MagicMock()
+        d1.sport = "nba"
+        d1.confidence = "low"
+        d1.actual_outcome = "incorrect"
+        d1.decision_type = "trade"
+        d1.query = "Trade Jokic?"
+        d1.decision = "Keep Jokic"
+        d1.source = "local"
+        d1.player_a_name = "Jokic"
+        d1.player_b_name = None
+
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = [d1]
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        with patch("services.weekly_recap.claude_service") as mock_claude:
+            mock_claude.is_available = False
+
+            ws = datetime(2026, 2, 23, tzinfo=UTC)
+            we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+            result = await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+
+        assert result is not None
+        added_recap = mock_session.add.call_args[0][0]
+        assert added_recap.input_tokens == 0
+        assert added_recap.output_tokens == 0
+
+    @pytest.mark.asyncio
+    async def test_highlights_best_and_worst(self):
+        """Should extract best and worst call highlights."""
+        from unittest.mock import patch
+
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        d1 = MagicMock()
+        d1.sport = "nfl"
+        d1.confidence = "high"
+        d1.actual_outcome = "correct"
+        d1.decision_type = "start_sit"
+        d1.query = "Start Mahomes?"
+        d1.decision = "Start Mahomes"
+        d1.source = "claude"
+        d1.player_a_name = None
+        d1.player_b_name = None
+
+        d2 = MagicMock()
+        d2.sport = "nfl"
+        d2.confidence = "high"
+        d2.actual_outcome = "incorrect"
+        d2.decision_type = "start_sit"
+        d2.query = "Start Herbert?"
+        d2.decision = "Start Herbert"
+        d2.source = "claude"
+        d2.player_a_name = None
+        d2.player_b_name = None
+
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = [d1, d2]
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        with patch("services.weekly_recap.claude_service") as mock_claude:
+            mock_claude.is_available = False
+
+            ws = datetime(2026, 2, 23, tzinfo=UTC)
+            we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+            await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+
+        added_recap = mock_session.add.call_args[0][0]
+        assert "Best call: Start Mahomes" in added_recap.highlights
+        assert "Missed call: Start Herbert" in added_recap.highlights
+
+    @pytest.mark.asyncio
+    async def test_highlights_none_when_all_pending(self):
+        """Should set highlights to None when no outcomes resolved."""
+        from unittest.mock import patch
+
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        d1 = MagicMock()
+        d1.sport = "nfl"
+        d1.confidence = "medium"
+        d1.actual_outcome = None  # pending
+        d1.decision_type = "start_sit"
+        d1.query = "Start X?"
+        d1.decision = "Start X"
+        d1.source = "local"
+        d1.player_a_name = None
+        d1.player_b_name = None
+
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = [d1]
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        with patch("services.weekly_recap.claude_service") as mock_claude:
+            mock_claude.is_available = False
+
+            ws = datetime(2026, 2, 23, tzinfo=UTC)
+            we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+
+            await generate_weekly_recap(mock_session, 1, "Alice", ws, we)
+
+        added_recap = mock_session.add.call_args[0][0]
+        assert added_recap.highlights is None
+
+    @pytest.mark.asyncio
+    async def test_default_week_range_when_none(self):
+        """Should compute week range when not provided."""
+        from unittest.mock import patch
+
+        from services.weekly_recap import generate_weekly_recap
+
+        mock_session = AsyncMock()
+
+        cache_result = MagicMock()
+        cache_result.scalar_one_or_none.return_value = None
+
+        stats_result = MagicMock()
+        stats_result.scalars.return_value.all.return_value = []
+
+        mock_session.execute = AsyncMock(
+            side_effect=[cache_result, cache_result, stats_result]
+        )
+
+        with patch("services.weekly_recap._compute_week_range") as mock_range:
+            ws = datetime(2026, 2, 23, tzinfo=UTC)
+            we = datetime(2026, 3, 1, 23, 59, 59, tzinfo=UTC)
+            mock_range.return_value = (ws, we)
+
+            result = await generate_weekly_recap(
+                mock_session, 1, "Alice", week_start=None, week_end=None
+            )
+
+        assert result is None
+        mock_range.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# get_user_recaps
+# ---------------------------------------------------------------------------
+
+
+class TestGetUserRecaps:
+    """Tests for fetching stored recaps."""
+
+    @pytest.mark.asyncio
+    async def test_returns_recaps(self):
+        from services.weekly_recap import get_user_recaps
+
+        mock_session = AsyncMock()
+        recap1 = MagicMock()
+        recap2 = MagicMock()
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [recap1, recap2]
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        result = await get_user_recaps(mock_session, user_id=42, limit=5)
+        assert len(result) == 2
+        assert result[0] == recap1
+        assert result[1] == recap2
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list(self):
+        from services.weekly_recap import get_user_recaps
+
+        mock_session = AsyncMock()
+
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        result = await get_user_recaps(mock_session, user_id=99)
+        assert result == []
