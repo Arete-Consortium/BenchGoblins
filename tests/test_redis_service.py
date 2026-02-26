@@ -1,7 +1,7 @@
 """Tests for Redis caching service."""
 
 import json
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -265,3 +265,178 @@ class TestVersionedDecisionKey:
         svc._client.setex = AsyncMock()
         result = await svc.set_decision("nba", "safe", "test", {"decision": "x"})
         assert result is True
+
+
+# ---------------------------------------------------------------------------
+# Connect / Health Check flows
+# ---------------------------------------------------------------------------
+
+
+class TestConnectFlow:
+    @pytest.mark.asyncio
+    async def test_connect_success(self, redis_svc_configured):
+        svc = redis_svc_configured
+        mock_client = AsyncMock()
+        mock_client.ping = AsyncMock()
+
+        with patch("services.redis.redis.from_url", return_value=mock_client):
+            await svc.connect()
+            assert svc._client is mock_client
+            mock_client.ping.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_connect_ping_failure(self, redis_svc_configured):
+        import redis as _redis
+
+        svc = redis_svc_configured
+        mock_client = AsyncMock()
+        mock_client.ping = AsyncMock(side_effect=_redis.ConnectionError("refused"))
+
+        with patch("services.redis.redis.from_url", return_value=mock_client):
+            with pytest.raises(_redis.ConnectionError):
+                await svc.connect()
+            assert svc._client is None
+
+
+class TestHealthCheckError:
+    @pytest.mark.asyncio
+    async def test_health_check_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.ping = AsyncMock(side_effect=_redis.ConnectionError("down"))
+        assert await svc.health_check() is False
+
+
+# ---------------------------------------------------------------------------
+# ConnectionError branches on all operations
+# ---------------------------------------------------------------------------
+
+
+class TestConnectionErrorBranches:
+    @pytest.mark.asyncio
+    async def test_get_player_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.get = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.get_player("nba", "123") is None
+
+    @pytest.mark.asyncio
+    async def test_set_player_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.setex = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.set_player("nba", "123", {"x": 1}) is False
+
+    @pytest.mark.asyncio
+    async def test_get_player_search_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.get = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.get_player_search("nba", "test") is None
+
+    @pytest.mark.asyncio
+    async def test_set_player_search_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.setex = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.set_player_search("nba", "test", []) is False
+
+    @pytest.mark.asyncio
+    async def test_get_stats_version_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.get = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.get_stats_version("nba") == 0
+
+    @pytest.mark.asyncio
+    async def test_bump_stats_version_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.incr = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.bump_stats_version("nba") == 0
+
+    @pytest.mark.asyncio
+    async def test_get_decision_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.get = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.get_decision("nba", "safe", "query") is None
+
+    @pytest.mark.asyncio
+    async def test_set_decision_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        # First get for version key, then setex fails
+        svc._client.get = AsyncMock(return_value="1")
+        svc._client.setex = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        assert await svc.set_decision("nba", "safe", "q", {"d": 1}) is False
+
+    @pytest.mark.asyncio
+    async def test_get_stats_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+        svc._client.info = AsyncMock(side_effect=_redis.ConnectionError("err"))
+        result = await svc.get_stats()
+        assert result == {"connected": False}
+
+    @pytest.mark.asyncio
+    async def test_clear_pattern_connection_error(self, redis_svc_connected):
+        import redis as _redis
+
+        svc = redis_svc_connected
+
+        async def mock_scan_iter(match=None):
+            raise _redis.ConnectionError("err")
+            yield  # noqa: make it an async generator
+
+        svc._client.scan_iter = mock_scan_iter
+        assert await svc.clear_pattern("player:*") == 0
+
+    @pytest.mark.asyncio
+    async def test_clear_all_success(self, redis_svc_connected):
+        """clear_all with connected client clears all patterns."""
+        svc = redis_svc_connected
+
+        async def mock_scan_iter(match=None):
+            return
+            yield  # noqa: make it an async generator
+
+        svc._client.scan_iter = mock_scan_iter
+        result = await svc.clear_all()
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_clear_all_connection_error(self, redis_svc_connected):
+        """clear_all catches ConnectionError from the pattern loop."""
+        import redis as _redis
+
+        svc = redis_svc_connected
+        with patch.object(
+            svc, "clear_pattern", side_effect=_redis.ConnectionError("err")
+        ):
+            assert await svc.clear_all() is False
+
+
+# ---------------------------------------------------------------------------
+# ImportError fallback for monitoring
+# ---------------------------------------------------------------------------
+
+
+class TestMonitoringImportFallback:
+    def test_track_cache_operation_fallback(self):
+        """The fallback track_cache_operation is a no-op."""
+        from services.redis import track_cache_operation
+
+        # Should not raise
+        track_cache_operation("get", hit=True)
+        track_cache_operation("set", hit=False)
