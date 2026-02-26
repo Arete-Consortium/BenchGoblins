@@ -137,6 +137,26 @@ class TestExtractGameLogStats:
         assert stats["minutes"] == 30
         assert stats["points"] == 20
 
+    def test_string_stat_value_passthrough(self):
+        """Values without __float__ (e.g., strings) pass through unchanged."""
+        gl = MagicMock()
+        gl.minutes = "DNP"
+        gl.points = None
+        gl.rebounds = None
+        gl.assists = None
+        gl.steals = None
+        gl.blocks = None
+        gl.turnovers = None
+        gl.fg_made = None
+        gl.fg_attempted = None
+        gl.three_made = None
+        gl.three_attempted = None
+        gl.ft_made = None
+        gl.ft_attempted = None
+
+        stats = _extract_game_log_stats(gl, "nba")
+        assert stats["minutes"] == "DNP"
+
     def test_decimal_conversion(self):
         gl = MagicMock()
         gl.minutes = None

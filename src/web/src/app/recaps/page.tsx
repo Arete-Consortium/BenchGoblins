@@ -6,7 +6,7 @@ import { cn, getSportDisplayName } from '@/lib/utils';
 import { useAuthStore } from '@/stores/authStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 import api from '@/lib/api';
-import type { WeeklyRecap } from '@/types';
+import type { WeeklyRecap, Sport } from '@/types';
 import {
   BookOpen,
   TrendingUp,
@@ -65,7 +65,7 @@ function RecapCard({ recap }: { recap: WeeklyRecap }) {
             <p className="text-sm text-dark-400 mt-0.5">
               {recap.total_decisions} decisions
               {recap.most_asked_sport && (
-                <> &middot; Most active: {getSportDisplayName(recap.most_asked_sport as any)}</>
+                <> &middot; Most active: {getSportDisplayName(recap.most_asked_sport as Sport)}</>
               )}
             </p>
           </div>
@@ -148,7 +148,7 @@ export default function RecapsPage() {
     try {
       const data = await api.getWeeklyRecaps();
       setRecaps(data);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to fetch recaps:', err);
       setError('Failed to load recaps');
     } finally {
@@ -174,8 +174,8 @@ export default function RecapsPage() {
       } else {
         setError('No decisions found this week. Make some calls first!');
       }
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || 'Failed to generate recap';
+    } catch (err: unknown) {
+      const msg = (err instanceof Error ? err.message : null) || 'Failed to generate recap';
       setError(msg);
     } finally {
       setIsGenerating(false);
