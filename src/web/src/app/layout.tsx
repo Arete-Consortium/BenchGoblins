@@ -6,6 +6,8 @@ import { GoogleAuthProviderWrapper } from '@/components/providers/GoogleAuthProv
 import { RevenueCatProvider } from '@/components/providers/RevenueCatProvider';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
+import GoogleAnalytics from '@/components/GoogleAnalytics';
+import CookieConsent from '@/components/CookieConsent';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -64,6 +66,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <GoogleAnalytics />
       <body className={`${inter.className} min-h-screen bg-dark-950 text-dark-100 antialiased`}>
         <ThemeProvider
           attribute="class"
@@ -78,6 +81,7 @@ export default function RootLayout({
                   <ToastProvider>
                     {children}
                     <ToastViewport />
+                    <CookieConsent />
                   </ToastProvider>
                 </RevenueCatProvider>
               </QueryProvider>
