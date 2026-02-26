@@ -1,6 +1,6 @@
 """Tests for Claude API service."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -19,6 +19,28 @@ def svc():
         yield svc
         if old:
             os.environ["ANTHROPIC_API_KEY"] = old
+
+
+@pytest.fixture
+def svc_with_client():
+    """ClaudeService with a mocked Anthropic client."""
+    s = ClaudeService()
+    s.client = MagicMock()
+    ClaudeService.clear_cache()
+
+    # Build a mock response
+    mock_response = MagicMock()
+    mock_response.usage.input_tokens = 100
+    mock_response.output_tokens = 50
+    mock_response.usage.output_tokens = 50
+    mock_response.content = [
+        MagicMock(
+            text='{"decision": "Start LeBron", "confidence": "high", "rationale": "Hot streak"}'
+        )
+    ]
+    s.client.messages.create.return_value = mock_response
+    yield s
+    ClaudeService.clear_cache()
 
 
 class TestCacheKey:
@@ -165,6 +187,16 @@ class TestParseResponse:
         assert result["source"] == "claude"
 
 
+class TestParseResponseJSONDecodeError:
+    def test_invalid_json_with_braces_falls_back(self, svc):
+        """Lines 269-270: regex matches braces but json.loads fails."""
+        response = "{this is not: valid json content}"
+        result = svc._parse_response(response)
+        # Falls through to freeform parsing
+        assert result["source"] == "claude"
+        assert "details" in result
+
+
 class TestMakeDecisionNoClient:
     @pytest.mark.asyncio
     async def test_raises_without_api_key(self, svc):
@@ -180,3 +212,125 @@ class TestMakeDecisionNoClient:
                 query="test", sport="nba", risk_mode="safe", decision_type="start_sit"
             ):
                 pass
+
+
+class TestMakeDecisionWithClient:
+    """Lines 150-193: make_decision full flow with mocked client."""
+
+    @pytest.mark.asyncio
+    @patch("services.claude.track_claude_request")
+    @patch("services.claude.get_prompt", return_value="system prompt")
+    async def test_fresh_call(self, _mock_prompt, mock_track, svc_with_client):
+        result = await svc_with_client.make_decision(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+        )
+        assert result["decision"] == "Start LeBron"
+        assert result["cached"] is False
+        assert result["input_tokens"] == 100
+        assert result["output_tokens"] == 50
+        svc_with_client.client.messages.create.assert_called_once()
+        mock_track.assert_called_once_with(100, 50, success=True, variant="control")
+
+    @pytest.mark.asyncio
+    @patch("services.claude.track_claude_request")
+    @patch("services.claude.get_prompt", return_value="system prompt")
+    async def test_cache_hit(self, _mock_prompt, _mock_track, svc_with_client):
+        # First call populates cache
+        await svc_with_client.make_decision(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+        )
+        # Second call should hit cache
+        result = await svc_with_client.make_decision(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+        )
+        assert result["cached"] is True
+        # API only called once
+        assert svc_with_client.client.messages.create.call_count == 1
+        assert ClaudeService._cache_hits == 1
+
+    @pytest.mark.asyncio
+    @patch("services.claude.track_claude_request")
+    @patch("services.claude.get_prompt", return_value="system prompt")
+    async def test_use_cache_false(self, _mock_prompt, _mock_track, svc_with_client):
+        # First call populates cache
+        await svc_with_client.make_decision(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+        )
+        # Second call with use_cache=False should call API again
+        result = await svc_with_client.make_decision(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+            use_cache=False,
+        )
+        assert result["cached"] is False
+        assert svc_with_client.client.messages.create.call_count == 2
+
+    @pytest.mark.asyncio
+    @patch("services.claude.track_claude_request")
+    @patch("services.claude.get_prompt", return_value="system prompt")
+    async def test_prompt_variant_forwarded(
+        self, mock_prompt, _mock_track, svc_with_client
+    ):
+        await svc_with_client.make_decision(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+            prompt_variant="concise_v1",
+        )
+        mock_prompt.assert_called_with("concise_v1")
+
+
+class TestMakeDecisionStream:
+    """Lines 195-251: make_decision_stream with mocked client."""
+
+    @pytest.mark.asyncio
+    @patch("services.claude.track_claude_request")
+    @patch("services.claude.get_prompt", return_value="system prompt")
+    async def test_stream_yields_text_and_metadata(
+        self, _mock_prompt, mock_track, svc_with_client
+    ):
+        # Build mock stream context manager
+        mock_final = MagicMock()
+        mock_final.usage.input_tokens = 80
+        mock_final.usage.output_tokens = 40
+
+        mock_stream = MagicMock()
+        mock_stream.text_stream = iter(["Start ", "LeBron"])
+        mock_stream.get_final_message.return_value = mock_final
+        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
+        mock_stream.__exit__ = MagicMock(return_value=False)
+        svc_with_client.client.messages.stream.return_value = mock_stream
+
+        chunks = []
+        async for chunk in svc_with_client.make_decision_stream(
+            query="Start LeBron?",
+            sport="nba",
+            risk_mode="safe",
+            decision_type="start_sit",
+        ):
+            chunks.append(chunk)
+
+        # Text chunks first, then metadata dict
+        assert chunks[0] == "Start "
+        assert chunks[1] == "LeBron"
+        assert isinstance(chunks[2], dict)
+        assert chunks[2]["_metadata"] is True
+        assert chunks[2]["input_tokens"] == 80
+        assert chunks[2]["output_tokens"] == 40
+        assert chunks[2]["full_response"] == "Start LeBron"
+        mock_track.assert_called_once_with(80, 40, success=True, variant="control")
