@@ -103,20 +103,14 @@ function BillingContent() {
   const [billingStatus, setBillingStatus] = useState<BillingStatus | null>(null);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(
+    searchParams.get('canceled') === 'true' ? 'Checkout was cancelled.' : null
+  );
+  const [successMessage] = useState<string | null>(
+    searchParams.get('success') === 'true' ? 'Subscription activated! Welcome to Pro.' : null
+  );
 
   const isPro = billingStatus?.tier === 'pro';
-
-  // Show success/cancel message from Stripe redirect
-  useEffect(() => {
-    if (searchParams.get('success') === 'true') {
-      setSuccessMessage('Subscription activated! Welcome to Pro.');
-    }
-    if (searchParams.get('canceled') === 'true') {
-      setError('Checkout was cancelled.');
-    }
-  }, [searchParams]);
 
   // Fetch prices and billing status on mount
   useEffect(() => {

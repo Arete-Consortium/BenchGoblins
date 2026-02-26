@@ -3680,9 +3680,7 @@ class CheckoutRequest(BaseModel):
     cancel_url: str = Field(
         ..., max_length=500, description="URL to redirect to if checkout is cancelled"
     )
-    league_id: int | None = Field(
-        default=None, description="League ID for pro_league checkout"
-    )
+    league_id: int | None = Field(default=None, description="League ID for pro_league checkout")
 
 
 class CheckoutResponse(BaseModel):
@@ -3731,9 +3729,7 @@ async def _get_user_by_id(user_id: int) -> User | None:
 @app.get("/billing/prices")
 async def get_billing_prices():
     """Return available Stripe price IDs for checkout."""
-    return {
-        "prices": {k: v for k, v in stripe_billing.PRICE_IDS.items() if v}
-    }
+    return {"prices": {k: v for k, v in stripe_billing.PRICE_IDS.items() if v}}
 
 
 @app.post("/billing/create-checkout", response_model=CheckoutResponse)
