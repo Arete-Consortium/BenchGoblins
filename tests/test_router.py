@@ -328,3 +328,54 @@ class TestComplexPatterns:
         )
 
         assert result == QueryComplexity.COMPLEX
+
+
+class TestStartSitWordCountBranch:
+    """Tests for the start_sit + two players + word count branch (lines 98-100)."""
+
+    def test_start_sit_long_query_is_complex(self):
+        """start_sit with two players and > 20 words → COMPLEX (line 99)."""
+        from services.router import QueryComplexity, classify_query
+
+        # Build a query with > 20 words, no complex keywords
+        long_query = (
+            "start LeBron or KD because I am looking at the matchups "
+            "and thinking about the best option available to me this week"
+        )
+        assert len(long_query.split()) > 20
+
+        result = classify_query(
+            query=long_query,
+            decision_type="start_sit",
+            player_a="LeBron",
+            player_b="KD",
+        )
+        assert result == QueryComplexity.COMPLEX
+
+
+class TestSimplePatternWithTwoPlayers:
+    """Tests for simple pattern + two players branch (line 107)."""
+
+    def test_simple_pattern_non_start_sit_with_players(self):
+        """Simple pattern (e.g. 'better X or Y') with two players and non-start_sit → SIMPLE (line 107)."""
+        from services.router import QueryComplexity, classify_query
+
+        result = classify_query(
+            query="LeBron vs KD",
+            decision_type="general",
+            player_a="LeBron",
+            player_b="KD",
+        )
+        assert result == QueryComplexity.SIMPLE
+
+    def test_simple_pattern_no_players_stays_complex(self):
+        """Simple pattern without two players → falls through to COMPLEX."""
+        from services.router import QueryComplexity, classify_query
+
+        result = classify_query(
+            query="LeBron vs KD",
+            decision_type="general",
+            player_a=None,
+            player_b=None,
+        )
+        assert result == QueryComplexity.COMPLEX

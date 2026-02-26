@@ -99,6 +99,19 @@ class TestParseLeague:
         assert result is not None
         assert result.name == "Unknown League"
 
+    def test_parse_returns_none_on_type_error(self, svc):
+        """Lines 199-200: _parse_league returns None on TypeError."""
+        from unittest.mock import patch
+
+        # Patch FantasyLeague to raise TypeError when constructed
+        with patch(
+            "services.espn_fantasy.FantasyLeague",
+            side_effect=TypeError("bad construction"),
+        ):
+            data = {"id": 1, "settings": {"name": "Test"}}
+            result = svc._parse_league(data, "nba")
+            assert result is None
+
 
 class TestGetPrimaryPosition:
     def test_nba(self, svc):

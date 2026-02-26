@@ -320,6 +320,28 @@ class TestTradeResult:
 
         assert result.confidence in ("low", "medium", "high")
 
+    def test_confidence_high_direct(self):
+        """Line 84: avg_margin >= 8 returns 'high' confidence."""
+        from core.scoring import IndexScores
+        from services.trade_analyzer import PlayerBreakdown, TradeResult, TradeSide
+
+        # Construct a trade with large net_value to guarantee high confidence
+        # 1 player each side: net_value=20, player_count=2, avg_margin=10 >= 8
+        idx = IndexScores(sci=50, rmi=30, gis=60, od=10, msf=55)
+        side_giving = TradeSide(
+            players=[PlayerBreakdown(name="Low", team="AAA", score=10.0, indices=idx)]
+        )
+        side_receiving = TradeSide(
+            players=[PlayerBreakdown(name="High", team="BBB", score=30.0, indices=idx)]
+        )
+        result = TradeResult(
+            side_giving=side_giving,
+            side_receiving=side_receiving,
+            risk_mode="median",
+            sport="nba",
+        )
+        assert result.confidence == "high"
+
 
 # =============================================================================
 # TEST TradeSide DATACLASS

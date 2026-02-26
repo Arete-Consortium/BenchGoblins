@@ -281,3 +281,77 @@ class TestStartSitVerdict:
         assert data["reasoning"] is None
         assert data["source"] == "local"
         assert data["verdict"].startswith("Start ")
+
+    @patch("routes.verdicts.espn_service")
+    def test_player_found_but_no_stats(self, mock_espn, authed_client):
+        """Returns 404 when player is found but has no stats (line 92)."""
+        info = _make_player_info("Patrick Mahomes", "KC", "QB")
+        # Return (info, None) — player found but no stats
+        mock_espn.find_player_by_name = AsyncMock(return_value=(info, None))
+
+        response = authed_client.post(
+            "/verdicts/start-sit",
+            json={"player_a": "Patrick Mahomes", "player_b": "Josh Allen"},
+        )
+
+        assert response.status_code == 404
+        assert "No stats available" in response.json()["detail"]
+
+
+class TestBuildReasoningPrompt:
+    """Tests for _build_reasoning_prompt helper — lines 128-129."""
+
+    def test_league_settings_included_in_prompt(self):
+        """When league_settings is provided, prompt uses those settings."""
+        from core.scoring import IndexScores
+        from core.verdicts import Verdict, RiskBreakdown
+        from routes.verdicts import _build_reasoning_prompt
+
+        idx = IndexScores(sci=80.0, rmi=70.0, gis=60.0, od=50.0, msf=40.0)
+        bd = RiskBreakdown(score_a=75.0, score_b=60.0, winner="Mahomes", margin=15.0)
+        verdict = Verdict(
+            player_a_name="Mahomes",
+            player_b_name="Allen",
+            decision="Start Mahomes",
+            confidence=80,
+            margin=15.0,
+            floor=bd,
+            median=bd,
+            ceiling=bd,
+            indices_a=idx,
+            indices_b=idx,
+        )
+        league_settings = {"pass_td": 6, "rush_td": 6, "rec": 1, "ppr": 1.0}
+
+        prompt = _build_reasoning_prompt(verdict, league_settings)
+
+        # Lines 128-129: league settings formatted into the prompt
+        assert "pass_td: 6" in prompt
+        assert "rush_td: 6" in prompt
+        # Standard scoring should NOT appear
+        assert "standard scoring" not in prompt
+
+    def test_no_league_settings_uses_standard(self):
+        """When league_settings is None, prompt uses 'standard scoring'."""
+        from core.scoring import IndexScores
+        from core.verdicts import Verdict, RiskBreakdown
+        from routes.verdicts import _build_reasoning_prompt
+
+        idx = IndexScores(sci=80.0, rmi=70.0, gis=60.0, od=50.0, msf=40.0)
+        bd = RiskBreakdown(score_a=75.0, score_b=60.0, winner="Mahomes", margin=15.0)
+        verdict = Verdict(
+            player_a_name="Mahomes",
+            player_b_name="Allen",
+            decision="Start Mahomes",
+            confidence=80,
+            margin=15.0,
+            floor=bd,
+            median=bd,
+            ceiling=bd,
+            indices_a=idx,
+            indices_b=idx,
+        )
+
+        prompt = _build_reasoning_prompt(verdict, None)
+
+        assert "standard scoring" in prompt

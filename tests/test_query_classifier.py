@@ -404,6 +404,32 @@ class TestClassificationResult:
         assert len(result.reason) > 0
 
 
+class TestKeywordDensityFunction:
+    """Test _calculate_keyword_density edge cases."""
+
+    def test_zero_words_returns_zero(self):
+        """Line 592: query with no word characters returns (0.0, 0, 0)."""
+        from services.query_classifier import _calculate_keyword_density
+
+        density, sports, total = _calculate_keyword_density("!!! ... ???")
+        assert density == 0.0
+        assert sports == 0
+        assert total == 0
+
+    def test_two_sports_keywords_low_density_ambiguous(self):
+        """Line 709: 2+ sports keywords at low density -> AMBIGUOUS with 0.50."""
+        # A long query where only 2 words are sports keywords, giving density < 0.1
+        # and no player names/comparison patterns/fantasy phrases
+        query = (
+            "I was wondering about my general strategy and whether "
+            "the overall approach for my team is correct and if my "
+            "lineup could be improved at all this afternoon"
+        )
+        result = classify_query(query)
+        assert result.category == QueryCategory.AMBIGUOUS
+        assert result.confidence == 0.50
+
+
 class TestKeywordDensity:
     """Test keyword density calculation."""
 

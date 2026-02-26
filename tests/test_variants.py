@@ -169,3 +169,35 @@ class TestExperimentLifecycle:
         history = get_experiment_history()
         assert isinstance(history, list)
         # May be empty if default hasn't been ended, which is expected
+
+
+class TestAssignVariantFallback:
+    def test_fallback_return_variants_zero(self):
+        """Line 260: fallback return variants[0] when loop completes without match."""
+        from unittest.mock import patch
+
+        # Create a custom dict subclass where iteration yields keys but
+        # __getitem__ returns 0, so cumulative stays at 0 and bucket is always >= cumulative.
+        # However total_weight must be > 0 to avoid ZeroDivisionError.
+        # Trick: sum(values()) returns 1, but iterating weights[variant] returns 0.
+        class _TrickyWeights(dict):
+            """Weights dict that reports total=1 via values() but yields 0 per key."""
+
+            def values(self):
+                return [1]
+
+            def keys(self):
+                return ["control"]
+
+            def __iter__(self):
+                return iter(["control"])
+
+            def __getitem__(self, key):
+                return 0  # cumulative stays 0, bucket (>= 0) never < 0
+
+        with patch(
+            "services.variants.experiment_registry.get_active_weights",
+            return_value=_TrickyWeights({"control": 0}),
+        ):
+            result = assign_variant("test-session")
+            assert result == "control"

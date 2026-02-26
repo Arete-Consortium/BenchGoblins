@@ -41,6 +41,27 @@ class TestRateLimitedGet:
         assert result.text == "<html>ok</html>"
 
     @pytest.mark.asyncio
+    async def test_rate_limit_wait(self):
+        """Line 76: triggers asyncio.sleep when called too soon after last request."""
+        import asyncio
+
+        import services.reference as ref
+
+        client = AsyncMock()
+        resp = mock_response(text="ok")
+        client.get = AsyncMock(return_value=resp)
+
+        # Set last request time to "now" so elapsed < _RATE_LIMIT_SECONDS
+        ref._last_request_time = asyncio.get_event_loop().time()
+
+        with patch(
+            "services.reference.asyncio.sleep", new_callable=AsyncMock
+        ) as mock_sleep:
+            result = await _rate_limited_get(client, "http://example.com")
+            mock_sleep.assert_called_once()
+            assert result is not None
+
+    @pytest.mark.asyncio
     async def test_error(self):
         client = AsyncMock()
         client.get = AsyncMock(side_effect=Exception("network error"))

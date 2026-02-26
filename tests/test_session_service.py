@@ -80,3 +80,36 @@ class TestEncryptionKeyProperty:
         k1 = svc.encryption_key
         k2 = svc.encryption_key
         assert k1 is k2
+
+    def test_raises_on_wrong_key_length(self):
+        """Line 48: SESSION_ENCRYPTION_KEY that decodes to != 32 bytes raises ValueError."""
+        import base64
+        from unittest.mock import patch
+
+        bad_key = base64.b64encode(b"short").decode()
+        svc = SessionService()
+        with patch.dict("os.environ", {"SESSION_ENCRYPTION_KEY": bad_key}):
+            with pytest.raises(ValueError, match="must decode to 32 bytes"):
+                _ = svc.encryption_key
+
+    def test_raises_in_production_without_key(self):
+        """Line 53: no key + non-development environment raises RuntimeError."""
+        from unittest.mock import patch
+
+        svc = SessionService()
+        with patch.dict(
+            "os.environ",
+            {"ENVIRONMENT": "production"},
+            clear=False,
+        ):
+            with patch(
+                "os.getenv",
+                side_effect=lambda k, d=None: {
+                    "SESSION_ENCRYPTION_KEY": None,
+                    "ENVIRONMENT": "production",
+                }.get(k, d),
+            ):
+                with pytest.raises(
+                    RuntimeError, match="SESSION_ENCRYPTION_KEY not set"
+                ):
+                    _ = svc.encryption_key

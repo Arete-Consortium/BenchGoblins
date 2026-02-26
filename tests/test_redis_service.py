@@ -440,3 +440,20 @@ class TestMonitoringImportFallback:
         # Should not raise
         track_cache_operation("get", hit=True)
         track_cache_operation("set", hit=False)
+
+    def test_import_error_defines_fallback(self):
+        """When monitoring module is absent, the fallback is defined (lines 20-23)."""
+        import importlib
+        import sys
+
+        with patch.dict(sys.modules, {"monitoring": None}):
+            import services.redis as redis_mod
+
+            importlib.reload(redis_mod)
+
+            # The fallback should be a callable no-op
+            result = redis_mod.track_cache_operation("get", hit=True)
+            assert result is None
+
+        # Reload to restore original state
+        importlib.reload(redis_mod)

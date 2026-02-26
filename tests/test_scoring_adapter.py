@@ -292,6 +292,117 @@ class TestAdapterMatchup:
         assert msf != 50.0
 
 
+class TestAdapterSoccerMatchup:
+    """Test soccer position matchup mapping (lines 20-44)."""
+
+    def test_soccer_forward_matchup(
+        self, espn_soccer_forward_info, espn_soccer_forward_stats
+    ):
+        """Soccer FW position maps to vs_fwd."""
+        from services.espn import TeamDefense
+
+        matchup = TeamDefense(
+            team_abbrev="CHE",
+            sport="soccer",
+            points_allowed=25.0,
+            pace=None,
+            vs_fwd=18.5,
+            vs_mid=12.0,
+            vs_def=5.0,
+            vs_gk=2.0,
+        )
+        core = adapt_espn_to_core(
+            espn_soccer_forward_info, espn_soccer_forward_stats, matchup=matchup
+        )
+        assert core.opponent_vs_position == 18.5
+        # Soccer uses points_allowed, not defensive_rating
+        assert core.opponent_def_rating == 25.0
+
+    def test_soccer_midfielder_matchup(self):
+        """Soccer MF/MID/CM positions map to vs_mid."""
+        from services.espn import TeamDefense
+        from services.scoring_adapter import _position_matchup_field
+
+        matchup = TeamDefense(
+            team_abbrev="MCI",
+            sport="soccer",
+            vs_fwd=18.0,
+            vs_mid=14.0,
+            vs_def=6.0,
+            vs_gk=1.0,
+        )
+        for pos in ("MF", "MID", "M", "CM", "CAM", "CDM"):
+            result = _position_matchup_field(matchup, pos, sport="soccer")
+            assert result == 14.0, f"Position {pos} should map to vs_mid"
+
+    def test_soccer_defender_matchup(self):
+        """Soccer DF/DEF/CB/LB/RB positions map to vs_def."""
+        from services.espn import TeamDefense
+        from services.scoring_adapter import _position_matchup_field
+
+        matchup = TeamDefense(
+            team_abbrev="LIV",
+            sport="soccer",
+            vs_fwd=18.0,
+            vs_mid=14.0,
+            vs_def=6.5,
+            vs_gk=1.0,
+        )
+        for pos in ("DF", "DEF", "D", "CB", "LB", "RB"):
+            result = _position_matchup_field(matchup, pos, sport="soccer")
+            assert result == 6.5, f"Position {pos} should map to vs_def"
+
+    def test_soccer_goalkeeper_matchup(self):
+        """Soccer GK/G/GOALKEEPER positions map to vs_gk."""
+        from services.espn import TeamDefense
+        from services.scoring_adapter import _position_matchup_field
+
+        matchup = TeamDefense(
+            team_abbrev="ARS",
+            sport="soccer",
+            vs_fwd=18.0,
+            vs_mid=14.0,
+            vs_def=6.0,
+            vs_gk=3.0,
+        )
+        for pos in ("GK", "G", "GOALKEEPER"):
+            result = _position_matchup_field(matchup, pos, sport="soccer")
+            assert result == 3.0, f"Position {pos} should map to vs_gk"
+
+    def test_soccer_forward_aliases(self):
+        """Soccer FW/FWD/F/ST/CF/LW/RW all map to vs_fwd."""
+        from services.espn import TeamDefense
+        from services.scoring_adapter import _position_matchup_field
+
+        matchup = TeamDefense(
+            team_abbrev="BAR",
+            sport="soccer",
+            vs_fwd=20.0,
+            vs_mid=14.0,
+            vs_def=6.0,
+            vs_gk=1.0,
+        )
+        for pos in ("FW", "FWD", "F", "ST", "CF", "LW", "RW"):
+            result = _position_matchup_field(matchup, pos, sport="soccer")
+            assert result == 20.0, f"Position {pos} should map to vs_fwd"
+
+    def test_soccer_unknown_position_returns_none(self):
+        """Unknown soccer position returns None."""
+        from services.espn import TeamDefense
+        from services.scoring_adapter import _position_matchup_field
+
+        matchup = TeamDefense(
+            team_abbrev="BAR",
+            sport="soccer",
+            vs_fwd=20.0,
+            vs_mid=14.0,
+            vs_def=6.0,
+            vs_gk=1.0,
+        )
+        result = _position_matchup_field(matchup, "XX", sport="soccer")
+        assert result is None
+
+
 class TestAdapterMLB:
     """Test MLB field mapping in adapter."""
 

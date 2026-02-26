@@ -23,6 +23,77 @@ from services.stripe_billing import (
 # ---------------------------------------------------------------------------
 
 
+class TestIsLeaguePro:
+    async def test_db_not_configured(self):
+        from services.stripe_billing import is_league_pro
+
+        with patch("services.stripe_billing.db_service") as mock_db:
+            mock_db.is_configured = False
+            result = await is_league_pro(1)
+            assert result is False
+
+    async def test_league_without_commissioner_continues(self):
+        """Line 67: league.commissioner_user_id is None -> continue."""
+        from services.stripe_billing import is_league_pro
+
+        mock_league = MagicMock()
+        mock_league.commissioner_user_id = None
+
+        mock_session = AsyncMock()
+        # First execute returns the leagues query
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = [mock_league]
+        mock_session.execute.return_value = mock_result
+
+        with patch("services.stripe_billing.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            result = await is_league_pro(1)
+            assert result is False
+
+
+class TestCreateCheckoutSessionWithMetadata:
+    async def test_extra_metadata_included(self):
+        """Line 120: extra_metadata dict gets merged into metadata."""
+        mock_session = MagicMock()
+        mock_session.id = "cs_test_123"
+        mock_session.url = "https://checkout.stripe.com/session"
+
+        with (
+            patch("services.stripe_billing.is_configured", return_value=True),
+            patch.dict(
+                "services.stripe_billing.PRICE_IDS", {"pro_monthly": "price_xxx"}
+            ),
+            patch(
+                "services.stripe_billing._get_or_create_customer",
+                new_callable=AsyncMock,
+                return_value="cus_123",
+            ),
+            patch("services.stripe_billing.stripe") as mock_stripe,
+        ):
+            mock_stripe.checkout.Session.create.return_value = mock_session
+            mock_stripe.error = stripe.error
+
+            url = await create_checkout_session(
+                1,
+                "a@b.com",
+                "price_xxx",
+                "http://ok",
+                "http://no",
+                extra_metadata={"league_id": "42"},
+            )
+
+            assert url == "https://checkout.stripe.com/session"
+            call_kwargs = mock_stripe.checkout.Session.create.call_args
+            metadata = call_kwargs[1]["metadata"]
+            assert metadata["league_id"] == "42"
+            assert metadata["user_id"] == "1"
+
+
 class TestIsConfigured:
     def test_configured_when_api_key_set(self):
         with patch("services.stripe_billing.stripe") as mock_stripe:

@@ -369,6 +369,38 @@ class TestGoogleAuth:
 
         assert response.status_code == 401
 
+    @patch(
+        "routes.auth.create_jwt_token",
+        side_effect=ConfigurationError("JWT_SECRET not set"),
+    )
+    @patch("routes.auth.get_or_create_user", new_callable=AsyncMock)
+    @patch("routes.auth.verify_google_token")
+    @patch("routes.auth.db_service")
+    def test_jwt_config_error_during_google_auth(
+        self, mock_db, mock_verify, mock_get_user, mock_create_jwt, test_client
+    ):
+        """Lines 304-305: ConfigurationError from create_jwt_token in /auth/google."""
+        mock_verify.return_value = {
+            "google_id": "g123",
+            "email": "user@gmail.com",
+            "name": "User",
+            "email_verified": True,
+        }
+        mock_get_user.return_value = _make_mock_user()
+
+        mock_db_ctx, mock_session = _mock_db_session(AsyncMock())
+        mock_db.is_configured = True
+        mock_db.session.return_value = mock_db_ctx
+
+        with patch("services.rate_limiter.rate_limiter") as mock_rl:
+            mock_rl.check_rate_limit = AsyncMock(return_value=(True, 0))
+            response = test_client.post(
+                "/auth/google", json={"id_token": "valid_google_token"}
+            )
+
+        assert response.status_code == 503
+        assert "JWT_SECRET not set" in response.json()["detail"]
+
     @patch("routes.auth.verify_google_token")
     @patch("routes.auth.db_service")
     def test_email_not_verified(self, mock_db, mock_verify, test_client):

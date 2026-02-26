@@ -694,3 +694,223 @@ class TestParsePlayerExtended:
         }
         p = svc._parse_player(data)
         assert p.bye_week is None
+
+
+# =========================================================================
+# Exception-handler branches (lines 419-420, 514-515, 575-576, 642-643,
+# 737-738, 777-778) and league-key filter skip (lines 569-570)
+# =========================================================================
+
+
+class TestGetUserLeaguesParseError:
+    """Trigger the except block at lines 419-420 in get_user_leagues."""
+
+    @pytest.mark.asyncio
+    async def test_malformed_league_data_triggers_except(self, svc, mock_client):
+        """A TypeError during league parsing hits the except handler."""
+        svc._client = mock_client
+        # league_data.get("league", [[{}]]) returns None, then [0] raises TypeError
+        data = {
+            "fantasy_content": {
+                "users": {
+                    "0": {
+                        "user": [
+                            {"guid": "abc"},
+                            {
+                                "games": {
+                                    "0": {
+                                        "game": [
+                                            {"code": "nfl"},
+                                            {
+                                                "leagues": {
+                                                    "0": {"league": None},
+                                                }
+                                            },
+                                        ]
+                                    }
+                                }
+                            },
+                        ]
+                    }
+                }
+            }
+        }
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.get_user_leagues("token")
+        # Should not crash — returns empty list from the except branch
+        assert result == []
+
+
+class TestGetLeagueStandingsParseError:
+    """Trigger the except block at lines 514-515 in get_league_standings."""
+
+    @pytest.mark.asyncio
+    async def test_malformed_standings_triggers_except(self, svc, mock_client):
+        """Empty inner list causes IndexError caught by except handler."""
+        svc._client = mock_client
+        # team_info[0] is list (isinstance check True), but empty → [][0] = IndexError
+        data = {
+            "fantasy_content": {
+                "league": [
+                    {"league_key": "k"},
+                    {
+                        "standings": [
+                            {
+                                "teams": {
+                                    "0": {
+                                        "team": [
+                                            [],  # empty list → IndexError on [0]
+                                            {"team_standings": {}},
+                                        ]
+                                    }
+                                }
+                            }
+                        ]
+                    },
+                ]
+            }
+        }
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.get_league_standings("token", "k")
+        assert result == []
+
+
+class TestGetUserTeamsFilterSkip:
+    """Trigger lines 569-570 (league_key filter skip) and 575-576 (except)."""
+
+    @pytest.mark.asyncio
+    async def test_team_filtered_out_by_league_key(self, svc, mock_client):
+        """Team whose team_key doesn't match the league_key is skipped."""
+        svc._client = mock_client
+        # Team key "999.l.999.t.1" doesn't match league_key "449.l.123"
+        data = {
+            "fantasy_content": {
+                "users": {
+                    "0": {
+                        "user": [
+                            {"guid": "x"},
+                            {
+                                "teams": {
+                                    "0": {
+                                        "team": [
+                                            [
+                                                {
+                                                    "team_key": "999.l.999.t.1",
+                                                    "team_id": "1",
+                                                    "name": "Other Team",
+                                                    "number_of_moves": 0,
+                                                    "number_of_trades": 0,
+                                                }
+                                            ]
+                                        ]
+                                    }
+                                }
+                            },
+                        ]
+                    }
+                }
+            }
+        }
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.get_user_teams("token", "449.l.123")
+        # The team is skipped because its team_key prefix doesn't match
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_malformed_teams_triggers_except(self, svc, mock_client):
+        """Empty inner list causes IndexError caught by except handler."""
+        svc._client = mock_client
+        # team_info[0] is a list (isinstance True), but empty → [][0] = IndexError
+        data = {
+            "fantasy_content": {
+                "users": {
+                    "0": {
+                        "user": [
+                            {"guid": "x"},
+                            {
+                                "teams": {
+                                    "0": {
+                                        "team": [[]],
+                                    }
+                                }
+                            },
+                        ]
+                    }
+                }
+            }
+        }
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.get_user_teams("token", "449.l.123")
+        assert result == []
+
+
+class TestGetTeamRosterParseError:
+    """Trigger the except block at lines 642-643 in get_team_roster."""
+
+    @pytest.mark.asyncio
+    async def test_malformed_roster_triggers_except(self, svc, mock_client):
+        """Empty inner list causes IndexError caught by except handler."""
+        svc._client = mock_client
+        # player_info[0] is a list (isinstance True), but empty → [][0] = IndexError
+        data = {
+            "fantasy_content": {
+                "team": [
+                    {"team_key": "k"},
+                    {
+                        "roster": {
+                            "0": {
+                                "players": {
+                                    "0": {
+                                        "player": [[]],
+                                    }
+                                }
+                            }
+                        }
+                    },
+                ]
+            }
+        }
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.get_team_roster("token", "k")
+        assert result == []
+
+
+class TestSearchPlayersParseError:
+    """Trigger the except block at lines 737-738 in search_players."""
+
+    @pytest.mark.asyncio
+    async def test_malformed_players_triggers_except(self, svc, mock_client):
+        """Empty inner list causes IndexError caught by except handler."""
+        svc._client = mock_client
+        # player_info[0] is a list (isinstance True), but empty → [][0] = IndexError
+        data = {
+            "fantasy_content": {
+                "game": [
+                    {"game_key": "449"},
+                    {
+                        "players": {
+                            "0": {
+                                "player": [[]],
+                            }
+                        }
+                    },
+                ]
+            }
+        }
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.search_players("token", "Test", sport="nfl")
+        assert result == []
+
+
+class TestGetTeamMatchupParseError:
+    """Trigger the except block at lines 777-778 in get_team_matchup."""
+
+    @pytest.mark.asyncio
+    async def test_malformed_matchup_triggers_except(self, svc, mock_client):
+        """team=None causes TypeError on len(None), caught by except handler."""
+        svc._client = mock_client
+        # team is None → len(None) raises TypeError
+        data = {"fantasy_content": {"team": None}}
+        mock_client.get = AsyncMock(return_value=make_response(data))
+        result = await svc.get_team_matchup("token", "k")
+        assert result is None

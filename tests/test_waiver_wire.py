@@ -727,3 +727,94 @@ class TestWaiverEndpoint:
         )
 
         assert response.status_code == 422
+
+
+# =============================================================================
+# COVERAGE GAPS — Lines 53, 112-113, 164
+# =============================================================================
+
+
+class TestRosterAnalysisToDict:
+    """Tests for RosterAnalysis.to_dict() — line 53."""
+
+    def test_to_dict_returns_all_fields(self):
+        """to_dict returns a dict with all five fields."""
+        analysis = RosterAnalysis(
+            position_counts={"QB": 2, "RB": 3},
+            starters=[{"name": "A", "position": "QB"}],
+            bench=[{"name": "B", "position": "RB"}],
+            injured=[{"name": "C", "position": "WR"}],
+            position_needs=["TE"],
+        )
+        d = analysis.to_dict()
+
+        assert d["position_counts"] == {"QB": 2, "RB": 3}
+        assert len(d["starters"]) == 1
+        assert len(d["bench"]) == 1
+        assert len(d["injured"]) == 1
+        assert d["position_needs"] == ["TE"]
+
+    def test_to_dict_empty_defaults(self):
+        """to_dict works on a default-constructed RosterAnalysis."""
+        analysis = RosterAnalysis()
+        d = analysis.to_dict()
+
+        assert d["position_counts"] == {}
+        assert d["starters"] == []
+        assert d["bench"] == []
+        assert d["injured"] == []
+        assert d["position_needs"] == []
+
+
+class TestWaiverResultRationaleInjured:
+    """Tests for WaiverResult.rationale injured branch — lines 112-113."""
+
+    def test_rationale_mentions_injured_players(self):
+        """When roster has injured players, rationale includes their names."""
+        analysis = RosterAnalysis(
+            position_needs=["RB"],
+            injured=[
+                {"name": "Saquon Barkley", "position": "RB"},
+                {"name": "Joe Mixon", "position": "RB"},
+            ],
+        )
+        candidate = WaiverCandidate(
+            name="De'Von Achane",
+            position="RB",
+            team="MIA",
+            rationale="Fills RB need",
+            priority=1,
+        )
+        result = WaiverResult(roster_analysis=analysis, recommendations=[candidate])
+
+        assert "Saquon Barkley" in result.rationale
+        assert "Joe Mixon" in result.rationale
+        assert "Injured:" in result.rationale
+
+
+class TestAnalyzeRosterSkipNoPosition:
+    """Tests for analyze_roster skipping players with no position — line 164."""
+
+    def test_player_without_position_is_skipped(self):
+        """Player with position=None or position='' is skipped."""
+        no_pos_player = SleeperPlayer(
+            player_id="99",
+            full_name="No Position Guy",
+            first_name="No",
+            last_name="Guy",
+            team="FA",
+            position="",
+            sport="nfl",
+            status="Active",
+            injury_status=None,
+            age=25,
+            years_exp=1,
+        )
+        normal_player = _make_player("1", "Josh Allen", "QB", "BUF")
+
+        analysis = analyze_roster([no_pos_player, normal_player], {"1", "99"}, "nfl")
+
+        # Only the normal player is counted
+        assert analysis.position_counts == {"QB": 1}
+        assert len(analysis.starters) == 1
+        assert analysis.starters[0]["name"] == "Josh Allen"

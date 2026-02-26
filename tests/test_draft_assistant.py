@@ -314,6 +314,61 @@ class TestDraftResult:
 
         assert "floor" in result.rationale
 
+    def test_rationale_position_boosted(self):
+        """Rationale includes position-boost note when top pick is boosted (line 78)."""
+        from core.scoring import IndexScores
+
+        from services.draft_assistant import DraftPick, DraftResult
+
+        idx = IndexScores(sci=60.0, rmi=60.0, gis=60.0, od=5.0, msf=55.0)
+        picks = [
+            DraftPick(
+                rank=1,
+                name="Boosted Player",
+                team="LAL",
+                position="PG",
+                score=75.0,
+                base_score=70.0,
+                indices=idx,
+                position_boosted=True,
+            ),
+            DraftPick(
+                rank=2,
+                name="Other Player",
+                team="BOS",
+                position="SF",
+                score=65.0,
+                base_score=65.0,
+                indices=idx,
+                position_boosted=False,
+            ),
+        ]
+        result = DraftResult(ranked_players=picks, risk_mode="median", sport="nba")
+        assert "boosted for position need" in result.rationale
+
+    def test_rationale_single_player(self):
+        """Rationale with one player uses mode-only suffix (line 87)."""
+        from core.scoring import IndexScores
+
+        from services.draft_assistant import DraftPick, DraftResult
+
+        idx = IndexScores(sci=60.0, rmi=60.0, gis=60.0, od=5.0, msf=55.0)
+        picks = [
+            DraftPick(
+                rank=1,
+                name="Solo Player",
+                team="LAL",
+                position="PG",
+                score=70.0,
+                base_score=70.0,
+                indices=idx,
+                position_boosted=False,
+            ),
+        ]
+        result = DraftResult(ranked_players=picks, risk_mode="floor", sport="nba")
+        assert "(floor mode)." in result.rationale
+        assert "over" not in result.rationale
+
     def test_to_details_dict_structure(self, star_player, bench_player):
         """to_details_dict returns expected structure."""
         from services.draft_assistant import draft_assistant
