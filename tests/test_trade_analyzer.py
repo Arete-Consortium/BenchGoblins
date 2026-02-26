@@ -342,6 +342,27 @@ class TestTradeResult:
         )
         assert result.confidence == "high"
 
+    def test_confidence_medium_direct(self):
+        """Line 84: avg_margin in [3, 8) returns 'medium' confidence."""
+        from core.scoring import IndexScores
+        from services.trade_analyzer import PlayerBreakdown, TradeResult, TradeSide
+
+        # 1 player each side: net_value=10, player_count=2, avg_margin=5 → medium
+        idx = IndexScores(sci=50, rmi=30, gis=60, od=10, msf=55)
+        side_giving = TradeSide(
+            players=[PlayerBreakdown(name="A", team="AAA", score=20.0, indices=idx)]
+        )
+        side_receiving = TradeSide(
+            players=[PlayerBreakdown(name="B", team="BBB", score=30.0, indices=idx)]
+        )
+        result = TradeResult(
+            side_giving=side_giving,
+            side_receiving=side_receiving,
+            risk_mode="median",
+            sport="nba",
+        )
+        assert result.confidence == "medium"
+
 
 # =============================================================================
 # TEST TradeSide DATACLASS
