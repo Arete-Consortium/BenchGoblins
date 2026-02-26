@@ -552,6 +552,139 @@ class TestGetCurrentSpend:
             assert result == 0.0
 
 
+class TestDiscordAlertCriticalColor:
+    """Test Discord alert with critical (orange) color for 90-99% range."""
+
+    @pytest.mark.asyncio
+    async def test_send_discord_alert_critical_color(self):
+        """Test Discord embed uses orange for 90-99% range (line 133)."""
+        with patch("services.budget_alerts.httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.status_code = 204
+            mock_post = AsyncMock(return_value=mock_response)
+            mock_client.return_value.__aenter__.return_value.post = mock_post
+
+            await send_discord_alert(
+                webhook_url="https://discord.com/api/webhooks/test",
+                message="Budget critical",
+                spend=95.0,
+                limit=100.0,
+                percent=95.0,
+            )
+
+            call_args = mock_post.call_args
+            payload = call_args.kwargs["json"]
+            assert payload["embeds"][0]["color"] == 0xFFA500  # Orange
+
+
+class TestDiscordAlertNon200:
+    """Test Discord alert with non-success status codes."""
+
+    @pytest.mark.asyncio
+    async def test_send_discord_alert_non_200_response(self):
+        """Test Discord webhook failure on non-200/204 response (lines 174-175)."""
+        with patch("services.budget_alerts.httpx.AsyncClient") as mock_client:
+            mock_response = MagicMock()
+            mock_response.status_code = 400
+            mock_response.text = "Bad request"
+            mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+                return_value=mock_response
+            )
+
+            result = await send_discord_alert(
+                webhook_url="https://discord.com/api/webhooks/test",
+                message="Budget warning",
+                spend=80.0,
+                limit=100.0,
+                percent=80.0,
+            )
+
+            assert result is False
+
+
+class TestShouldSendAlertExceededBucket:
+    """Test _should_send_alert for exceeded-budget bucket transitions."""
+
+    @pytest.mark.asyncio
+    async def test_exceeded_bucket_transition(self):
+        """Test alert at new 10% bucket when already exceeded (line 270).
+
+        When last_percent was already >= 100 but in a different bucket,
+        the exceeded-bucket branch should fire.
+        """
+        config = MagicMock()
+        config.alerts_enabled = True
+        config.monthly_limit_usd = 100
+        config.alert_threshold_pct = 80
+        config.slack_webhook_url = "https://hooks.slack.com/test"
+        config.discord_webhook_url = None
+        config.last_alert_percent = 100  # Already exceeded
+        config.last_alert_time = datetime.now(UTC) - timedelta(hours=2)
+
+        # Current is 110%, last was 100% — different buckets (100 vs 110)
+        should_send, message = await _should_send_alert(config, 110)
+        assert should_send is True
+        assert "exceeded" in message.lower()
+        assert "110%" in message
+
+
+class TestCheckAndSendAlertsZeroLimit:
+    """Test check_and_send_alerts with zero monthly limit."""
+
+    @pytest.mark.asyncio
+    async def test_zero_limit_returns_no_limit_set(self):
+        """Test no_limit_set response when monthly_limit_usd is 0 (line 309)."""
+        mock_config = MagicMock()
+        mock_config.monthly_limit_usd = 0
+
+        with (
+            patch("services.budget_alerts.db_service") as mock_db,
+            patch(
+                "services.budget_alerts._get_current_spend", new_callable=AsyncMock
+            ) as mock_spend,
+        ):
+            mock_db.is_configured = True
+
+            mock_execute_result = MagicMock()
+            mock_execute_result.scalar_one_or_none.return_value = mock_config
+
+            mock_session_obj = AsyncMock()
+            mock_session_obj.execute = AsyncMock(return_value=mock_execute_result)
+
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.return_value = mock_session_obj
+            mock_context_manager.__aexit__.return_value = None
+
+            mock_db.session.return_value = mock_context_manager
+            mock_spend.return_value = 5.0
+
+            result = await check_and_send_alerts()
+
+            assert result["alerts_sent"] is False
+            assert result["reason"] == "no_limit_set"
+
+
+class TestCheckAndSendAlertsException:
+    """Test check_and_send_alerts exception handling."""
+
+    @pytest.mark.asyncio
+    async def test_exception_returns_error(self):
+        """Test exception in check_and_send_alerts returns error dict (lines 365-367)."""
+        with patch("services.budget_alerts.db_service") as mock_db:
+            mock_db.is_configured = True
+
+            mock_context_manager = AsyncMock()
+            mock_context_manager.__aenter__.side_effect = RuntimeError("DB exploded")
+
+            mock_db.session.return_value = mock_context_manager
+
+            result = await check_and_send_alerts()
+
+            assert result["alerts_sent"] is False
+            assert "error:" in result["reason"]
+            assert "DB exploded" in result["reason"]
+
+
 class TestConstants:
     """Tests for module constants."""
 

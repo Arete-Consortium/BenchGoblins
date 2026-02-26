@@ -1,5 +1,7 @@
 """Tests for rate limiter service."""
 
+import importlib
+import sys
 import time
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -327,6 +329,115 @@ class TestRedisRateLimiting:
         assert status["storage"] == "redis"
 
 
+class TestRedisStatusEdgeCases:
+    """Tests for Redis status edge cases — covers lines 153, 174-175."""
+
+    @pytest.mark.asyncio
+    async def test_get_status_redis_falls_back_when_no_client(self, rate_limiter):
+        """get_status should fall back to memory when Redis client is None (line 153)."""
+        rl = rate_limiter
+
+        mock_redis = MagicMock()
+        mock_redis.is_connected = True
+        mock_redis._client = None
+
+        with patch("services.rate_limiter.redis_service", mock_redis):
+            status = await rl.get_status("no-client-status")
+
+        assert status["storage"] == "memory"
+        assert status["requests_used"] == 0
+        assert status["requests_remaining"] == 20
+
+    @pytest.mark.asyncio
+    async def test_get_status_redis_falls_back_on_exception(self, strict_rate_limiter):
+        """get_status should fall back to memory on Redis error (lines 174-175)."""
+        rl = strict_rate_limiter
+
+        mock_redis = MagicMock()
+        mock_redis.is_connected = True
+        mock_client = AsyncMock()
+        mock_redis._client = mock_client
+
+        # Make zremrangebyscore raise to trigger except branch
+        mock_client.zremrangebyscore = AsyncMock(
+            side_effect=Exception("Redis connection lost")
+        )
+
+        with patch("services.rate_limiter.redis_service", mock_redis):
+            status = await rl.get_status("error-status")
+
+        # Should fall back to memory storage
+        assert status["storage"] == "memory"
+        assert status["session_id"] == "error-status"
+        assert status["requests_used"] == 0
+        assert status["requests_remaining"] == 3
+
+
+class TestRedisCheckEdgeCases:
+    """Tests for Redis check edge cases — covers line 103."""
+
+    @pytest.mark.asyncio
+    async def test_redis_over_limit_empty_oldest(self, strict_rate_limiter):
+        """Should return False, 1 when over limit but oldest is empty (line 103)."""
+        rl = strict_rate_limiter
+
+        mock_redis = MagicMock()
+        mock_redis.is_connected = True
+        mock_client = AsyncMock()
+        mock_redis._client = mock_client
+
+        # Pipeline says count >= max_requests
+        mock_pipe = MagicMock()
+        mock_pipe.execute = AsyncMock(return_value=[0, 3])  # 3 requests = at limit
+        mock_client.pipeline = MagicMock(return_value=mock_pipe)
+
+        # zrange returns empty list — no oldest entry
+        mock_client.zrange = AsyncMock(return_value=[])
+
+        with patch("services.rate_limiter.redis_service", mock_redis):
+            allowed, retry_after = await rl.check_rate_limit("empty-oldest")
+
+        assert allowed is False
+        assert retry_after == 1
+
+
+class TestImportFallback:
+    """Tests for ImportError fallback — covers lines 15-16."""
+
+    def test_redis_import_failure_sets_none(self):
+        """Module should set redis_service=None when import fails (lines 15-16)."""
+        import services.rate_limiter as rl_module
+
+        # Save original redis module reference if present
+        original_redis = sys.modules.get("services.redis")
+
+        try:
+            # Make 'services.redis' import fail
+            sys.modules["services.redis"] = None
+
+            importlib.reload(rl_module)
+
+            # redis_service should be None after failed import
+            assert rl_module.redis_service is None
+
+            # RateLimiter should still work with memory fallback
+            rl = rl_module.RateLimiter(max_requests=5, window_seconds=10)
+            assert rl.max_requests == 5
+        finally:
+            # Restore original state and reload
+            if original_redis is not None:
+                sys.modules["services.redis"] = original_redis
+            else:
+                sys.modules.pop("services.redis", None)
+
+            # Reload with default env vars to restore module state
+            with patch.dict(
+                "os.environ",
+                {"RATE_LIMIT_REQUESTS": "20", "RATE_LIMIT_WINDOW_SECONDS": "60"},
+            ):
+                importlib.reload(rl_module)
+
+
 class TestEnvironmentConfig:
     """Tests for environment variable configuration."""
 
@@ -337,7 +448,6 @@ class TestEnvironmentConfig:
             {"RATE_LIMIT_REQUESTS": "50", "RATE_LIMIT_WINDOW_SECONDS": "120"},
         ):
             # Need to reload module to pick up env vars
-            import importlib
             import services.rate_limiter as rl_module
 
             importlib.reload(rl_module)

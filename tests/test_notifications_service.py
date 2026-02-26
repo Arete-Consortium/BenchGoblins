@@ -1,7 +1,8 @@
 """Tests for notification service."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
 import pytest
 
 from services.notifications import (
@@ -85,6 +86,59 @@ class TestTokenManagement:
         assert tokens == []
 
 
+class TestGetClient:
+    @pytest.mark.asyncio
+    async def test_get_client_creates_new_when_none(self, svc):
+        """Line 59: _get_client creates a new httpx.AsyncClient when _client is None."""
+        assert svc._client is None
+
+        with patch("services.notifications.httpx.AsyncClient") as mock_cls:
+            mock_instance = MagicMock()
+            mock_instance.is_closed = False
+            mock_cls.return_value = mock_instance
+
+            client = await svc._get_client()
+
+            mock_cls.assert_called_once_with(
+                timeout=30.0,
+                headers={
+                    "Accept": "application/json",
+                    "Accept-Encoding": "gzip, deflate",
+                    "Content-Type": "application/json",
+                },
+            )
+            assert client is mock_instance
+            assert svc._client is mock_instance
+
+    @pytest.mark.asyncio
+    async def test_get_client_creates_new_when_closed(self, svc):
+        """Line 59: _get_client creates a new client when existing one is closed."""
+        old_client = MagicMock()
+        old_client.is_closed = True
+        svc._client = old_client
+
+        with patch("services.notifications.httpx.AsyncClient") as mock_cls:
+            mock_instance = MagicMock()
+            mock_instance.is_closed = False
+            mock_cls.return_value = mock_instance
+
+            client = await svc._get_client()
+
+            mock_cls.assert_called_once()
+            assert client is mock_instance
+            assert svc._client is mock_instance
+
+    @pytest.mark.asyncio
+    async def test_get_client_reuses_existing(self, svc):
+        """_get_client reuses existing client when not closed."""
+        existing_client = MagicMock()
+        existing_client.is_closed = False
+        svc._client = existing_client
+
+        client = await svc._get_client()
+        assert client is existing_client
+
+
 class TestSendNotification:
     @pytest.mark.asyncio
     async def test_send_single(self, svc):
@@ -119,6 +173,18 @@ class TestSendNotification:
         assert payload["badge"] == 5
 
     @pytest.mark.asyncio
+    async def test_send_notification_http_error(self, svc):
+        """Lines 142-143: send_notification catches httpx.HTTPError and returns error dict."""
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=httpx.HTTPError("connection refused"))
+        mock_client.is_closed = False
+        svc._client = mock_client
+
+        n = PushNotification(to="tok", title="T", body="B")
+        result = await svc.send_notification(n)
+        assert result == {"error": "connection refused"}
+
+    @pytest.mark.asyncio
     async def test_send_batch_empty(self, svc):
         result = await svc.send_batch([])
         assert result == []
@@ -139,6 +205,43 @@ class TestSendNotification:
         ]
         result = await svc.send_batch(notifications)
         assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_send_batch_with_data_and_badge(self, svc):
+        """Line 171: send_batch includes badge in payload when set."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"data": [{"status": "ok"}]}
+
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(return_value=mock_response)
+        mock_client.is_closed = False
+        svc._client = mock_client
+
+        notifications = [
+            PushNotification(
+                to="tok1", title="T1", body="B1", data={"key": "val"}, badge=7
+            ),
+        ]
+        await svc.send_batch(notifications)
+
+        call_kwargs = mock_client.post.call_args
+        payload = call_kwargs.kwargs.get("json") or call_kwargs[1].get("json")
+        assert payload[0]["data"] == {"key": "val"}
+        assert payload[0]["badge"] == 7
+
+    @pytest.mark.asyncio
+    async def test_send_batch_http_error(self, svc):
+        """Lines 178-179: send_batch catches httpx.HTTPError and returns error list."""
+        mock_client = AsyncMock()
+        mock_client.post = AsyncMock(side_effect=httpx.HTTPError("timeout"))
+        mock_client.is_closed = False
+        svc._client = mock_client
+
+        notifications = [
+            PushNotification(to="tok1", title="T1", body="B1"),
+        ]
+        result = await svc.send_batch(notifications)
+        assert result == [{"error": "timeout"}]
 
 
 class TestNotificationTemplates:
