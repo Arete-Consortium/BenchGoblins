@@ -80,6 +80,9 @@ htmlcov/
 scripts/config/store_credentials.json
 scripts/config/*.p8
 
+# Vercel
+.vercel/
+
 # Misc
 *.log
 *.sqlite3
