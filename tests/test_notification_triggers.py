@@ -1014,3 +1014,497 @@ class TestRunLoop:
                 pass
 
         # If we get here without hanging, the test passes
+
+
+# =============================================================================
+# IMPORT FALLBACK (Lines 25-26)
+# =============================================================================
+
+
+class TestImportFallback:
+    """Test the ImportError fallback for redis.exceptions.RedisError."""
+
+    def test_redis_import_fallback(self):
+        """When redis is not installed, RedisError falls back to Exception."""
+        import importlib
+        import sys
+
+        # Temporarily block the redis package
+        with patch.dict(sys.modules, {"redis": None, "redis.exceptions": None}):
+            mod = importlib.import_module("services.notification_triggers")
+            importlib.reload(mod)
+            assert mod.RedisError is Exception
+
+        # Restore the module to normal state
+        importlib.reload(mod)
+
+
+# =============================================================================
+# RUN LOOP — CancelledError branches (Lines 102, 108-109)
+# =============================================================================
+
+
+class TestRunLoopCancelledError:
+    """Tests for CancelledError handling in _run_loop."""
+
+    @pytest.mark.asyncio
+    async def test_run_loop_breaks_on_checker_cancelled_error(self):
+        """CancelledError from checker breaks the loop (line 102)."""
+        scheduler = NotificationScheduler()
+        scheduler._running = True
+
+        async def cancelling_checker():
+            raise asyncio.CancelledError
+
+        real_sleep = asyncio.sleep
+
+        async def fast_sleep(_seconds):
+            await real_sleep(0)
+
+        with patch(
+            "services.notification_triggers.asyncio.sleep", side_effect=fast_sleep
+        ):
+            task = asyncio.create_task(
+                scheduler._run_loop("test", 1, cancelling_checker)
+            )
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                task.cancel()
+
+        # Task should have completed (broke out of loop)
+
+    @pytest.mark.asyncio
+    async def test_run_loop_breaks_on_sleep_cancelled_error(self):
+        """CancelledError from interval sleep breaks the loop (lines 108-109)."""
+        scheduler = NotificationScheduler()
+        scheduler._running = True
+
+        call_count = 0
+        sleep_call_count = 0
+        real_sleep = asyncio.sleep
+
+        async def checker():
+            nonlocal call_count
+            call_count += 1
+            return 0
+
+        async def sleep_with_cancel(seconds):
+            nonlocal sleep_call_count
+            sleep_call_count += 1
+            if sleep_call_count == 1:
+                # First call is the initial stagger delay — let it through
+                await real_sleep(0)
+            else:
+                # Second call is the interval sleep — cancel here
+                raise asyncio.CancelledError
+
+        with patch(
+            "services.notification_triggers.asyncio.sleep",
+            side_effect=sleep_with_cancel,
+        ):
+            task = asyncio.create_task(scheduler._run_loop("test", 60, checker))
+            try:
+                await asyncio.wait_for(task, timeout=2.0)
+            except (asyncio.TimeoutError, asyncio.CancelledError):
+                task.cancel()
+
+        assert call_count >= 1
+
+
+# =============================================================================
+# COOLDOWN — RedisError branches (Lines 193-194, 206-207)
+# =============================================================================
+
+
+class TestCooldownRedisErrors:
+    """Tests for RedisError handling in cooldown methods."""
+
+    @pytest.mark.asyncio
+    async def test_check_cooldown_returns_false_on_redis_error(self):
+        """RedisError in _check_cooldown returns False (lines 193-194)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        mock_client = AsyncMock()
+        mock_client.exists = AsyncMock(side_effect=RealRedisError("connection lost"))
+
+        with patch(_REDIS) as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+            result = await scheduler._check_cooldown("user1", "injury", "player1")
+            assert result is False
+
+    @pytest.mark.asyncio
+    async def test_set_cooldown_swallows_redis_error(self):
+        """RedisError in _set_cooldown is silently caught (lines 206-207)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        mock_client = AsyncMock()
+        mock_client.setex = AsyncMock(side_effect=RealRedisError("connection lost"))
+
+        with patch(_REDIS) as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+            # Should not raise
+            await scheduler._set_cooldown("user1", "injury", "player1")
+
+
+# =============================================================================
+# INJURY CHECKER — RedisError branches (Lines 273-274, 296-297)
+# =============================================================================
+
+
+class TestInjuryCheckerRedisErrors:
+    """Tests for RedisError handling within _check_injuries."""
+
+    @pytest.mark.asyncio
+    async def test_redis_error_on_get_cached_status(self):
+        """RedisError when reading cached injury status defaults to '' (lines 273-274)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+        player = _make_player("p1", "Test Player", "RB", injury_status="Doubtful")
+
+        mock_redis_client = AsyncMock()
+        # Redis get fails -> cached_status defaults to ""
+        mock_redis_client.get = AsyncMock(side_effect=RealRedisError("read error"))
+        mock_redis_client.setex = AsyncMock()
+        mock_redis_client.exists = AsyncMock(return_value=0)  # No cooldown
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_SLEEPER) as mock_sleeper,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+            patch.object(scheduler, "_log_notification", new_callable=AsyncMock),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_sleeper.get_roster_with_players = AsyncMock(return_value=[player])
+            mock_notif.send_injury_alert = AsyncMock(return_value=[])
+
+            result = await scheduler._check_injuries()
+
+        # Should still send because cached_status="" != current_status="Doubtful"
+        assert result == 1
+        mock_notif.send_injury_alert.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_redis_error_on_cache_update_setex(self):
+        """RedisError when updating injury cache is silently caught (lines 296-297)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+        # Player with no injury — won't trigger notification but will try cache update
+        player = _make_player("p1", "Healthy Player", "QB", injury_status=None)
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.get = AsyncMock(return_value="")
+        # Cache update setex fails
+        mock_redis_client.setex = AsyncMock(side_effect=RealRedisError("write error"))
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_SLEEPER) as mock_sleeper,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_sleeper.get_roster_with_players = AsyncMock(return_value=[player])
+
+            # Should not raise despite RedisError on setex
+            result = await scheduler._check_injuries()
+
+        assert result == 0
+
+
+# =============================================================================
+# LINEUP LOCK CHECKER — RedisError + edge cases (Lines 340-341, 358, 363, 368-369, 381-382)
+# =============================================================================
+
+
+class TestLineupLockRedisErrors:
+    """Tests for RedisError and edge-case handling in _check_lineup_locks."""
+
+    @pytest.mark.asyncio
+    async def test_redis_error_on_exists_check(self):
+        """RedisError when checking already_sent defaults to False (lines 340-341)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        # Game starting in 30 minutes
+        now = datetime.now(UTC)
+        game_time = (now + timedelta(minutes=30)).isoformat()
+
+        mock_redis_client = AsyncMock()
+        # exists() raises RedisError -> already_sent defaults to False, continues
+        mock_redis_client.exists = AsyncMock(side_effect=RealRedisError("read error"))
+        mock_redis_client.setex = AsyncMock()
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_ESPN) as mock_espn,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+            patch.object(scheduler, "_log_notification", new_callable=AsyncMock),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_espn.get_team_schedule = AsyncMock(return_value=[{"date": game_time}])
+            mock_notif.send_lineup_reminder = AsyncMock(return_value=[])
+
+            result = await scheduler._check_lineup_locks()
+
+        # Should send because already_sent defaults to False
+        assert result == 1
+
+    @pytest.mark.asyncio
+    async def test_skips_game_with_no_date(self):
+        """Games with no 'date' key are skipped (line 358)."""
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.exists = AsyncMock(return_value=0)
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_ESPN) as mock_espn,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            # Schedule entry with no 'date' key
+            mock_espn.get_team_schedule = AsyncMock(
+                return_value=[{"name": "Game 1"}, {"date": None}]
+            )
+
+            result = await scheduler._check_lineup_locks()
+
+        assert result == 0
+        mock_notif.send_lineup_reminder.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handles_datetime_object_game_time(self):
+        """When game_time is already a datetime object, not a string (line 363)."""
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        now = datetime.now(UTC)
+        game_dt = now + timedelta(minutes=30)  # datetime object, not string
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.exists = AsyncMock(return_value=0)
+        mock_redis_client.setex = AsyncMock()
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_ESPN) as mock_espn,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+            patch.object(scheduler, "_log_notification", new_callable=AsyncMock),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            # Return a datetime object, not a string
+            mock_espn.get_team_schedule = AsyncMock(return_value=[{"date": game_dt}])
+            mock_notif.send_lineup_reminder = AsyncMock(return_value=[])
+
+            result = await scheduler._check_lineup_locks()
+
+        assert result == 1
+        mock_notif.send_lineup_reminder.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_handles_invalid_date_format(self):
+        """Invalid date string triggers ValueError -> continue (lines 368-369)."""
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.exists = AsyncMock(return_value=0)
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_ESPN) as mock_espn,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_espn.get_team_schedule = AsyncMock(
+                return_value=[{"date": "not-a-real-date"}]
+            )
+
+            result = await scheduler._check_lineup_locks()
+
+        assert result == 0
+        mock_notif.send_lineup_reminder.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_handles_non_subtractable_game_time(self):
+        """TypeError on datetime subtraction -> continue (lines 368-369)."""
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.exists = AsyncMock(return_value=0)
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_ESPN) as mock_espn,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            # An integer is not a string and not a datetime — causes TypeError
+            # in (gt - now).total_seconds()
+            mock_espn.get_team_schedule = AsyncMock(return_value=[{"date": 12345}])
+
+            result = await scheduler._check_lineup_locks()
+
+        assert result == 0
+        mock_notif.send_lineup_reminder.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_redis_error_on_setex_after_send(self):
+        """RedisError when marking reminder as sent is caught (lines 381-382)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        now = datetime.now(UTC)
+        game_time = (now + timedelta(minutes=30)).isoformat()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.exists = AsyncMock(return_value=0)
+        # setex raises after notification is sent
+        mock_redis_client.setex = AsyncMock(side_effect=RealRedisError("write error"))
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_ESPN) as mock_espn,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+            patch.object(scheduler, "_log_notification", new_callable=AsyncMock),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_espn.get_team_schedule = AsyncMock(return_value=[{"date": game_time}])
+            mock_notif.send_lineup_reminder = AsyncMock(return_value=[])
+
+            # Should not raise despite RedisError on setex
+            result = await scheduler._check_lineup_locks()
+
+        assert result == 1
+        mock_notif.send_lineup_reminder.assert_called_once()
+
+
+# =============================================================================
+# TRENDING CHECKER — RedisError branches (Lines 432-433, 478-479)
+# =============================================================================
+
+
+class TestTrendingCheckerRedisErrors:
+    """Tests for RedisError handling within _check_trending."""
+
+    @pytest.mark.asyncio
+    async def test_redis_error_on_get_previous_list(self):
+        """RedisError when reading cached trending list defaults to [] (lines 432-433)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.get = AsyncMock(side_effect=RealRedisError("read error"))
+        mock_redis_client.setex = AsyncMock()
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_SLEEPER) as mock_sleeper,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_sleeper.get_trending_players = AsyncMock(
+                return_value=[{"player_id": "p1"}]
+            )
+
+            result = await scheduler._check_trending()
+
+        # previous_ids defaults to [] so no notifications (first-run guard)
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_json_decode_error_on_cached_trending(self):
+        """JSONDecodeError when parsing cached trending list defaults to [] (lines 432-433)."""
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.get = AsyncMock(return_value="not-valid-json{{{")
+        mock_redis_client.setex = AsyncMock()
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_SLEEPER) as mock_sleeper,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_sleeper.get_trending_players = AsyncMock(
+                return_value=[{"player_id": "p1"}]
+            )
+
+            result = await scheduler._check_trending()
+
+        # previous_ids defaults to [] so no notifications (first-run guard)
+        assert result == 0
+
+    @pytest.mark.asyncio
+    async def test_redis_error_on_trending_cache_update(self):
+        """RedisError when updating trending cache is caught (lines 478-479)."""
+        from redis.exceptions import RedisError as RealRedisError
+
+        scheduler = NotificationScheduler()
+        user = _make_eligible_user()
+
+        mock_redis_client = AsyncMock()
+        mock_redis_client.get = AsyncMock(return_value=json.dumps(["p1"]))
+        # setex for cache update fails
+        mock_redis_client.setex = AsyncMock(side_effect=RealRedisError("write error"))
+        mock_redis_client.exists = AsyncMock(return_value=0)
+
+        player = _make_player("p2", "New Player", "WR")
+
+        with (
+            patch(_REDIS) as mock_redis,
+            patch(_SLEEPER) as mock_sleeper,
+            patch(_NOTIF) as mock_notif,
+            patch.object(scheduler, "_get_eligible_users", return_value=[user]),
+            patch.object(scheduler, "_log_notification", new_callable=AsyncMock),
+            patch.object(scheduler, "_set_cooldown", new_callable=AsyncMock),
+        ):
+            mock_redis.is_connected = True
+            mock_redis._client = mock_redis_client
+            mock_sleeper.get_trending_players = AsyncMock(
+                return_value=[{"player_id": "p1"}, {"player_id": "p2"}]
+            )
+            mock_sleeper.get_players_by_ids = AsyncMock(return_value=[player])
+            mock_notif.send_batch = AsyncMock(return_value=[])
+
+            # Should not raise despite RedisError on setex
+            result = await scheduler._check_trending()
+
+        # Notification still sent, just cache update failed
+        assert result == 1
