@@ -15,6 +15,7 @@ import {
   Loader2,
   Check,
   Shield,
+  Swords,
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 
-type Tab = 'overview' | 'rankings' | 'trade' | 'activity';
+type Tab = 'overview' | 'rivalries' | 'rankings' | 'trade' | 'activity';
 
 interface League {
   id: number;
@@ -66,6 +67,18 @@ interface ActivityMember {
   last_active: string | null;
 }
 
+interface Rivalry {
+  owner_a: string;
+  owner_b: string;
+  games_played: number;
+  wins_a: number;
+  wins_b: number;
+  ties: number;
+  avg_margin: number;
+  total_points_a: number;
+  total_points_b: number;
+}
+
 export default function LeagueDashboard() {
   const params = useParams();
   const leagueId = Number(params.leagueId);
@@ -76,7 +89,9 @@ export default function LeagueDashboard() {
   const [members, setMembers] = useState<Member[]>([]);
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [activity, setActivity] = useState<ActivityMember[]>([]);
+  const [rivalries, setRivalries] = useState<Rivalry[]>([]);
   const [tradeResult, setTradeResult] = useState<TradeResult | null>(null);
+  const [syncing, setSyncing] = useState(false);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -151,6 +166,30 @@ export default function LeagueDashboard() {
     }
   }, [leagueId]);
 
+  const fetchRivalries = useCallback(async () => {
+    setActionLoading(true);
+    try {
+      const data = await api.getLeagueRivalries(leagueId, league?.season);
+      setRivalries(data);
+    } catch {
+      setError('Failed to load rivalries');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [leagueId, league?.season]);
+
+  const syncRivalries = useCallback(async () => {
+    setSyncing(true);
+    try {
+      await api.syncRivalries(leagueId, league?.season || '2025');
+      await fetchRivalries();
+    } catch {
+      setError('Failed to sync matchup data');
+    } finally {
+      setSyncing(false);
+    }
+  }, [leagueId, league?.season, fetchRivalries]);
+
   const analyzeTrade = useCallback(async () => {
     if (!teamAPlayers.trim() || !teamBPlayers.trim()) return;
     setActionLoading(true);
@@ -172,7 +211,8 @@ export default function LeagueDashboard() {
   useEffect(() => {
     if (tab === 'rankings' && rankings.length === 0) fetchRankings();
     if (tab === 'activity' && activity.length === 0) fetchActivity();
-  }, [tab, rankings.length, activity.length, fetchRankings, fetchActivity]);
+    if (tab === 'rivalries' && rivalries.length === 0) fetchRivalries();
+  }, [tab, rankings.length, activity.length, rivalries.length, fetchRankings, fetchActivity, fetchRivalries]);
 
   if (!isAuthenticated) {
     return (
@@ -200,6 +240,7 @@ export default function LeagueDashboard() {
 
   const tabs: { key: Tab; label: string; icon: typeof Trophy; commissionerOnly?: boolean }[] = [
     { key: 'overview', label: 'Overview', icon: Users2 },
+    { key: 'rivalries', label: 'Rivalries', icon: Swords },
     { key: 'rankings', label: 'Power Rankings', icon: Trophy, commissionerOnly: true },
     { key: 'trade', label: 'Trade Checker', icon: ArrowRightLeft, commissionerOnly: true },
     { key: 'activity', label: 'Activity', icon: Activity, commissionerOnly: true },
@@ -334,6 +375,90 @@ export default function LeagueDashboard() {
               </Card>
             )}
           </div>
+        )}
+
+        {/* Rivalries Tab */}
+        {tab === 'rivalries' && (
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">League Rivalries</CardTitle>
+                <CardDescription>Head-to-head records between all members</CardDescription>
+              </div>
+              <Button variant="outline" size="sm" onClick={syncRivalries} disabled={syncing}>
+                <RefreshCw className={`w-4 h-4 mr-1.5 ${syncing ? 'animate-spin' : ''}`} />
+                {syncing ? 'Syncing...' : 'Sync from Sleeper'}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              {actionLoading && rivalries.length === 0 ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="w-6 h-6 animate-spin" />
+                </div>
+              ) : rivalries.length === 0 ? (
+                <div className="text-center py-8">
+                  <Swords className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+                  <p className="text-muted-foreground mb-3">No rivalry data yet</p>
+                  <Button onClick={syncRivalries} disabled={syncing}>
+                    {syncing ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
+                    Sync Matchup Data
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {rivalries.map((r, i) => {
+                    const dominantA = r.wins_a > r.wins_b;
+                    const dominantB = r.wins_b > r.wins_a;
+                    const tied = r.wins_a === r.wins_b;
+                    return (
+                      <div key={i} className="p-3 bg-muted/50 rounded-lg">
+                        <div className="flex items-center justify-between mb-1">
+                          <span className={`font-medium text-sm ${dominantA ? 'text-green-400' : ''}`}>
+                            {r.owner_a.slice(0, 12)}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {r.games_played} game{r.games_played !== 1 ? 's' : ''}
+                          </span>
+                          <span className={`font-medium text-sm ${dominantB ? 'text-green-400' : ''}`}>
+                            {r.owner_b.slice(0, 12)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className={`text-lg font-bold ${dominantA ? 'text-green-400' : dominantB ? 'text-red-400' : ''}`}>
+                            {r.wins_a}
+                          </span>
+                          <div className="flex-1 mx-3">
+                            <div className="h-2 bg-dark-700 rounded-full overflow-hidden flex">
+                              <div
+                                className="bg-green-500 h-full"
+                                style={{ width: r.games_played > 0 ? `${(r.wins_a / r.games_played) * 100}%` : '50%' }}
+                              />
+                              {r.ties > 0 && (
+                                <div
+                                  className="bg-yellow-500 h-full"
+                                  style={{ width: `${(r.ties / r.games_played) * 100}%` }}
+                                />
+                              )}
+                              <div className="bg-red-500 h-full flex-1" />
+                            </div>
+                          </div>
+                          <span className={`text-lg font-bold ${dominantB ? 'text-green-400' : dominantA ? 'text-red-400' : ''}`}>
+                            {r.wins_b}
+                          </span>
+                        </div>
+                        <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                          <span>{r.total_points_a.toFixed(1)} pts</span>
+                          {tied && r.ties > 0 && <span>{r.ties} tie{r.ties !== 1 ? 's' : ''}</span>}
+                          <span>Avg margin: {r.avg_margin}</span>
+                          <span>{r.total_points_b.toFixed(1)} pts</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
         )}
 
         {/* Power Rankings Tab */}

@@ -794,6 +794,61 @@ class APIClient {
     return response.data;
   }
 
+  // Rivalry tracking
+  async syncRivalries(leagueId: number, season = '2025', weeks = '1-18'): Promise<{ upserted: number; message: string }> {
+    const response = await this.client.post(`/rivalries/${leagueId}/sync`, null, {
+      params: { season, weeks },
+    });
+    return response.data;
+  }
+
+  async getLeagueRivalries(leagueId: number, season?: string): Promise<{
+    owner_a: string;
+    owner_b: string;
+    games_played: number;
+    wins_a: number;
+    wins_b: number;
+    ties: number;
+    avg_margin: number;
+    total_points_a: number;
+    total_points_b: number;
+  }[]> {
+    const response = await this.client.get(`/rivalries/${leagueId}`, {
+      params: season ? { season } : {},
+    });
+    return response.data;
+  }
+
+  async getMyRivalries(leagueId: number, season?: string): Promise<{
+    opponent: string;
+    games_played: number;
+    wins: number;
+    losses: number;
+    ties: number;
+    win_pct: number;
+  }[]> {
+    const response = await this.client.get(`/rivalries/${leagueId}/me`, {
+      params: season ? { season } : {},
+    });
+    return response.data;
+  }
+
+  async getH2HRecord(leagueId: number, ownerA: string, ownerB: string, season?: string): Promise<{
+    owner_a: string;
+    owner_b: string;
+    wins_a: number;
+    wins_b: number;
+    ties: number;
+    total_points_a: number;
+    total_points_b: number;
+    matchups: { season: string; week: number; points_a: number; points_b: number; winner: string | null }[];
+  }> {
+    const response = await this.client.get(`/rivalries/${leagueId}/h2h`, {
+      params: { owner_a: ownerA, owner_b: ownerB, ...(season ? { season } : {}) },
+    });
+    return response.data;
+  }
+
   // Weekly recaps
   async getWeeklyRecaps(limit = 10): Promise<WeeklyRecap[]> {
     const response = await this.client.get<WeeklyRecap[]>('/recaps/weekly', {

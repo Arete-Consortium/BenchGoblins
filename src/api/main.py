@@ -40,6 +40,7 @@ from routes.commissioner import router as commissioner_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
+from routes.rivalries import router as rivalries_router
 from routes.sessions import router as sessions_router
 from routes.verdicts import router as verdicts_router
 from services import stripe_billing
@@ -307,6 +308,9 @@ app.include_router(notifications_router)
 
 # Commissioner AI tools
 app.include_router(commissioner_router)
+
+# Rivalry tracking
+app.include_router(rivalries_router)
 
 
 # ---------------------------------------------------------------------------

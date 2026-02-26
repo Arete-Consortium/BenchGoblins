@@ -69,6 +69,15 @@ class SleeperRoster:
 
 
 @dataclass
+class SleeperMatchup:
+    """Sleeper weekly matchup result."""
+
+    matchup_id: int
+    roster_id: int
+    points: float
+
+
+@dataclass
 class SleeperPlayer:
     """Sleeper player information."""
 
@@ -413,6 +422,52 @@ class SleeperService:
                 )
 
         return result
+
+    # =========================================================================
+    # Matchups
+    # =========================================================================
+
+    async def get_league_matchups(
+        self,
+        league_id: str,
+        week: int,
+    ) -> list[SleeperMatchup]:
+        """
+        Get matchup results for a specific week.
+
+        Sleeper groups matchups by matchup_id — two rosters share the same
+        matchup_id in a given week.
+
+        Args:
+            league_id: Sleeper league ID
+            week: Week number (1-based)
+
+        Returns:
+            List of SleeperMatchup entries (two per matchup pair)
+        """
+        client = await self._get_client()
+        matchups = []
+
+        try:
+            response = await client.get(
+                f"{SLEEPER_API}/league/{league_id}/matchups/{week}"
+            )
+
+            if response.status_code == 200:
+                data = response.json()
+                for entry in data or []:
+                    matchups.append(
+                        SleeperMatchup(
+                            matchup_id=entry.get("matchup_id", 0),
+                            roster_id=entry.get("roster_id", 0),
+                            points=entry.get("points") or 0.0,
+                        )
+                    )
+
+        except httpx.HTTPError as e:
+            logger.error("Sleeper API error fetching matchups: %s", e)
+
+        return matchups
 
     # =========================================================================
     # Trending Players
