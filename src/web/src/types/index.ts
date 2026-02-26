@@ -228,6 +228,69 @@ export interface WeeklyRecap {
   created_at: string;
 }
 
+// Dossier types
+export interface DossierIndices {
+  sci: number;
+  rmi: number;
+  gis: number;
+  od: number;
+  msf: number;
+  floor_score: number;
+  median_score: number;
+  ceiling_score: number;
+  calculated_at: string;
+  opponent: string | null;
+  game_date: string | null;
+}
+
+export interface DossierGameLog {
+  game_date: string;
+  opponent: string | null;
+  home_away: string | null;
+  result: string | null;
+  fantasy_points: number | null;
+  stats: Record<string, number>;
+}
+
+export interface DossierDecision {
+  id: string;
+  decision_type: string;
+  query: string;
+  decision: string;
+  confidence: string;
+  risk_mode: string;
+  source: string;
+  created_at: string;
+  outcome: string | null;
+}
+
+export interface DossierPlayerDetail {
+  id: string;
+  name: string;
+  team: string | null;
+  team_abbrev: string | null;
+  position: string | null;
+  sport: string;
+  headshot_url: string | null;
+  stats: Record<string, number> | null;
+}
+
+export interface DossierSummary {
+  games_played: number;
+  total_indices: number;
+  total_game_logs: number;
+  total_decisions: number;
+  latest_median: number | null;
+}
+
+export interface DossierResponse {
+  player: DossierPlayerDetail;
+  indices: DossierIndices[];
+  game_logs: DossierGameLog[];
+  decisions: DossierDecision[];
+  summary: DossierSummary;
+}
+
 // Subscription tier
 export type SubscriptionTier = 'free' | 'pro';
 

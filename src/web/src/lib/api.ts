@@ -15,6 +15,7 @@ import type {
   SleeperLeague,
   RosterResponse,
   WeeklyRecap,
+  DossierResponse,
 } from '@/types';
 import { parseSSE } from './utils';
 
@@ -340,6 +341,13 @@ class APIClient {
   async getPlayer(playerId: string, sport: Sport): Promise<Player> {
     await this.ensureSession();
     const response = await this.client.get<Player>(`/players/${sport}/${playerId}`);
+    return response.data;
+  }
+
+  // Player dossier
+  async getPlayerDossier(sport: Sport, playerId: string): Promise<DossierResponse> {
+    await this.ensureSession();
+    const response = await this.client.get<DossierResponse>(`/dossier/${sport}/${playerId}`);
     return response.data;
   }
 
