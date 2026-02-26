@@ -176,16 +176,32 @@ export const useAppStore = create<AppState>()(
             streamingContent: '',
             streamingMessageId: null,
           }));
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Decision error:', error);
-          // Add error message
+
+          // Parse structured error with suggestions from backend
+          let content = 'Sorry, something went wrong. Please try again.';
+          let suggestions: string[] | undefined;
+
+          if (error && typeof error === 'object' && 'response' in error) {
+            const axiosErr = error as { response?: { data?: { detail?: string | { message?: string; suggestions?: string[] } } } };
+            const detail = axiosErr.response?.data?.detail;
+            if (detail && typeof detail === 'object' && 'suggestions' in detail) {
+              content = detail.message || 'Try rephrasing your question:';
+              suggestions = detail.suggestions;
+            } else if (typeof detail === 'string') {
+              content = detail;
+            }
+          } else if (error instanceof Error) {
+            content = error.message;
+          }
+
           const errorMessage: Message = {
             id: assistantMessageId,
             role: 'assistant',
-            content: error instanceof Error && error.message.includes('sports')
-              ? error.message
-              : 'Sorry, I encountered an error processing your request. Please try again.',
+            content,
             timestamp: new Date(),
+            suggestions,
           };
 
           set((state) => ({

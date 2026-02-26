@@ -3,6 +3,7 @@
 import { cn, formatRelativeTime, getConfidenceColor } from '@/lib/utils';
 import { Message, DecisionResponse, StartSitDetailsData, TradeDetailsData, DraftDetailsData, WaiverDetailsData } from '@/types';
 import { Bot, User, TrendingUp, TrendingDown, Minus, ArrowRightLeft, Trophy, Zap, UserPlus, UserMinus, AlertCircle } from 'lucide-react';
+import useAppStore from '@/stores/appStore';
 
 interface MessageBubbleProps {
   message: Message;
@@ -414,6 +415,23 @@ export function MessageBubble({ message }: MessageBubbleProps) {
         )}
       >
         <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+
+        {message.suggestions && message.suggestions.length > 0 && (
+          <div className="mt-3 flex flex-wrap gap-2">
+            {message.suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                onClick={() => {
+                  useAppStore.getState().sendMessage(suggestion);
+                }}
+                className="px-3 py-1.5 rounded-full bg-primary-500/15 text-primary-300 text-sm
+                           hover:bg-primary-500/25 hover:text-primary-200 transition-all border border-primary-500/20"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
 
         {message.decision && <DecisionDetails decision={message.decision} />}
 

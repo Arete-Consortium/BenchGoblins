@@ -686,6 +686,76 @@ def _is_sports_query(query: str) -> tuple[bool, str]:
     return True, result.reason
 
 
+# Sport-specific suggestion templates for rejected/unclear queries
+_SPORT_SUGGESTIONS: dict[str, list[str]] = {
+    "nba": [
+        "Should I start {A} or {B} this week?",
+        "Trade value for {A} — buy or sell?",
+        "Best waiver wire pickups for NBA this week?",
+        "Is {A} a must-start in my lineup?",
+    ],
+    "nfl": [
+        "Should I start {A} or {B} at QB this week?",
+        "Trade {A} for {B} — who wins?",
+        "Best waiver wire RBs for this week?",
+        "Is {A} a must-start in ceiling mode?",
+    ],
+    "mlb": [
+        "Start {A} or {B} tonight?",
+        "Best waiver wire pitchers this week?",
+        "Should I bench {A} against a lefty?",
+        "Trade {A} for {B} — fair deal?",
+    ],
+    "nhl": [
+        "Start {A} or {B} this week?",
+        "Best waiver wire goalies this week?",
+        "Trade {A} for {B} — fair?",
+        "Is {A} a good pickup off waivers?",
+    ],
+    "soccer": [
+        "Captain {A} or {B} this gameweek?",
+        "Best budget midfielders to pick up?",
+        "Should I start {A} in my FPL squad?",
+        "Is {A} a good differential captain?",
+    ],
+}
+
+_SAMPLE_PLAYERS: dict[str, list[str]] = {
+    "nba": ["Jayson Tatum", "Anthony Edwards", "Luka Doncic", "Tyrese Haliburton"],
+    "nfl": ["Josh Allen", "Lamar Jackson", "Tyreek Hill", "CeeDee Lamb"],
+    "mlb": ["Shohei Ohtani", "Aaron Judge", "Mookie Betts", "Trea Turner"],
+    "nhl": ["Connor McDavid", "Nathan MacKinnon", "Auston Matthews", "Cale Makar"],
+    "soccer": ["Haaland", "Salah", "Palmer", "Saka"],
+}
+
+
+def _generate_suggestions(query: str, sport: str) -> list[str]:
+    """Generate helpful rephrased suggestions for a rejected/unclear query."""
+    import random
+
+    templates = _SPORT_SUGGESTIONS.get(sport, _SPORT_SUGGESTIONS["nfl"])
+    players = _SAMPLE_PLAYERS.get(sport, _SAMPLE_PLAYERS["nfl"])
+
+    suggestions = []
+    for tmpl in random.sample(templates, min(3, len(templates))):
+        a, b = random.sample(players, 2)
+        suggestions.append(tmpl.replace("{A}", a).replace("{B}", b))
+
+    return suggestions
+
+
+def _raise_off_topic(query: str, sport: str) -> None:
+    """Raise a 400 with helpful suggestions instead of a vague rejection."""
+    suggestions = _generate_suggestions(query, sport)
+    raise HTTPException(
+        status_code=400,
+        detail={
+            "message": "I'm built for fantasy sports questions — try rephrasing like one of these:",
+            "suggestions": suggestions,
+        },
+    )
+
+
 # ---------------------------------------------------------------------------
 # Tier-Based Query Limiting Helpers
 # ---------------------------------------------------------------------------
@@ -798,10 +868,7 @@ async def make_decision(
     if not request.league_id:
         is_allowed, rejection_reason = _is_sports_query(request.query)
         if not is_allowed:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
-            )
+            _raise_off_topic(request.query, request.sport.value if hasattr(request.sport, 'value') else str(request.sport))
 
     # Assign A/B prompt variant
     variant = assign_variant(session_id)
@@ -1308,10 +1375,7 @@ async def draft_decision(
     if not request.league_id:
         is_allowed, rejection_reason = _is_sports_query(request.query)
         if not is_allowed:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
-            )
+            _raise_off_topic(request.query, request.sport.value if hasattr(request.sport, 'value') else str(request.sport))
 
     # Determine player names: explicit list takes priority over query parsing
     player_names: list[str] | None = request.players
@@ -1643,10 +1707,7 @@ async def make_decision_stream(
     if not request.league_id:
         is_allowed, rejection_reason = _is_sports_query(request.query)
         if not is_allowed:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Query must be about fantasy sports. Rejection reason: {rejection_reason}",
-            )
+            _raise_off_topic(request.query, request.sport.value if hasattr(request.sport, 'value') else str(request.sport))
 
     if not claude_service.is_available:
         raise HTTPException(

@@ -160,6 +160,7 @@ export interface Message {
   content: string;
   timestamp: Date;
   decision?: DecisionResponse;
+  suggestions?: string[];
 }
 
 // Player search result
