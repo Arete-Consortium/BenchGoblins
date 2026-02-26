@@ -3984,6 +3984,132 @@ async def get_billing_status(
     )
 
 
+# ---------------------------------------------------------------------------
+# Weekly Recaps
+# ---------------------------------------------------------------------------
+
+
+class WeeklyRecapResponse(BaseModel):
+    """Response model for a weekly recap."""
+
+    id: str
+    week_start: str
+    week_end: str
+    total_decisions: int
+    correct_decisions: int
+    incorrect_decisions: int
+    pending_decisions: int
+    accuracy_pct: float | None
+    avg_confidence: str | None
+    most_asked_sport: str | None
+    narrative: str
+    highlights: str | None
+    created_at: str
+
+
+@app.get("/recaps/weekly", response_model=list[WeeklyRecapResponse])
+async def get_weekly_recaps(
+    limit: int = Query(default=10, ge=1, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get stored weekly recaps for the authenticated user.
+
+    Returns most recent recaps first. Requires authentication.
+    """
+    if not db_service.is_configured:
+        return []
+
+    from services.weekly_recap import get_user_recaps
+
+    try:
+        async with db_service.session() as session:
+            recaps = await get_user_recaps(session, current_user["user_id"], limit)
+            return [
+                WeeklyRecapResponse(
+                    id=str(r.id),
+                    week_start=r.week_start.isoformat() if r.week_start else "",
+                    week_end=r.week_end.isoformat() if r.week_end else "",
+                    total_decisions=r.total_decisions,
+                    correct_decisions=r.correct_decisions,
+                    incorrect_decisions=r.incorrect_decisions,
+                    pending_decisions=r.pending_decisions,
+                    accuracy_pct=float(r.accuracy_pct) if r.accuracy_pct is not None else None,
+                    avg_confidence=r.avg_confidence,
+                    most_asked_sport=r.most_asked_sport,
+                    narrative=r.narrative,
+                    highlights=r.highlights,
+                    created_at=r.created_at.isoformat() if r.created_at else "",
+                )
+                for r in recaps
+            ]
+    except Exception as e:
+        logger.error("Failed to fetch recaps: %s", e)
+        return []
+
+
+@app.post("/recaps/weekly/generate", response_model=WeeklyRecapResponse | None)
+async def generate_recap(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Generate a weekly recap for the current week.
+
+    If a recap already exists for this week, returns the cached version.
+    Requires authentication. Pro users only.
+    """
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    user = await _get_user_by_id(current_user["user_id"])
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Pro-gate: recaps are a Pro feature
+    is_pro = user.subscription_tier == "pro"
+    if not is_pro:
+        try:
+            is_pro = await stripe_billing.is_league_pro(user.id)
+        except Exception:
+            pass
+    if not is_pro:
+        raise HTTPException(
+            status_code=403, detail="Weekly recaps are a Pro feature. Upgrade to access."
+        )
+
+    from services.weekly_recap import generate_weekly_recap
+
+    try:
+        async with db_service.session() as session:
+            recap = await generate_weekly_recap(
+                session=session,
+                user_id=user.id,
+                user_name=user.name,
+            )
+
+            if recap is None:
+                return None
+
+            return WeeklyRecapResponse(
+                id=str(recap.id),
+                week_start=recap.week_start.isoformat() if recap.week_start else "",
+                week_end=recap.week_end.isoformat() if recap.week_end else "",
+                total_decisions=recap.total_decisions,
+                correct_decisions=recap.correct_decisions,
+                incorrect_decisions=recap.incorrect_decisions,
+                pending_decisions=recap.pending_decisions,
+                accuracy_pct=float(recap.accuracy_pct) if recap.accuracy_pct is not None else None,
+                avg_confidence=recap.avg_confidence,
+                most_asked_sport=recap.most_asked_sport,
+                narrative=recap.narrative,
+                highlights=recap.highlights,
+                created_at=recap.created_at.isoformat() if recap.created_at else "",
+            )
+    except Exception as e:
+        logger.error("Failed to generate recap: %s", e)
+        raise HTTPException(status_code=500, detail="Failed to generate recap") from e
+
+
 if __name__ == "__main__":
     import uvicorn
 

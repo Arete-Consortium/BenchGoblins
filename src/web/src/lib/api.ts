@@ -14,6 +14,7 @@ import type {
   SleeperConnectResponse,
   SleeperLeague,
   RosterResponse,
+  WeeklyRecap,
 } from '@/types';
 import { parseSSE } from './utils';
 
@@ -785,6 +786,19 @@ class APIClient {
     members: { user_id: number; name: string; email: string; queries_this_week: number; last_active: string | null; is_active: boolean }[];
   }> {
     const response = await this.client.get(`/commissioner/leagues/${leagueId}/activity`);
+    return response.data;
+  }
+
+  // Weekly recaps
+  async getWeeklyRecaps(limit = 10): Promise<WeeklyRecap[]> {
+    const response = await this.client.get<WeeklyRecap[]>('/recaps/weekly', {
+      params: { limit },
+    });
+    return response.data;
+  }
+
+  async generateWeeklyRecap(): Promise<WeeklyRecap | null> {
+    const response = await this.client.post<WeeklyRecap | null>('/recaps/weekly/generate');
     return response.data;
   }
 

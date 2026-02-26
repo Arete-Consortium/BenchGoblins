@@ -211,6 +211,23 @@ export interface HealthResponse {
   };
 }
 
+// Weekly recap
+export interface WeeklyRecap {
+  id: string;
+  week_start: string;
+  week_end: string;
+  total_decisions: number;
+  correct_decisions: number;
+  incorrect_decisions: number;
+  pending_decisions: number;
+  accuracy_pct: number | null;
+  avg_confidence: string | null;
+  most_asked_sport: string | null;
+  narrative: string;
+  highlights: string | null;
+  created_at: string;
+}
+
 // Subscription tier
 export type SubscriptionTier = 'free' | 'pro';
 

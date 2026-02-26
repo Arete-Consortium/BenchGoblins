@@ -722,6 +722,48 @@ class LeagueMembership(Base):
     )
 
 
+class WeeklyRecap(Base):
+    """AI-generated weekly recap for a user."""
+
+    __tablename__ = "weekly_recaps"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    week_start: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    week_end: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    sport: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # Aggregated stats
+    total_decisions: Mapped[int] = mapped_column(Integer, default=0)
+    correct_decisions: Mapped[int] = mapped_column(Integer, default=0)
+    incorrect_decisions: Mapped[int] = mapped_column(Integer, default=0)
+    pending_decisions: Mapped[int] = mapped_column(Integer, default=0)
+    accuracy_pct: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    avg_confidence: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    most_asked_sport: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # AI-generated content
+    narrative: Mapped[str] = mapped_column(Text, nullable=False)
+    highlights: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Token tracking
+    input_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    output_tokens: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    user: Mapped["User"] = relationship(foreign_keys=[user_id])
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "week_start", "sport", name="uq_weekly_recaps_user_week"),
+        Index("idx_weekly_recaps_user", "user_id", week_start.desc()),
+        Index("idx_weekly_recaps_created", created_at.desc()),
+    )
+
+
 class NotificationLog(Base):
     """Log of sent notifications for dedup and cooldown tracking."""
 
