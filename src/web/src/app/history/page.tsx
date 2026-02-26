@@ -93,7 +93,21 @@ export default function HistoryPage() {
           </div>
 
           {/* History List */}
-          {items.length === 0 && !isLoading ? (
+          {isLoading && items.length === 0 ? (
+            <div className="space-y-3">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="bg-dark-800/50 border border-dark-700 rounded-xl p-4 animate-pulse">
+                  <div className="h-4 bg-dark-700 rounded w-3/4 mb-3" />
+                  <div className="h-3 bg-dark-700 rounded w-1/2 mb-4" />
+                  <div className="flex gap-3">
+                    <div className="h-3 bg-dark-700 rounded w-16" />
+                    <div className="h-3 bg-dark-700 rounded w-12" />
+                    <div className="h-3 bg-dark-700 rounded w-20" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : items.length === 0 ? (
             <div className="text-center py-16">
               <Clock className="w-16 h-16 text-dark-600 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-dark-300">No decisions yet</h2>

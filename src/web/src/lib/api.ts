@@ -278,10 +278,23 @@ class APIClient {
     if (!reader) throw new Error('No response body');
 
     const decoder = new TextDecoder();
+    const STREAM_TIMEOUT_MS = 60000; // 60s max silence before aborting
 
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+      // Race each read against a timeout — if backend stalls, abort cleanly
+      const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
+        setTimeout(() => resolve({ done: true, value: undefined }), STREAM_TIMEOUT_MS)
+      );
+      const { done, value } = await Promise.race([reader.read(), timeoutPromise]);
+
+      if (done) {
+        if (!value) {
+          // Timeout — cancel the reader and throw a recoverable error
+          reader.cancel();
+          throw new Error('Response timed out. Please try again.');
+        }
+        break;
+      }
 
       const chunk = decoder.decode(value, { stream: true });
       const events = parseSSE(chunk);

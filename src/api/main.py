@@ -515,8 +515,16 @@ async def health_check():
 
 
 @app.post("/players/search", response_model=list[Player])
-async def search_players(request: PlayerSearchRequest):
+async def search_players(request: PlayerSearchRequest, req: Request):
     """Search for players by name using ESPN data."""
+    client_ip = req.client.host if req.client else "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"player_search:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
     players = await espn_service.search_players(
         query=request.query,
         sport=request.sport.value,
@@ -537,8 +545,17 @@ async def search_players(request: PlayerSearchRequest):
 
 
 @app.get("/players/{sport}/{player_id}", response_model=PlayerDetail)
-async def get_player(sport: Sport, player_id: str):
+async def get_player(sport: Sport, player_id: str, req: Request):
     """Get detailed player information and stats."""
+    client_ip = req.client.host if req.client else "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"player_get:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     player = await espn_service.get_player(player_id, sport.value)
     if not player:
         raise HTTPException(status_code=404, detail="Player not found")
@@ -636,21 +653,23 @@ async def _check_budget_exceeded() -> tuple[bool, str | None]:
             if not config or float(config.monthly_limit_usd) == 0:
                 return False, None  # No limit set
 
-            # Calculate current month spend
-            now = datetime.now(UTC)
-            month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+            # Calculate current month spend (single indexed query)
+            month_start = datetime.now(UTC).replace(
+                day=1, hour=0, minute=0, second=0, microsecond=0
+            )
 
-            usage_q = select(
-                func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
-                func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
-            ).where(DecisionModel.created_at >= month_start)
-            usage_row = (await session.execute(usage_q)).one()
+            usage_row = (
+                await session.execute(
+                    select(
+                        func.coalesce(func.sum(DecisionModel.input_tokens), 0).label("input"),
+                        func.coalesce(func.sum(DecisionModel.output_tokens), 0).label("output"),
+                    ).where(DecisionModel.created_at >= month_start)
+                )
+            ).one()
 
-            input_tokens = int(usage_row.input)
-            output_tokens = int(usage_row.output)
             current_spend = (
-                input_tokens / 1_000_000 * input_cost_per_mtok
-                + output_tokens / 1_000_000 * output_cost_per_mtok
+                int(usage_row.input) / 1_000_000 * input_cost_per_mtok
+                + int(usage_row.output) / 1_000_000 * output_cost_per_mtok
             )
 
             limit = float(config.monthly_limit_usd)
@@ -868,7 +887,10 @@ async def make_decision(
     if not request.league_id:
         is_allowed, rejection_reason = _is_sports_query(request.query)
         if not is_allowed:
-            _raise_off_topic(request.query, request.sport.value if hasattr(request.sport, 'value') else str(request.sport))
+            _raise_off_topic(
+                request.query,
+                request.sport.value if hasattr(request.sport, "value") else str(request.sport),
+            )
 
     # Assign A/B prompt variant
     variant = assign_variant(session_id)
@@ -946,17 +968,18 @@ async def make_decision(
             )
         player_context = "\n\n".join(context_parts)
 
-    # Auto-fill league context from authenticated user's profile
+    # Auto-fill league context from authenticated user's profile (single DB lookup)
     user = None
-    if not request.league_id and current_user:
+    if current_user:
         user = await _get_user_by_id(current_user["user_id"])
-        if user and user.sleeper_league_id:
-            request = request.model_copy(
-                update={
-                    "league_id": user.sleeper_league_id,
-                    "sleeper_user_id": user.sleeper_user_id,
-                }
-            )
+
+    if not request.league_id and user and user.sleeper_league_id:
+        request = request.model_copy(
+            update={
+                "league_id": user.sleeper_league_id,
+                "sleeper_user_id": user.sleeper_user_id,
+            }
+        )
 
     # Inject Sleeper league context (roster + scoring)
     if request.league_id:
@@ -977,13 +1000,12 @@ async def make_decision(
                             roster.players, request.sport.value
                         )
                         starter_set = set(roster.starters or [])
-                        player_lines = []
-                        for p in players:
-                            starter_tag = " [STARTER]" if p.player_id in starter_set else " [BENCH]"
-                            injury = f" ({p.injury_status})" if p.injury_status else ""
-                            player_lines.append(
-                                f"  {p.full_name} ({p.position}, {p.team or '?'}){injury}{starter_tag}"
-                            )
+                        player_lines = [
+                            f"  {p.full_name} ({p.position}, {p.team or '?'})"
+                            f"{' (' + p.injury_status + ')' if p.injury_status else ''}"
+                            f"{' [STARTER]' if p.player_id in starter_set else ' [BENCH]'}"
+                            for p in players
+                        ]
                         league_ctx += "\n\nUser's roster:\n" + "\n".join(player_lines)
 
                 if player_context:
@@ -994,47 +1016,44 @@ async def make_decision(
             logger.warning("Failed to fetch Sleeper league context for %s", request.league_id)
 
     # Auto-inject ESPN roster context if no Sleeper and user has ESPN connection
-    if not request.league_id and current_user:
+    if not request.league_id and user and user.espn_league_id and user.espn_roster_snapshot:
         try:
-            if not user:
-                user = await _get_user_by_id(current_user["user_id"])
-            if user and user.espn_league_id and user.espn_roster_snapshot:
-                player_lines = []
-                for p in user.espn_roster_snapshot:
-                    slot = f" [{p.get('lineup_slot', 'ROSTER')}]"
-                    player_lines.append(
-                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}){slot}"
-                    )
-                espn_ctx = (
-                    f"ESPN League {user.espn_league_id} ({user.espn_sport or 'nfl'})\n\nUser's roster:\n"
-                    + "\n".join(player_lines)
-                )
-                if player_context:
-                    player_context = f"{player_context}\n\n{espn_ctx}"
-                else:
-                    player_context = espn_ctx
+            player_lines = [
+                f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('lineup_slot', 'ROSTER')}]"
+                for p in user.espn_roster_snapshot
+            ]
+            espn_ctx = (
+                f"ESPN League {user.espn_league_id} ({user.espn_sport or 'nfl'})\n\nUser's roster:\n"
+                + "\n".join(player_lines)
+            )
+            if player_context:
+                player_context = f"{player_context}\n\n{espn_ctx}"
+            else:
+                player_context = espn_ctx
         except Exception:
             logger.warning("Failed to inject ESPN roster context")
 
     # Auto-inject Yahoo roster context if no Sleeper/ESPN and user has Yahoo connection
-    if not request.league_id and current_user and not (user and user.espn_league_id):
+    if (
+        not request.league_id
+        and user
+        and not user.espn_league_id
+        and user.yahoo_league_key
+        and user.yahoo_roster_snapshot
+    ):
         try:
-            if not user:
-                user = await _get_user_by_id(current_user["user_id"])
-            if user and user.yahoo_league_key and user.yahoo_roster_snapshot:
-                player_lines = []
-                for p in user.yahoo_roster_snapshot:
-                    player_lines.append(
-                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
-                    )
-                yahoo_ctx = (
-                    f"Yahoo League {user.yahoo_league_key} ({user.yahoo_sport or 'nfl'})\n\nUser's roster:\n"
-                    + "\n".join(player_lines)
-                )
-                if player_context:
-                    player_context = f"{player_context}\n\n{yahoo_ctx}"
-                else:
-                    player_context = yahoo_ctx
+            player_lines = [
+                f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
+                for p in user.yahoo_roster_snapshot
+            ]
+            yahoo_ctx = (
+                f"Yahoo League {user.yahoo_league_key} ({user.yahoo_sport or 'nfl'})\n\nUser's roster:\n"
+                + "\n".join(player_lines)
+            )
+            if player_context:
+                player_context = f"{player_context}\n\n{yahoo_ctx}"
+            else:
+                player_context = yahoo_ctx
         except Exception:
             logger.warning("Failed to inject Yahoo roster context")
 
@@ -1375,7 +1394,10 @@ async def draft_decision(
     if not request.league_id:
         is_allowed, rejection_reason = _is_sports_query(request.query)
         if not is_allowed:
-            _raise_off_topic(request.query, request.sport.value if hasattr(request.sport, 'value') else str(request.sport))
+            _raise_off_topic(
+                request.query,
+                request.sport.value if hasattr(request.sport, "value") else str(request.sport),
+            )
 
     # Determine player names: explicit list takes priority over query parsing
     player_names: list[str] | None = request.players
@@ -1707,7 +1729,10 @@ async def make_decision_stream(
     if not request.league_id:
         is_allowed, rejection_reason = _is_sports_query(request.query)
         if not is_allowed:
-            _raise_off_topic(request.query, request.sport.value if hasattr(request.sport, 'value') else str(request.sport))
+            _raise_off_topic(
+                request.query,
+                request.sport.value if hasattr(request.sport, "value") else str(request.sport),
+            )
 
     if not claude_service.is_available:
         raise HTTPException(
@@ -1756,17 +1781,18 @@ async def make_decision_stream(
         if context_parts:
             player_context = "\n\n".join(context_parts)
 
-    # Auto-fill league context from authenticated user's profile
+    # Auto-fill league context from authenticated user's profile (single DB lookup)
     user = None
-    if not request.league_id and current_user:
+    if current_user:
         user = await _get_user_by_id(current_user["user_id"])
-        if user and user.sleeper_league_id:
-            request = request.model_copy(
-                update={
-                    "league_id": user.sleeper_league_id,
-                    "sleeper_user_id": user.sleeper_user_id,
-                }
-            )
+
+    if not request.league_id and user and user.sleeper_league_id:
+        request = request.model_copy(
+            update={
+                "league_id": user.sleeper_league_id,
+                "sleeper_user_id": user.sleeper_user_id,
+            }
+        )
 
     # Inject Sleeper league context (roster + scoring)
     if request.league_id:
@@ -1786,13 +1812,12 @@ async def make_decision_stream(
                             roster.players, request.sport.value
                         )
                         starter_set = set(roster.starters or [])
-                        player_lines = []
-                        for p in players:
-                            starter_tag = " [STARTER]" if p.player_id in starter_set else " [BENCH]"
-                            injury = f" ({p.injury_status})" if p.injury_status else ""
-                            player_lines.append(
-                                f"  {p.full_name} ({p.position}, {p.team or '?'}){injury}{starter_tag}"
-                            )
+                        player_lines = [
+                            f"  {p.full_name} ({p.position}, {p.team or '?'})"
+                            f"{' (' + p.injury_status + ')' if p.injury_status else ''}"
+                            f"{' [STARTER]' if p.player_id in starter_set else ' [BENCH]'}"
+                            for p in players
+                        ]
                         league_ctx += "\n\nUser's roster:\n" + "\n".join(player_lines)
 
                 if player_context:
@@ -1803,47 +1828,44 @@ async def make_decision_stream(
             logger.warning("Failed to fetch Sleeper league context for %s", request.league_id)
 
     # Auto-inject ESPN roster context if no Sleeper and user has ESPN connection
-    if not request.league_id and current_user:
+    if not request.league_id and user and user.espn_league_id and user.espn_roster_snapshot:
         try:
-            if not user:
-                user = await _get_user_by_id(current_user["user_id"])
-            if user and user.espn_league_id and user.espn_roster_snapshot:
-                player_lines = []
-                for p in user.espn_roster_snapshot:
-                    slot = f" [{p.get('lineup_slot', 'ROSTER')}]"
-                    player_lines.append(
-                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}){slot}"
-                    )
-                espn_ctx = (
-                    f"ESPN League {user.espn_league_id} ({user.espn_sport or 'nfl'})\n\nUser's roster:\n"
-                    + "\n".join(player_lines)
-                )
-                if player_context:
-                    player_context = f"{player_context}\n\n{espn_ctx}"
-                else:
-                    player_context = espn_ctx
+            player_lines = [
+                f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('lineup_slot', 'ROSTER')}]"
+                for p in user.espn_roster_snapshot
+            ]
+            espn_ctx = (
+                f"ESPN League {user.espn_league_id} ({user.espn_sport or 'nfl'})\n\nUser's roster:\n"
+                + "\n".join(player_lines)
+            )
+            if player_context:
+                player_context = f"{player_context}\n\n{espn_ctx}"
+            else:
+                player_context = espn_ctx
         except Exception:
             logger.warning("Failed to inject ESPN roster context")
 
     # Auto-inject Yahoo roster context if no Sleeper/ESPN and user has Yahoo connection
-    if not request.league_id and current_user and not (user and user.espn_league_id):
+    if (
+        not request.league_id
+        and user
+        and not user.espn_league_id
+        and user.yahoo_league_key
+        and user.yahoo_roster_snapshot
+    ):
         try:
-            if not user:
-                user = await _get_user_by_id(current_user["user_id"])
-            if user and user.yahoo_league_key and user.yahoo_roster_snapshot:
-                player_lines = []
-                for p in user.yahoo_roster_snapshot:
-                    player_lines.append(
-                        f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
-                    )
-                yahoo_ctx = (
-                    f"Yahoo League {user.yahoo_league_key} ({user.yahoo_sport or 'nfl'})\n\nUser's roster:\n"
-                    + "\n".join(player_lines)
-                )
-                if player_context:
-                    player_context = f"{player_context}\n\n{yahoo_ctx}"
-                else:
-                    player_context = yahoo_ctx
+            player_lines = [
+                f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
+                for p in user.yahoo_roster_snapshot
+            ]
+            yahoo_ctx = (
+                f"Yahoo League {user.yahoo_league_key} ({user.yahoo_sport or 'nfl'})\n\nUser's roster:\n"
+                + "\n".join(player_lines)
+            )
+            if player_context:
+                player_context = f"{player_context}\n\n{yahoo_ctx}"
+            else:
+                player_context = yahoo_ctx
         except Exception:
             logger.warning("Failed to inject Yahoo roster context")
 

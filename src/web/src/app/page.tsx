@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import {
@@ -69,7 +69,8 @@ function useCountdown() {
       });
     }
     tick();
-    const interval = setInterval(tick, 1000);
+    // Update every 30s instead of 1s — reduces re-renders 30x
+    const interval = setInterval(tick, 30000);
     return () => clearInterval(interval);
   }, [event.name]);
 
