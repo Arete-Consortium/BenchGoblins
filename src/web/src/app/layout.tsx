@@ -8,6 +8,7 @@ import { I18nProvider } from '@/i18n/I18nProvider';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import CookieConsent from '@/components/CookieConsent';
+import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 const inter = Inter({ subsets: ['latin'] });
@@ -82,6 +83,7 @@ export default function RootLayout({
                     {children}
                     <ToastViewport />
                     <CookieConsent />
+                    <Analytics />
                   </ToastProvider>
                 </RevenueCatProvider>
               </QueryProvider>
