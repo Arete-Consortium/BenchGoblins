@@ -331,6 +331,246 @@ class TestGetUserRivalries:
         assert opp2["losses"] == 0
 
 
+VALID_USER = {
+    "user_id": 1,
+    "email": "test@example.com",
+    "name": "Test User",
+    "tier": "pro",
+    "exp": 9999999999,
+}
+
+
+@pytest.fixture
+def authed_client(test_client):
+    """Test client with auth bypassed."""
+    from api.main import app
+    from routes.auth import get_current_user
+
+    app.dependency_overrides[get_current_user] = lambda: VALID_USER
+    yield test_client
+    app.dependency_overrides.pop(get_current_user, None)
+
+
+# -------------------------------------------------------------------------
+# Route Tests — POST /{league_id}/sync
+# -------------------------------------------------------------------------
+
+
+class TestSyncRoute:
+    """Tests for the rivalry sync route."""
+
+    @patch("routes.rivalries.db_service")
+    def test_league_not_found(self, mock_db, authed_client):
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = authed_client.post("/rivalries/999/sync")
+        assert resp.status_code == 404
+        assert "League not found" in resp.json()["detail"]
+
+    @patch("routes.rivalries.db_service")
+    def test_league_not_connected_to_sleeper(self, mock_db, authed_client):
+        league = MagicMock()
+        league.id = 1
+        league.sleeper_league_id = None
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = league
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = authed_client.post("/rivalries/1/sync")
+        assert resp.status_code == 400
+        assert "Sleeper" in resp.json()["detail"]
+
+    @patch("routes.rivalries.db_service")
+    def test_not_a_member(self, mock_db, authed_client):
+        league = MagicMock()
+        league.id = 1
+        league.sleeper_league_id = "sl_123"
+        league.commissioner_user_id = 99  # Not the current user
+
+        mock_session = AsyncMock()
+        # First: league found
+        league_result = MagicMock()
+        league_result.scalar_one_or_none.return_value = league
+        # Second: membership check — not a member
+        member_result = MagicMock()
+        member_result.scalar_one_or_none.return_value = None
+
+        mock_session.execute = AsyncMock(side_effect=[league_result, member_result])
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = authed_client.post("/rivalries/1/sync")
+        assert resp.status_code == 403
+
+    @patch("services.rivalry.sync_matchups", new_callable=AsyncMock)
+    @patch("routes.rivalries.db_service")
+    def test_sync_success(self, mock_db, mock_sync, authed_client):
+        league = MagicMock()
+        league.id = 1
+        league.sleeper_league_id = "sl_123"
+        league.commissioner_user_id = VALID_USER["user_id"]
+
+        membership = MagicMock()
+
+        mock_session = AsyncMock()
+        league_result = MagicMock()
+        league_result.scalar_one_or_none.return_value = league
+        member_result = MagicMock()
+        member_result.scalar_one_or_none.return_value = membership
+
+        mock_session.execute = AsyncMock(side_effect=[league_result, member_result])
+        mock_session.commit = AsyncMock()
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_sync.return_value = 5
+
+        resp = authed_client.post("/rivalries/1/sync?season=2025&weeks=1-3")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["upserted"] == 5
+        assert "3 weeks" in data["message"]
+
+
+# -------------------------------------------------------------------------
+# Route Tests — GET /{league_id}
+# -------------------------------------------------------------------------
+
+
+class TestGetLeagueRivalriesRoute:
+    @patch("services.rivalry.get_league_rivalries", new_callable=AsyncMock)
+    @patch("routes.rivalries.db_service")
+    def test_success(self, mock_db, mock_get_rivalries, authed_client):
+        mock_session = AsyncMock()
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_get_rivalries.return_value = [
+            {
+                "owner_a": "alpha",
+                "owner_b": "beta",
+                "games_played": 3,
+                "wins_a": 2,
+                "wins_b": 1,
+                "ties": 0,
+                "avg_margin": 8.5,
+                "total_points_a": 350.0,
+                "total_points_b": 320.0,
+            }
+        ]
+
+        resp = authed_client.get("/rivalries/1")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["owner_a"] == "alpha"
+
+
+# -------------------------------------------------------------------------
+# Route Tests — GET /{league_id}/me
+# -------------------------------------------------------------------------
+
+
+class TestGetMyRivalriesRoute:
+    @patch("services.rivalry.get_user_rivalries", new_callable=AsyncMock)
+    @patch("routes.rivalries.db_service")
+    def test_success(self, mock_db, mock_get_user_rivalries, authed_client):
+        mock_user = MagicMock()
+        mock_user.sleeper_user_id = "sleeper_me"
+
+        mock_session = AsyncMock()
+        user_result = MagicMock()
+        user_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute = AsyncMock(return_value=user_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_get_user_rivalries.return_value = [
+            {
+                "opponent": "opp1",
+                "games_played": 2,
+                "wins": 1,
+                "losses": 1,
+                "ties": 0,
+                "win_pct": 0.5,
+            }
+        ]
+
+        resp = authed_client.get("/rivalries/1/me")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data) == 1
+        assert data[0]["opponent"] == "opp1"
+
+    @patch("routes.rivalries.db_service")
+    def test_user_not_found(self, mock_db, authed_client):
+        mock_session = AsyncMock()
+        user_result = MagicMock()
+        user_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=user_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = authed_client.get("/rivalries/1/me")
+        assert resp.status_code == 404
+        assert "Sleeper" in resp.json()["detail"]
+
+    @patch("routes.rivalries.db_service")
+    def test_sleeper_not_linked(self, mock_db, authed_client):
+        mock_user = MagicMock()
+        mock_user.sleeper_user_id = None
+
+        mock_session = AsyncMock()
+        user_result = MagicMock()
+        user_result.scalar_one_or_none.return_value = mock_user
+        mock_session.execute = AsyncMock(return_value=user_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = authed_client.get("/rivalries/1/me")
+        assert resp.status_code == 404
+
+
+# -------------------------------------------------------------------------
+# Route Tests — GET /{league_id}/h2h
+# -------------------------------------------------------------------------
+
+
+class TestGetH2HRoute:
+    @patch("services.rivalry.get_h2h_record", new_callable=AsyncMock)
+    @patch("routes.rivalries.db_service")
+    def test_success(self, mock_db, mock_h2h, authed_client):
+        mock_session = AsyncMock()
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_h2h.return_value = {
+            "owner_a": "a",
+            "owner_b": "b",
+            "wins_a": 3,
+            "wins_b": 1,
+            "ties": 0,
+            "total_points_a": 400.0,
+            "total_points_b": 350.0,
+            "matchups": [],
+        }
+
+        resp = authed_client.get("/rivalries/1/h2h?owner_a=a&owner_b=b")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["wins_a"] == 3
+        assert data["wins_b"] == 1
+
+
 class TestSleeperMatchupAPI:
     """Tests for the Sleeper matchup API method."""
 

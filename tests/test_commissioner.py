@@ -602,3 +602,626 @@ class TestEnsureLeagueOnSync:
         )
         # Should have called session.add at least twice (league + membership)
         assert mock_session.add.call_count >= 2
+
+
+# -------------------------------------------------------------------------
+# Power Rankings — Sleeper error
+# -------------------------------------------------------------------------
+
+
+class TestPowerRankingsSleeperError:
+    @patch("routes.commissioner.sleeper_service")
+    @patch("routes.commissioner.db_service")
+    def test_sleeper_api_error_returns_502(self, mock_db, mock_sleeper, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_sleeper.get_league_rosters = AsyncMock(
+            side_effect=RuntimeError("Sleeper API timeout")
+        )
+
+        resp = commish_client.get("/commissioner/leagues/1/power-rankings")
+        assert resp.status_code == 502
+        assert "Sleeper" in resp.json()["detail"]
+
+
+# -------------------------------------------------------------------------
+# Trade Check — exception handler
+# -------------------------------------------------------------------------
+
+
+class TestTradeCheckErrors:
+    @patch("routes.commissioner.claude_service")
+    @patch("routes.commissioner.db_service")
+    def test_trade_check_exception_returns_500(
+        self, mock_db, mock_claude, commish_client
+    ):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_claude.is_available = True
+        mock_claude.make_decision = AsyncMock(
+            side_effect=RuntimeError("Claude API error")
+        )
+
+        resp = commish_client.post(
+            "/commissioner/leagues/1/trade-check",
+            json={"team_a_players": ["A"], "team_b_players": ["B"]},
+        )
+        assert resp.status_code == 500
+        assert "Trade analysis failed" in resp.json()["detail"]
+
+    @patch("routes.commissioner.claude_service")
+    @patch("routes.commissioner.db_service")
+    def test_trade_check_non_dict_details(self, mock_db, mock_claude, commish_client):
+        """When details is not a dict, should use fallback values."""
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_claude.is_available = True
+        mock_claude.make_decision = AsyncMock(
+            return_value={
+                "decision": "Fair Trade",
+                "rationale": "Balanced",
+                "details": "some string, not a dict",
+            }
+        )
+
+        resp = commish_client.post(
+            "/commissioner/leagues/1/trade-check",
+            json={"team_a_players": ["X"], "team_b_players": ["Y"]},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["fairness_score"] == 50.0
+        assert data["verdict"] == "Fair Trade"
+
+
+# -------------------------------------------------------------------------
+# Roster Analysis
+# -------------------------------------------------------------------------
+
+
+class TestRosterAnalysis:
+    @patch("routes.commissioner.sleeper_service")
+    @patch("routes.commissioner.db_service")
+    def test_roster_analysis_success(self, mock_db, mock_sleeper, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        # Deep roster (15+ players, 9+ starters)
+        deep_roster = MagicMock(spec=SleeperRoster)
+        deep_roster.owner_id = "owner_deep"
+        deep_roster.players = [f"p{i}" for i in range(16)]
+        deep_roster.starters = [f"p{i}" for i in range(9)]
+
+        # Thin roster (< 10 players, < 3 bench)
+        thin_roster = MagicMock(spec=SleeperRoster)
+        thin_roster.owner_id = "owner_thin"
+        thin_roster.players = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]
+        thin_roster.starters = ["p1", "p2", "p3", "p4", "p5", "p6"]
+
+        mock_sleeper.get_league_rosters = AsyncMock(
+            return_value=[deep_roster, thin_roster]
+        )
+
+        resp = commish_client.get("/commissioner/leagues/1/roster-analysis")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert len(data["teams"]) == 2
+
+        deep = next(t for t in data["teams"] if t["owner_id"] == "owner_deep")
+        assert "Deep roster" in deep["strengths"]
+        assert "Strong starting lineup" in deep["strengths"]
+
+        thin = next(t for t in data["teams"] if t["owner_id"] == "owner_thin")
+        assert "Thin roster" in thin["weaknesses"]
+        assert "Limited bench depth" in thin["weaknesses"]
+
+    @patch("routes.commissioner.sleeper_service")
+    @patch("routes.commissioner.db_service")
+    def test_roster_analysis_sleeper_error(self, mock_db, mock_sleeper, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_sleeper.get_league_rosters = AsyncMock(
+            side_effect=RuntimeError("Sleeper down")
+        )
+
+        resp = commish_client.get("/commissioner/leagues/1/roster-analysis")
+        assert resp.status_code == 502
+
+    @patch("routes.commissioner.sleeper_service")
+    @patch("routes.commissioner.db_service")
+    def test_roster_analysis_empty(self, mock_db, mock_sleeper, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = membership
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        mock_sleeper.get_league_rosters = AsyncMock(return_value=None)
+
+        resp = commish_client.get("/commissioner/leagues/1/roster-analysis")
+        assert resp.status_code == 200
+        assert resp.json()["teams"] == []
+
+    @patch("routes.commissioner.sleeper_service")
+    @patch("routes.commissioner.db_service")
+    def test_roster_analysis_requires_commissioner(
+        self, mock_db, mock_sleeper, member_client
+    ):
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = member_client.get("/commissioner/leagues/1/roster-analysis")
+        assert resp.status_code == 403
+
+
+# -------------------------------------------------------------------------
+# Activity — null user edge case
+# -------------------------------------------------------------------------
+
+
+class TestActivityNullUser:
+    @patch("routes.commissioner.db_service")
+    def test_activity_skips_null_user(self, mock_db, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        # Ensure the valid user has real attributes for Pydantic + comparison
+        membership.user.updated_at = datetime.now(UTC)
+        membership.user.name = f"User {membership.user_id}"
+        membership.user.email = f"user{membership.user_id}@test.com"
+        membership.user.queries_today = 3
+
+        # A membership with user=None (deleted user)
+        null_membership = MagicMock(spec=LeagueMembership)
+        null_membership.user = None
+
+        mock_session = AsyncMock()
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+
+        members_result = MagicMock()
+        members_result.scalars.return_value.all.return_value = [
+            membership,
+            null_membership,
+        ]
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, members_result])
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.get("/commissioner/leagues/1/activity")
+        assert resp.status_code == 200
+        data = resp.json()
+        # Only the valid membership should appear
+        assert data["total_members"] == 1
+
+    @patch("routes.commissioner.db_service")
+    def test_activity_inactive_user(self, mock_db, commish_client):
+        """User with old updated_at should not be counted as active."""
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        old_user = MagicMock(spec=User)
+        old_user.id = 99
+        old_user.name = "Stale User"
+        old_user.email = "stale@test.com"
+        old_user.queries_today = 0
+        old_user.updated_at = datetime(2020, 1, 1, tzinfo=UTC)
+
+        stale_membership = MagicMock(spec=LeagueMembership)
+        stale_membership.user = old_user
+
+        mock_session = AsyncMock()
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+
+        members_result = MagicMock()
+        members_result.scalars.return_value.all.return_value = [stale_membership]
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, members_result])
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.get("/commissioner/leagues/1/activity")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["active_members"] == 0
+        assert data["members"][0]["is_active"] is False
+
+
+# -------------------------------------------------------------------------
+# Disputes — File, List, Resolve
+# -------------------------------------------------------------------------
+
+
+class TestFileDispute:
+    @patch("routes.commissioner.db_service")
+    def test_invalid_category(self, mock_db, commish_client):
+        resp = commish_client.post(
+            "/commissioner/leagues/1/disputes",
+            json={
+                "category": "invalid",
+                "subject": "Test",
+                "description": "Something happened",
+            },
+        )
+        assert resp.status_code == 400
+        assert "Invalid category" in resp.json()["detail"]
+
+    @patch("routes.commissioner.db_service")
+    def test_not_a_member(self, mock_db, member_client):
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = member_client.post(
+            "/commissioner/leagues/1/disputes",
+            json={
+                "category": "trade",
+                "subject": "Unfair trade",
+                "description": "This trade is unfair",
+            },
+        )
+        assert resp.status_code == 403
+        assert "Not an active member" in resp.json()["detail"]
+
+    @patch("routes.commissioner.db_service")
+    def test_file_dispute_success(self, mock_db, commish_client):
+        mock_session = AsyncMock()
+
+        # Membership check
+        member_result = MagicMock()
+        member_result.scalar_one_or_none.return_value = _mock_membership(
+            _mock_league(), role="member"
+        )
+
+        mock_session.execute = AsyncMock(return_value=member_result)
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+
+        # After refresh, the dispute object gets an id and created_at
+        now = datetime.now(UTC)
+
+        async def fake_refresh(obj):
+            obj.id = 42
+            obj.league_id = 1
+            obj.filed_by_user_id = COMMISH_USER["user_id"]
+            obj.against_user_id = None
+            obj.category = "trade"
+            obj.subject = "Unfair trade"
+            obj.description = "This trade is clearly unfair"
+            obj.status = "open"
+            obj.created_at = now
+
+        mock_session.refresh = AsyncMock(side_effect=fake_refresh)
+
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.post(
+            "/commissioner/leagues/1/disputes",
+            json={
+                "category": "trade",
+                "subject": "Unfair trade",
+                "description": "This trade is clearly unfair",
+            },
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == 42
+        assert data["category"] == "trade"
+        assert data["status"] == "open"
+        mock_session.add.assert_called_once()
+        mock_session.commit.assert_called_once()
+
+
+class TestListDisputes:
+    @patch("routes.commissioner.db_service")
+    def test_list_disputes_as_commissioner(self, mock_db, commish_client):
+        league = _mock_league(commissioner_user_id=COMMISH_USER["user_id"])
+        membership = _mock_membership(league, role="commissioner")
+
+        now = datetime.now(UTC)
+
+        # Mock disputes
+        dispute1 = MagicMock()
+        dispute1.id = 1
+        dispute1.league_id = 1
+        dispute1.filed_by_user_id = 2
+        dispute1.against_user_id = 3
+        dispute1.category = "trade"
+        dispute1.subject = "Trade dispute"
+        dispute1.description = "Details"
+        dispute1.status = "open"
+        dispute1.resolution = None
+        dispute1.resolved_by_user_id = None
+        dispute1.resolved_at = None
+        dispute1.created_at = now
+
+        dispute2 = MagicMock()
+        dispute2.id = 2
+        dispute2.league_id = 1
+        dispute2.filed_by_user_id = 2
+        dispute2.against_user_id = None
+        dispute2.category = "scoring"
+        dispute2.subject = "Scoring error"
+        dispute2.description = "Wrong points"
+        dispute2.status = "resolved"
+        dispute2.resolution = "Fixed"
+        dispute2.resolved_by_user_id = 1
+        dispute2.resolved_at = now
+        dispute2.created_at = now
+
+        # Mock users for name lookup
+        user2 = MagicMock(spec=User)
+        user2.id = 2
+        user2.name = "Member"
+
+        user3 = MagicMock(spec=User)
+        user3.id = 3
+        user3.name = "Opponent"
+
+        user1 = MagicMock(spec=User)
+        user1.id = 1
+        user1.name = "Commissioner"
+
+        mock_session = AsyncMock()
+
+        # Call 1: require_commissioner (membership check)
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+
+        # Call 2: select disputes
+        disputes_result = MagicMock()
+        disputes_result.scalars.return_value.all.return_value = [dispute1, dispute2]
+
+        # Call 3: select users for names
+        users_result = MagicMock()
+        users_result.scalars.return_value.all.return_value = [user1, user2, user3]
+
+        mock_session.execute = AsyncMock(
+            side_effect=[commish_result, disputes_result, users_result]
+        )
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.get("/commissioner/leagues/1/disputes")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 2
+        assert data["open"] == 1
+        assert data["resolved"] == 1
+        assert data["disputes"][0]["filed_by_name"] == "Member"
+        assert data["disputes"][0]["against_name"] == "Opponent"
+        assert data["disputes"][1]["resolved_by_name"] == "Commissioner"
+
+    @patch("routes.commissioner.db_service")
+    def test_list_disputes_as_member(self, mock_db, member_client):
+        """Regular members should only see their own disputes."""
+        league = _mock_league(commissioner_user_id=COMMISH_USER["user_id"])
+        membership = _mock_membership(
+            league, user_id=MEMBER_USER["user_id"], role="member"
+        )
+
+        mock_session = AsyncMock()
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+
+        disputes_result = MagicMock()
+        disputes_result.scalars.return_value.all.return_value = []
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, disputes_result])
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = member_client.get("/commissioner/leagues/1/disputes")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["total"] == 0
+
+    @patch("routes.commissioner.db_service")
+    def test_list_disputes_not_a_member(self, mock_db, member_client):
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+        mock_session.execute = AsyncMock(return_value=mock_result)
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = member_client.get("/commissioner/leagues/1/disputes")
+        assert resp.status_code == 403
+
+
+class TestResolveDispute:
+    @patch("routes.commissioner.db_service")
+    def test_invalid_status(self, mock_db, commish_client):
+        resp = commish_client.patch(
+            "/commissioner/leagues/1/disputes/1",
+            json={"status": "invalid", "resolution": "Something"},
+        )
+        assert resp.status_code == 400
+        assert "resolved" in resp.json()["detail"]
+
+    @patch("routes.commissioner.db_service")
+    def test_dispute_not_found(self, mock_db, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        mock_session = AsyncMock()
+        # Call 1: commissioner check
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+        # Call 2: dispute not found
+        dispute_result = MagicMock()
+        dispute_result.scalar_one_or_none.return_value = None
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, dispute_result])
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.patch(
+            "/commissioner/leagues/1/disputes/999",
+            json={"status": "resolved", "resolution": "Fixed it"},
+        )
+        assert resp.status_code == 404
+
+    @patch("routes.commissioner.db_service")
+    def test_dispute_already_closed(self, mock_db, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        closed_dispute = MagicMock()
+        closed_dispute.status = "resolved"
+
+        mock_session = AsyncMock()
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+        dispute_result = MagicMock()
+        dispute_result.scalar_one_or_none.return_value = closed_dispute
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, dispute_result])
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.patch(
+            "/commissioner/leagues/1/disputes/1",
+            json={"status": "dismissed", "resolution": "Already handled"},
+        )
+        assert resp.status_code == 400
+        assert "already closed" in resp.json()["detail"]
+
+    @patch("routes.commissioner.db_service")
+    def test_resolve_success(self, mock_db, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        now = datetime.now(UTC)
+        open_dispute = MagicMock()
+        open_dispute.id = 10
+        open_dispute.league_id = 1
+        open_dispute.filed_by_user_id = 2
+        open_dispute.against_user_id = None
+        open_dispute.category = "conduct"
+        open_dispute.subject = "Bad behavior"
+        open_dispute.description = "Details"
+        open_dispute.status = "open"
+        open_dispute.resolution = None
+        open_dispute.resolved_by_user_id = None
+        open_dispute.resolved_at = None
+        open_dispute.created_at = now
+
+        mock_session = AsyncMock()
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+        dispute_result = MagicMock()
+        dispute_result.scalar_one_or_none.return_value = open_dispute
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, dispute_result])
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.patch(
+            "/commissioner/leagues/1/disputes/10",
+            json={"status": "resolved", "resolution": "Warning issued"},
+        )
+        assert resp.status_code == 200
+        # Verify the dispute was updated
+        assert open_dispute.status == "resolved"
+        assert open_dispute.resolution == "Warning issued"
+        assert open_dispute.resolved_by_user_id == COMMISH_USER["user_id"]
+        mock_session.commit.assert_called_once()
+
+    @patch("routes.commissioner.db_service")
+    def test_dismiss_success(self, mock_db, commish_client):
+        league = _mock_league()
+        membership = _mock_membership(league)
+
+        now = datetime.now(UTC)
+        open_dispute = MagicMock()
+        open_dispute.id = 11
+        open_dispute.league_id = 1
+        open_dispute.filed_by_user_id = 2
+        open_dispute.against_user_id = None
+        open_dispute.category = "other"
+        open_dispute.subject = "Minor issue"
+        open_dispute.description = "Not a real issue"
+        open_dispute.status = "under_review"
+        open_dispute.resolution = None
+        open_dispute.resolved_by_user_id = None
+        open_dispute.resolved_at = None
+        open_dispute.created_at = now
+
+        mock_session = AsyncMock()
+        commish_result = MagicMock()
+        commish_result.scalar_one_or_none.return_value = membership
+        dispute_result = MagicMock()
+        dispute_result.scalar_one_or_none.return_value = open_dispute
+
+        mock_session.execute = AsyncMock(side_effect=[commish_result, dispute_result])
+        mock_session.add = MagicMock()
+        mock_session.commit = AsyncMock()
+        mock_session.refresh = AsyncMock()
+
+        mock_db.session.return_value.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+        resp = commish_client.patch(
+            "/commissioner/leagues/1/disputes/11",
+            json={"status": "dismissed", "resolution": "Not actionable"},
+        )
+        assert resp.status_code == 200
+        assert open_dispute.status == "dismissed"
