@@ -48,35 +48,29 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme();
   const { sport, riskMode, setSport, setRiskMode, clearMessages } = useAppStore();
   const { connection, selectedLeagueIds, disconnect } = useLeagueStore();
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, user } = useAuthStore();
   const darkMode = theme === 'dark';
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
 
-  // Billing status
-  const [billingTier, setBillingTier] = useState<string>('free');
-  const [billingStatus, setBillingStatus] = useState<string>('none');
+  // Billing status — primary source is user object from auth store,
+  // enriched with renewal details from /billing/status
+  const billingTier = user?.subscription_tier ?? 'free';
   const [renewalDate, setRenewalDate] = useState<string | null>(null);
   const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
 
-  const fetchBillingStatus = useCallback(async () => {
-    if (!isAuthenticated) return;
-    try {
-      const data = await api.getBillingStatus();
-      setBillingTier(data.tier);
-      setBillingStatus(data.status);
-      if (data.current_period_end) {
-        setRenewalDate(new Date(data.current_period_end).toLocaleDateString());
-      }
-      setCancelAtPeriodEnd(data.cancel_at_period_end ?? false);
-    } catch {
-      // Billing endpoint may not be configured
-    }
-  }, [isAuthenticated]);
-
   useEffect(() => {
-    fetchBillingStatus();
-  }, [fetchBillingStatus]);
+    if (!isAuthenticated || billingTier !== 'pro') return;
+    // Only fetch extra details (renewal date, cancel status) for Pro users
+    api.getBillingStatus()
+      .then((data) => {
+        if (data.current_period_end) {
+          setRenewalDate(new Date(data.current_period_end).toLocaleDateString());
+        }
+        setCancelAtPeriodEnd(data.cancel_at_period_end ?? false);
+      })
+      .catch(() => { /* billing endpoint may not be configured */ });
+  }, [isAuthenticated, billingTier]);
 
   const handleManageSubscription = async () => {
     setPortalLoading(true);
