@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 import Link from 'next/link';
@@ -88,6 +88,14 @@ interface BillingStatus {
 }
 
 export default function BillingPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-b from-dark-950 via-dark-900 to-dark-950 pt-20 pb-12 px-4 flex items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-dark-400" /></div>}>
+      <BillingContent />
+    </Suspense>
+  );
+}
+
+function BillingContent() {
   const { user, isAuthenticated } = useAuthStore();
   const searchParams = useSearchParams();
 
