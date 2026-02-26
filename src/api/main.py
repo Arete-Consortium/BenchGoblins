@@ -213,7 +213,7 @@ app = FastAPI(
         "Fantasy sports decision engine using role stability,"
         " spatial opportunity, and matchup context."
     ),
-    version="0.9.1",
+    version="1.0.0",
     lifespan=lifespan,
 )
 
@@ -506,7 +506,7 @@ async def health_check():
     status = "healthy" if db_healthy else "unhealthy"
     payload = {
         "status": status,
-        "version": "0.9.1",
+        "version": "1.0.0",
         "claude_available": claude_service.is_available,
         "postgres_connected": db_healthy,
         "redis_connected": redis_healthy,
