@@ -685,6 +685,38 @@ class League(Base):
     )
 
 
+class LeagueMatchup(Base):
+    """Cached weekly matchup results from Sleeper for rivalry tracking."""
+
+    __tablename__ = "league_matchups"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    league_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False
+    )
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+    week: Mapped[int] = mapped_column(Integer, nullable=False)
+    roster_id_a: Mapped[int] = mapped_column(Integer, nullable=False)
+    roster_id_b: Mapped[int] = mapped_column(Integer, nullable=False)
+    owner_id_a: Mapped[str] = mapped_column(String(100), nullable=False)
+    owner_id_b: Mapped[str] = mapped_column(String(100), nullable=False)
+    points_a: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    points_b: Mapped[Decimal | None] = mapped_column(Numeric(8, 2), nullable=True)
+    winner_owner_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    league: Mapped["League"] = relationship(foreign_keys=[league_id])
+
+    __table_args__ = (
+        UniqueConstraint(
+            "league_id", "season", "week", "roster_id_a", "roster_id_b",
+            name="uq_league_matchup",
+        ),
+        Index("idx_league_matchups_league", "league_id", "season"),
+        Index("idx_league_matchups_owners", "owner_id_a", "owner_id_b"),
+    )
+
+
 class LeagueMembership(Base):
     """User membership in a managed league."""
 
