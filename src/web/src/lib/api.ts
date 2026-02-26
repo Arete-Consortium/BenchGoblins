@@ -103,22 +103,18 @@ class APIClient {
       return config;
     });
 
-    // Handle auth errors
+    // Handle auth errors — only clear session tokens, NOT the JWT.
+    // JWT clearing is handled explicitly by the auth store on logout
+    // or token refresh failure. Clearing on every 401 causes a
+    // destructive cascade where a single failed request (e.g.,
+    // getBillingStatus on page mount) wipes the entire auth state.
     this.client.interceptors.response.use(
       (response) => response,
       async (error: AxiosError) => {
-        if (error.response?.status === 401) {
-          // If we have an auth token and it's invalid, clear auth state
-          if (this.authToken) {
-            this.clearAuthToken();
-            if (this.onAuthError) {
-              this.onAuthError();
-            }
-          } else {
-            // Session expired or invalid, clear and create new
-            this.clearSession();
-            await this.ensureSession();
-          }
+        if (error.response?.status === 401 && !this.authToken) {
+          // Only auto-recover anonymous sessions (no JWT)
+          this.clearSession();
+          await this.ensureSession();
         }
         return Promise.reject(error);
       }
