@@ -3,10 +3,12 @@
 import time
 from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from services.sleeper import (
     SleeperLeague,
+    SleeperPlayer,
     SleeperRoster,
     SleeperService,
     SleeperSport,
@@ -93,6 +95,38 @@ class TestParseLeague:
         assert league.name == "Unknown League"
 
 
+class TestGetClient:
+    """Tests for _get_client — line 113."""
+
+    @pytest.mark.asyncio
+    async def test_creates_new_client_when_none(self, svc):
+        """Line 113: creates httpx.AsyncClient when _client is None."""
+        assert svc._client is None
+        client = await svc._get_client()
+        assert client is not None
+        assert isinstance(client, httpx.AsyncClient)
+        assert svc._client is client
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_creates_new_client_when_closed(self, svc):
+        """Line 113: creates new client when existing one is closed."""
+        old_client = AsyncMock()
+        old_client.is_closed = True
+        svc._client = old_client
+        client = await svc._get_client()
+        assert client is not old_client
+        assert isinstance(client, httpx.AsyncClient)
+        await client.aclose()
+
+    @pytest.mark.asyncio
+    async def test_reuses_open_client(self, svc, mock_client):
+        """Reuses existing open client."""
+        svc._client = mock_client
+        client = await svc._get_client()
+        assert client is mock_client
+
+
 class TestGetUser:
     @pytest.mark.asyncio
     async def test_success(self, svc, mock_client):
@@ -126,6 +160,14 @@ class TestGetUser:
         result = await svc.get_user("nobody")
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        """Lines 157-158: HTTPError is caught and logged, returns None."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("connection timeout"))
+        result = await svc.get_user("testuser")
+        assert result is None
+
 
 class TestGetUserById:
     @pytest.mark.asyncio
@@ -143,6 +185,30 @@ class TestGetUserById:
         )
         result = await svc.get_user_by_id("123")
         assert result.user_id == "123"
+
+    @pytest.mark.asyncio
+    async def test_http_error_returns_none(self, svc, mock_client):
+        """Lines 178-179: HTTPError is caught with pass, returns None."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("fail"))
+        result = await svc.get_user_by_id("123")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_not_found_returns_none(self, svc, mock_client):
+        """Line 181: return None when status != 200."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(return_value=make_response({}, status=404))
+        result = await svc.get_user_by_id("123")
+        assert result is None
+
+    @pytest.mark.asyncio
+    async def test_empty_data_returns_none(self, svc, mock_client):
+        """Line 181: return None when data is falsy."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(return_value=make_response(None))
+        result = await svc.get_user_by_id("123")
+        assert result is None
 
 
 class TestGetUserLeagues:
@@ -177,6 +243,14 @@ class TestGetUserLeagues:
         result = await svc.get_user_leagues("123")
         assert result == []
 
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        """Lines 215-216: HTTPError is caught and logged, returns empty list."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("timeout"))
+        result = await svc.get_user_leagues("123")
+        assert result == []
+
 
 class TestGetLeague:
     @pytest.mark.asyncio
@@ -205,6 +279,14 @@ class TestGetLeague:
         result = await svc.get_league("999")
         assert result is None
 
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        """Lines 250-251: HTTPError is caught with pass, returns None."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("fail"))
+        result = await svc.get_league("456")
+        assert result is None
+
 
 class TestGetLeagueUsers:
     @pytest.mark.asyncio
@@ -231,6 +313,14 @@ class TestGetLeagueUsers:
         result = await svc.get_league_users("123")
         assert len(result) == 2
 
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        """Lines 277-278: HTTPError is caught with pass, returns empty list."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("fail"))
+        result = await svc.get_league_users("123")
+        assert result == []
+
 
 class TestGetLeagueRosters:
     @pytest.mark.asyncio
@@ -252,6 +342,14 @@ class TestGetLeagueRosters:
         result = await svc.get_league_rosters("123")
         assert len(result) == 1
         assert result[0].players == ["p1", "p2"]
+
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        """Lines 307-308: HTTPError is caught with pass, returns empty list."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("fail"))
+        result = await svc.get_league_rosters("123")
+        assert result == []
 
 
 class TestGetUserRoster:
@@ -319,6 +417,24 @@ class TestGetAllPlayers:
         assert "p1" in result
         # Should be cached now
         assert "nfl" in svc._players_cache
+
+    @pytest.mark.asyncio
+    async def test_http_error_returns_stale_cache(self, svc, mock_client):
+        """Lines 365-370: HTTPError with stale cache returns stale data."""
+        svc._client = mock_client
+        svc._players_cache["nfl"] = {"stale": {"full_name": "Old Player"}}
+        svc._players_cache_ts["nfl"] = 0  # expired (epoch = ancient)
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
+        result = await svc.get_all_players("nfl")
+        assert result == {"stale": {"full_name": "Old Player"}}
+
+    @pytest.mark.asyncio
+    async def test_http_error_no_cache_returns_empty(self, svc, mock_client):
+        """Lines 365-372: HTTPError with no stale cache returns {}."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
+        result = await svc.get_all_players("nfl")
+        assert result == {}
 
 
 class TestGetPlayer:
@@ -402,6 +518,103 @@ class TestGetTrendingPlayers:
         svc._client = mock_client
         mock_client.get = AsyncMock(return_value=make_response(None))
         result = await svc.get_trending_players()
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        """Lines 502-505: HTTPError is caught with pass, returns []."""
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("fail"))
+        result = await svc.get_trending_players()
+        assert result == []
+
+
+class TestGetRosterWithPlayers:
+    """Tests for get_roster_with_players — lines 522-527."""
+
+    @pytest.mark.asyncio
+    async def test_no_roster_returns_empty(self, svc):
+        """Lines 524-525: no roster found -> return []."""
+        svc.get_user_roster = AsyncMock(return_value=None)
+        result = await svc.get_roster_with_players("lg1", "u999")
+        assert result == []
+        svc.get_user_roster.assert_awaited_once_with("lg1", "u999")
+
+    @pytest.mark.asyncio
+    async def test_has_roster_returns_players(self, svc):
+        """Line 527: roster exists -> delegates to get_players_by_ids."""
+        roster = SleeperRoster(
+            roster_id=1,
+            owner_id="u123",
+            players=["p1", "p2"],
+            starters=["p1"],
+            reserve=None,
+        )
+        player = SleeperPlayer(
+            player_id="p1",
+            full_name="Patrick Mahomes",
+            first_name="Patrick",
+            last_name="Mahomes",
+            team="KC",
+            position="QB",
+            sport="nfl",
+            status="Active",
+            injury_status=None,
+            age=28,
+            years_exp=7,
+        )
+        svc.get_user_roster = AsyncMock(return_value=roster)
+        svc.get_players_by_ids = AsyncMock(return_value=[player])
+        result = await svc.get_roster_with_players("lg1", "u123")
+        assert len(result) == 1
+        assert result[0].full_name == "Patrick Mahomes"
+        svc.get_players_by_ids.assert_awaited_once_with(["p1", "p2"], "nfl")
+
+    @pytest.mark.asyncio
+    async def test_custom_sport_forwarded(self, svc):
+        """Sport kwarg is forwarded to get_players_by_ids."""
+        roster = SleeperRoster(
+            roster_id=1,
+            owner_id="u123",
+            players=["p1"],
+            starters=["p1"],
+            reserve=None,
+        )
+        svc.get_user_roster = AsyncMock(return_value=roster)
+        svc.get_players_by_ids = AsyncMock(return_value=[])
+        await svc.get_roster_with_players("lg1", "u123", sport="nba")
+        svc.get_players_by_ids.assert_awaited_once_with(["p1"], "nba")
+
+
+class TestGetLeagueMatchups:
+    @pytest.mark.asyncio
+    async def test_success(self, svc, mock_client):
+        svc._client = mock_client
+        mock_client.get = AsyncMock(
+            return_value=make_response(
+                [
+                    {"matchup_id": 1, "roster_id": 1, "points": 105.5},
+                    {"matchup_id": 1, "roster_id": 2, "points": 98.2},
+                ]
+            )
+        )
+        result = await svc.get_league_matchups("123", 1)
+        assert len(result) == 2
+        assert result[0].matchup_id == 1
+        assert result[0].points == 105.5
+
+    @pytest.mark.asyncio
+    async def test_empty(self, svc, mock_client):
+        svc._client = mock_client
+        mock_client.get = AsyncMock(return_value=make_response(None))
+        result = await svc.get_league_matchups("123", 1)
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_http_error(self, svc, mock_client):
+        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("fail"))
+        result = await svc.get_league_matchups("123", 1)
         assert result == []
 
 
