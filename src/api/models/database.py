@@ -709,7 +709,11 @@ class LeagueMatchup(Base):
 
     __table_args__ = (
         UniqueConstraint(
-            "league_id", "season", "week", "roster_id_a", "roster_id_b",
+            "league_id",
+            "season",
+            "week",
+            "roster_id_a",
+            "roster_id_b",
             name="uq_league_matchup",
         ),
         Index("idx_league_matchups_league", "league_id", "season"),
@@ -751,6 +755,52 @@ class LeagueMembership(Base):
             "status",
             postgresql_where=text("status = 'active'"),
         ),
+    )
+
+
+class LeagueDispute(Base):
+    """Commissioner dispute resolution record."""
+
+    __tablename__ = "league_disputes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    league_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False
+    )
+    filed_by_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    against_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    category: Mapped[str] = mapped_column(String(50), nullable=False)
+    subject: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="open")
+    resolution: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now()
+    )
+
+    league: Mapped["League"] = relationship(foreign_keys=[league_id])
+    filed_by: Mapped["User"] = relationship(foreign_keys=[filed_by_user_id])
+    against: Mapped["User"] = relationship(foreign_keys=[against_user_id])
+    resolved_by: Mapped["User"] = relationship(foreign_keys=[resolved_by_user_id])
+
+    __table_args__ = (
+        CheckConstraint(
+            "category IN ('trade', 'roster', 'scoring', 'conduct', 'other')",
+            name="check_dispute_category",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'under_review', 'resolved', 'dismissed')",
+            name="check_dispute_status",
+        ),
+        Index("idx_league_disputes_league", "league_id", "status"),
+        Index("idx_league_disputes_user", "filed_by_user_id"),
     )
 
 

@@ -794,6 +794,47 @@ class APIClient {
     return response.data;
   }
 
+  // Dispute resolution
+  async fileDispute(leagueId: number, data: {
+    category: string;
+    subject: string;
+    description: string;
+    against_user_id?: number;
+  }): Promise<{
+    id: number; league_id: number; category: string; subject: string;
+    description: string; status: string; created_at: string;
+  }> {
+    const response = await this.client.post(`/commissioner/leagues/${leagueId}/disputes`, data);
+    return response.data;
+  }
+
+  async getDisputes(leagueId: number): Promise<{
+    league_id: number;
+    total: number;
+    open: number;
+    resolved: number;
+    disputes: {
+      id: number; league_id: number; filed_by_user_id: number; filed_by_name: string | null;
+      against_user_id: number | null; against_name: string | null; category: string;
+      subject: string; description: string; status: string; resolution: string | null;
+      resolved_by_name: string | null; resolved_at: string | null; created_at: string;
+    }[];
+  }> {
+    const response = await this.client.get(`/commissioner/leagues/${leagueId}/disputes`);
+    return response.data;
+  }
+
+  async resolveDispute(leagueId: number, disputeId: number, data: {
+    status: 'resolved' | 'dismissed';
+    resolution: string;
+  }): Promise<{ id: number; status: string; resolution: string }> {
+    const response = await this.client.patch(
+      `/commissioner/leagues/${leagueId}/disputes/${disputeId}`,
+      data
+    );
+    return response.data;
+  }
+
   // Rivalry tracking
   async syncRivalries(leagueId: number, season = '2025', weeks = '1-18'): Promise<{ upserted: number; message: string }> {
     const response = await this.client.post(`/rivalries/${leagueId}/sync`, null, {

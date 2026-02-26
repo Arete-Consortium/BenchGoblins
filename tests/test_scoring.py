@@ -625,10 +625,14 @@ class TestSoccerScoring:
         assert -50 <= indices.od <= 50
         assert 0 <= indices.msf <= 100
 
-    def test_compare_soccer_players(self, soccer_forward_stats, soccer_midfielder_stats):
+    def test_compare_soccer_players(
+        self, soccer_forward_stats, soccer_midfielder_stats
+    ):
         from core.scoring import RiskMode, compare_players
 
-        result = compare_players(soccer_forward_stats, soccer_midfielder_stats, RiskMode.MEDIAN)
+        result = compare_players(
+            soccer_forward_stats, soccer_midfielder_stats, RiskMode.MEDIAN
+        )
 
         assert "decision" in result
         assert "confidence" in result

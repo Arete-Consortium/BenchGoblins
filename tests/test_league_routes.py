@@ -158,7 +158,9 @@ class TestConnectSleeper:
     @patch("routes.leagues.sleeper_service")
     def test_connect_nba(self, mock_svc, authed_client):
         mock_svc.get_user = AsyncMock(return_value=_make_sleeper_user())
-        mock_svc.get_user_leagues = AsyncMock(return_value=[_make_sleeper_league(sport="nba")])
+        mock_svc.get_user_leagues = AsyncMock(
+            return_value=[_make_sleeper_league(sport="nba")]
+        )
 
         response = authed_client.post(
             "/leagues/connect",
@@ -222,7 +224,9 @@ class TestGetRoster:
 
     @patch("routes.leagues.sleeper_service")
     def test_roster_with_reserve(self, mock_svc, authed_client):
-        mock_svc.get_user_roster = AsyncMock(return_value=_make_sleeper_roster(reserve=["p3"]))
+        mock_svc.get_user_roster = AsyncMock(
+            return_value=_make_sleeper_roster(reserve=["p3"])
+        )
         mock_svc.get_players_by_ids = AsyncMock(
             return_value=[
                 _make_sleeper_player("p1"),
@@ -532,8 +536,12 @@ class TestSyncESPN:
         mock_espn.verify_credentials = AsyncMock(return_value=True)
         mock_espn.get_roster = AsyncMock(
             return_value=[
-                _make_espn_roster_player(player_id="1", name="Josh Allen", position="QB"),
-                _make_espn_roster_player(player_id="2", name="Stefon Diggs", position="WR"),
+                _make_espn_roster_player(
+                    player_id="1", name="Josh Allen", position="QB"
+                ),
+                _make_espn_roster_player(
+                    player_id="2", name="Stefon Diggs", position="WR"
+                ),
             ]
         )
 
@@ -728,8 +736,12 @@ class TestSyncYahoo:
     def test_sync_yahoo_success(self, mock_yahoo, mock_db_svc, authed_client):
         mock_yahoo.get_team_roster = AsyncMock(
             return_value=[
-                _make_yahoo_player(player_key="449.p.1", name="Lamar Jackson", position="QB"),
-                _make_yahoo_player(player_key="449.p.2", name="Derrick Henry", position="RB"),
+                _make_yahoo_player(
+                    player_key="449.p.1", name="Lamar Jackson", position="QB"
+                ),
+                _make_yahoo_player(
+                    player_key="449.p.2", name="Derrick Henry", position="RB"
+                ),
             ]
         )
 
@@ -759,7 +771,9 @@ class TestSyncYahoo:
 
     @patch("routes.leagues.db_service")
     @patch("routes.leagues.yahoo_service")
-    def test_sync_yahoo_roster_fetch_fails(self, mock_yahoo, mock_db_svc, authed_client):
+    def test_sync_yahoo_roster_fetch_fails(
+        self, mock_yahoo, mock_db_svc, authed_client
+    ):
         """Sync succeeds even if roster fetch fails."""
         mock_yahoo.get_team_roster = AsyncMock(side_effect=Exception("API error"))
 
@@ -807,7 +821,10 @@ class TestGetMyYahoo:
             yahoo_league_key="449.l.12345",
             yahoo_team_key="449.l.12345.t.1",
             yahoo_sport="nfl",
-            yahoo_roster_snapshot=[{"player_key": "449.p.1"}, {"player_key": "449.p.2"}],
+            yahoo_roster_snapshot=[
+                {"player_key": "449.p.1"},
+                {"player_key": "449.p.2"},
+            ],
             yahoo_synced_at=synced,
         )
         mock_db, _ = _mock_db_session(mock_user)

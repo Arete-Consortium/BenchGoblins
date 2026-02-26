@@ -449,9 +449,7 @@ class SleeperService:
         matchups = []
 
         try:
-            response = await client.get(
-                f"{SLEEPER_API}/league/{league_id}/matchups/{week}"
-            )
+            response = await client.get(f"{SLEEPER_API}/league/{league_id}/matchups/{week}")
 
             if response.status_code == 200:
                 data = response.json()

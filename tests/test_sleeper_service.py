@@ -324,19 +324,23 @@ class TestGetAllPlayers:
 class TestGetPlayer:
     @pytest.mark.asyncio
     async def test_found(self, svc):
-        _seed_players_cache(svc, "nfl", {
-            "p1": {
-                "full_name": "Patrick Mahomes",
-                "first_name": "Patrick",
-                "last_name": "Mahomes",
-                "team": "KC",
-                "position": "QB",
-                "status": "Active",
-                "injury_status": None,
-                "age": 28,
-                "years_exp": 7,
-            }
-        })
+        _seed_players_cache(
+            svc,
+            "nfl",
+            {
+                "p1": {
+                    "full_name": "Patrick Mahomes",
+                    "first_name": "Patrick",
+                    "last_name": "Mahomes",
+                    "team": "KC",
+                    "position": "QB",
+                    "status": "Active",
+                    "injury_status": None,
+                    "age": 28,
+                    "years_exp": 7,
+                }
+            },
+        )
         result = await svc.get_player("p1", "nfl")
         assert result is not None
         assert result.full_name == "Patrick Mahomes"
@@ -352,24 +356,28 @@ class TestGetPlayer:
 class TestGetPlayersByIds:
     @pytest.mark.asyncio
     async def test_multiple(self, svc):
-        _seed_players_cache(svc, "nfl", {
-            "p1": {
-                "full_name": "A",
-                "first_name": "A",
-                "last_name": "A",
-                "team": "KC",
-                "position": "QB",
-                "status": "Active",
+        _seed_players_cache(
+            svc,
+            "nfl",
+            {
+                "p1": {
+                    "full_name": "A",
+                    "first_name": "A",
+                    "last_name": "A",
+                    "team": "KC",
+                    "position": "QB",
+                    "status": "Active",
+                },
+                "p2": {
+                    "full_name": "B",
+                    "first_name": "B",
+                    "last_name": "B",
+                    "team": "SF",
+                    "position": "RB",
+                    "status": "Active",
+                },
             },
-            "p2": {
-                "full_name": "B",
-                "first_name": "B",
-                "last_name": "B",
-                "team": "SF",
-                "position": "RB",
-                "status": "Active",
-            },
-        })
+        )
         result = await svc.get_players_by_ids(["p1", "p2", "missing"], "nfl")
         assert len(result) == 2
 

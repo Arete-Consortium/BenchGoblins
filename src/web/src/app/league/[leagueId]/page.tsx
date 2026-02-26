@@ -16,6 +16,7 @@ import {
   Check,
   Shield,
   Swords,
+  Scale,
   Zap,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -23,7 +24,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { useAuthStore } from '@/stores/authStore';
 import api from '@/lib/api';
 
-type Tab = 'overview' | 'rivalries' | 'rankings' | 'trade' | 'activity';
+type Tab = 'overview' | 'rivalries' | 'disputes' | 'rankings' | 'trade' | 'activity';
 
 interface League {
   id: number;
@@ -67,6 +68,23 @@ interface ActivityMember {
   last_active: string | null;
 }
 
+interface Dispute {
+  id: number;
+  league_id: number;
+  filed_by_user_id: number;
+  filed_by_name: string | null;
+  against_user_id: number | null;
+  against_name: string | null;
+  category: string;
+  subject: string;
+  description: string;
+  status: string;
+  resolution: string | null;
+  resolved_by_name: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
 interface Rivalry {
   owner_a: string;
   owner_b: string;
@@ -90,8 +108,15 @@ export default function LeagueDashboard() {
   const [rankings, setRankings] = useState<Ranking[]>([]);
   const [activity, setActivity] = useState<ActivityMember[]>([]);
   const [rivalries, setRivalries] = useState<Rivalry[]>([]);
+  const [disputes, setDisputes] = useState<Dispute[]>([]);
+  const [disputeStats, setDisputeStats] = useState({ total: 0, open: 0, resolved: 0 });
   const [tradeResult, setTradeResult] = useState<TradeResult | null>(null);
   const [syncing, setSyncing] = useState(false);
+  // Dispute form
+  const [disputeCategory, setDisputeCategory] = useState('trade');
+  const [disputeSubject, setDisputeSubject] = useState('');
+  const [disputeDescription, setDisputeDescription] = useState('');
+  const [resolutionText, setResolutionText] = useState('');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -166,6 +191,55 @@ export default function LeagueDashboard() {
     }
   }, [leagueId]);
 
+  const fetchDisputes = useCallback(async () => {
+    setActionLoading(true);
+    try {
+      const data = await api.getDisputes(leagueId);
+      setDisputes(data.disputes);
+      setDisputeStats({ total: data.total, open: data.open, resolved: data.resolved });
+    } catch {
+      setError('Failed to load disputes');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [leagueId]);
+
+  const fileNewDispute = useCallback(async () => {
+    if (!disputeSubject.trim() || !disputeDescription.trim()) return;
+    setActionLoading(true);
+    try {
+      await api.fileDispute(leagueId, {
+        category: disputeCategory,
+        subject: disputeSubject,
+        description: disputeDescription,
+      });
+      setDisputeSubject('');
+      setDisputeDescription('');
+      await fetchDisputes();
+    } catch {
+      setError('Failed to file dispute');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [leagueId, disputeCategory, disputeSubject, disputeDescription, fetchDisputes]);
+
+  const resolveDispute = useCallback(async (disputeId: number, status: 'resolved' | 'dismissed') => {
+    if (!resolutionText.trim()) return;
+    setActionLoading(true);
+    try {
+      await api.resolveDispute(leagueId, disputeId, {
+        status,
+        resolution: resolutionText,
+      });
+      setResolutionText('');
+      await fetchDisputes();
+    } catch {
+      setError('Failed to resolve dispute');
+    } finally {
+      setActionLoading(false);
+    }
+  }, [leagueId, resolutionText, fetchDisputes]);
+
   const fetchRivalries = useCallback(async () => {
     setActionLoading(true);
     try {
@@ -212,7 +286,8 @@ export default function LeagueDashboard() {
     if (tab === 'rankings' && rankings.length === 0) fetchRankings();
     if (tab === 'activity' && activity.length === 0) fetchActivity();
     if (tab === 'rivalries' && rivalries.length === 0) fetchRivalries();
-  }, [tab, rankings.length, activity.length, rivalries.length, fetchRankings, fetchActivity, fetchRivalries]);
+    if (tab === 'disputes' && disputes.length === 0) fetchDisputes();
+  }, [tab, rankings.length, activity.length, rivalries.length, disputes.length, fetchRankings, fetchActivity, fetchRivalries, fetchDisputes]);
 
   if (!isAuthenticated) {
     return (
@@ -241,6 +316,7 @@ export default function LeagueDashboard() {
   const tabs: { key: Tab; label: string; icon: typeof Trophy; commissionerOnly?: boolean }[] = [
     { key: 'overview', label: 'Overview', icon: Users2 },
     { key: 'rivalries', label: 'Rivalries', icon: Swords },
+    { key: 'disputes', label: 'Disputes', icon: Scale },
     { key: 'rankings', label: 'Power Rankings', icon: Trophy, commissionerOnly: true },
     { key: 'trade', label: 'Trade Checker', icon: ArrowRightLeft, commissionerOnly: true },
     { key: 'activity', label: 'Activity', icon: Activity, commissionerOnly: true },
@@ -459,6 +535,159 @@ export default function LeagueDashboard() {
               )}
             </CardContent>
           </Card>
+        )}
+
+        {/* Disputes Tab */}
+        {tab === 'disputes' && (
+          <div className="space-y-4">
+            {/* File New Dispute */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">File a Dispute</CardTitle>
+                <CardDescription>Report an issue for commissioner review</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Category</label>
+                  <select
+                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm"
+                    value={disputeCategory}
+                    onChange={(e) => setDisputeCategory(e.target.value)}
+                  >
+                    <option value="trade">Trade</option>
+                    <option value="roster">Roster</option>
+                    <option value="scoring">Scoring</option>
+                    <option value="conduct">Conduct</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Subject</label>
+                  <input
+                    type="text"
+                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm"
+                    placeholder="Brief summary of the dispute"
+                    value={disputeSubject}
+                    onChange={(e) => setDisputeSubject(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-sm font-medium mb-1 block">Description</label>
+                  <textarea
+                    className="w-full bg-muted border border-border rounded-md px-3 py-2 text-sm min-h-[80px]"
+                    placeholder="Describe the issue in detail..."
+                    value={disputeDescription}
+                    onChange={(e) => setDisputeDescription(e.target.value)}
+                  />
+                </div>
+                <Button
+                  onClick={fileNewDispute}
+                  disabled={actionLoading || !disputeSubject.trim() || !disputeDescription.trim()}
+                >
+                  {actionLoading ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Scale className="w-4 h-4 mr-2" />}
+                  Submit Dispute
+                </Button>
+              </CardContent>
+            </Card>
+
+            {/* Dispute List */}
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
+                <div>
+                  <CardTitle className="text-lg">Disputes</CardTitle>
+                  <CardDescription>
+                    {disputeStats.total} total &middot; {disputeStats.open} open &middot; {disputeStats.resolved} resolved
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={fetchDisputes} disabled={actionLoading}>
+                  <RefreshCw className={`w-4 h-4 mr-1.5 ${actionLoading ? 'animate-spin' : ''}`} />
+                  Refresh
+                </Button>
+              </CardHeader>
+              <CardContent>
+                {actionLoading && disputes.length === 0 ? (
+                  <div className="flex justify-center py-8">
+                    <Loader2 className="w-6 h-6 animate-spin" />
+                  </div>
+                ) : disputes.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Scale className="w-10 h-10 mx-auto mb-3 text-muted-foreground" />
+                    <p className="text-muted-foreground">No disputes filed yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {disputes.map((d) => (
+                      <div key={d.id} className="p-3 bg-muted/50 rounded-lg space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              d.status === 'open' ? 'bg-yellow-500/20 text-yellow-400' :
+                              d.status === 'resolved' ? 'bg-green-500/20 text-green-400' :
+                              'bg-gray-500/20 text-gray-400'
+                            }`}>
+                              {d.status}
+                            </span>
+                            <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground capitalize">
+                              {d.category}
+                            </span>
+                          </div>
+                          <span className="text-xs text-muted-foreground">
+                            {new Date(d.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="font-medium text-sm">{d.subject}</p>
+                        <p className="text-sm text-muted-foreground">{d.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Filed by {d.filed_by_name || `User #${d.filed_by_user_id}`}
+                          {d.against_name && ` against ${d.against_name}`}
+                        </p>
+
+                        {d.resolution && (
+                          <div className="mt-2 p-2 bg-background rounded border border-border">
+                            <p className="text-xs font-medium text-green-400 mb-1">Resolution</p>
+                            <p className="text-sm">{d.resolution}</p>
+                            {d.resolved_by_name && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                By {d.resolved_by_name} on {d.resolved_at ? new Date(d.resolved_at).toLocaleDateString() : ''}
+                              </p>
+                            )}
+                          </div>
+                        )}
+
+                        {isCommissioner && d.status === 'open' && (
+                          <div className="mt-2 pt-2 border-t border-border space-y-2">
+                            <textarea
+                              className="w-full bg-background border border-border rounded-md px-3 py-2 text-sm min-h-[60px]"
+                              placeholder="Enter resolution..."
+                              value={resolutionText}
+                              onChange={(e) => setResolutionText(e.target.value)}
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                onClick={() => resolveDispute(d.id, 'resolved')}
+                                disabled={actionLoading || !resolutionText.trim()}
+                              >
+                                Resolve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => resolveDispute(d.id, 'dismissed')}
+                                disabled={actionLoading || !resolutionText.trim()}
+                              >
+                                Dismiss
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Power Rankings Tab */}

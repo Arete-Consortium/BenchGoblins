@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from models.database import League, LeagueMembership
+from models.database import League, LeagueDispute, LeagueMembership, User
 from routes.auth import get_current_user
 from services.claude import claude_service
 from services.database import db_service
@@ -28,16 +28,31 @@ router = APIRouter(prefix="/commissioner", tags=["Commissioner"])
 # -------------------------------------------------------------------------
 
 
-async def require_commissioner(league_id: int, current_user: dict) -> League:
-    """Verify user is commissioner of this league. Raises 403 if not."""
-    async with db_service.session() as session:
-        result = await session.execute(
+async def require_commissioner(
+    league_id: int,
+    current_user: dict,
+    session=None,
+    allow_member: bool = False,
+) -> League:
+    """Verify user is commissioner of this league. Raises 403 if not.
+
+    If allow_member=True, any active member is allowed (used for dispute listing).
+    If a session is provided, uses it instead of creating a new one.
+    """
+
+    async def _check(s):
+        role_filter = (
+            LeagueMembership.role.in_(["commissioner", "member"])
+            if allow_member
+            else (LeagueMembership.role == "commissioner")
+        )
+        result = await s.execute(
             select(LeagueMembership)
             .options(selectinload(LeagueMembership.league))
             .where(
                 LeagueMembership.league_id == league_id,
                 LeagueMembership.user_id == current_user["user_id"],
-                LeagueMembership.role == "commissioner",
+                role_filter,
                 LeagueMembership.status == "active",
             )
         )
@@ -45,9 +60,17 @@ async def require_commissioner(league_id: int, current_user: dict) -> League:
         if not membership:
             raise HTTPException(
                 status_code=403,
-                detail="Commissioner access required",
+                detail="Commissioner access required"
+                if not allow_member
+                else "League membership required",
             )
         return membership.league
+
+    if session is not None:
+        return await _check(session)
+
+    async with db_service.session() as s:
+        return await _check(s)
 
 
 # -------------------------------------------------------------------------
@@ -350,4 +373,258 @@ async def get_league_activity(
             total_members=len(members),
             active_members=active_count,
             members=members,
+        )
+
+
+# -------------------------------------------------------------------------
+# Dispute Resolution
+# -------------------------------------------------------------------------
+
+
+class FileDisputeRequest(BaseModel):
+    """Request to file a new dispute."""
+
+    category: str = Field(
+        ...,
+        description="Dispute category: trade, roster, scoring, conduct, other",
+    )
+    subject: str = Field(..., max_length=255, description="Brief subject line")
+    description: str = Field(..., description="Detailed description of the dispute")
+    against_user_id: int | None = Field(
+        default=None, description="User ID of the opposing party (optional)"
+    )
+
+
+class ResolveDisputeRequest(BaseModel):
+    """Request to resolve or dismiss a dispute."""
+
+    status: str = Field(..., description="New status: resolved or dismissed")
+    resolution: str = Field(..., description="Resolution explanation")
+
+
+class DisputeResponse(BaseModel):
+    """Single dispute record."""
+
+    id: int
+    league_id: int
+    filed_by_user_id: int
+    filed_by_name: str | None = None
+    against_user_id: int | None = None
+    against_name: str | None = None
+    category: str
+    subject: str
+    description: str
+    status: str
+    resolution: str | None = None
+    resolved_by_name: str | None = None
+    resolved_at: str | None = None
+    created_at: str
+
+
+class DisputeListResponse(BaseModel):
+    """List of disputes with counts."""
+
+    league_id: int
+    total: int
+    open: int
+    resolved: int
+    disputes: list[DisputeResponse]
+
+
+@router.post(
+    "/leagues/{league_id}/disputes",
+    response_model=DisputeResponse,
+)
+async def file_dispute(
+    league_id: int,
+    request: FileDisputeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    File a new dispute in the league.
+
+    Any active league member can file a dispute. The commissioner
+    can then review and resolve it.
+    """
+    valid_categories = {"trade", "roster", "scoring", "conduct", "other"}
+    if request.category not in valid_categories:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category. Must be one of: {', '.join(valid_categories)}",
+        )
+
+    async with db_service.session() as session:
+        # Verify membership
+        member_result = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league_id,
+                LeagueMembership.user_id == current_user["user_id"],
+                LeagueMembership.status == "active",
+            )
+        )
+        if not member_result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Not an active member of this league")
+
+        dispute = LeagueDispute(
+            league_id=league_id,
+            filed_by_user_id=current_user["user_id"],
+            against_user_id=request.against_user_id,
+            category=request.category,
+            subject=request.subject,
+            description=request.description,
+        )
+        session.add(dispute)
+        await session.commit()
+        await session.refresh(dispute)
+
+        return DisputeResponse(
+            id=dispute.id,
+            league_id=dispute.league_id,
+            filed_by_user_id=dispute.filed_by_user_id,
+            filed_by_name=current_user.get("name"),
+            against_user_id=dispute.against_user_id,
+            category=dispute.category,
+            subject=dispute.subject,
+            description=dispute.description,
+            status=dispute.status,
+            created_at=dispute.created_at.isoformat(),
+        )
+
+
+@router.get(
+    "/leagues/{league_id}/disputes",
+    response_model=DisputeListResponse,
+)
+async def list_disputes(
+    league_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    List all disputes in the league.
+
+    Commissioner sees all disputes. Regular members see only their own.
+    """
+    async with db_service.session() as session:
+        league = await require_commissioner(league_id, current_user, session, allow_member=True)
+
+        is_commissioner = league.commissioner_user_id == current_user["user_id"]
+
+        query = select(LeagueDispute).where(LeagueDispute.league_id == league_id)
+        if not is_commissioner:
+            query = query.where(LeagueDispute.filed_by_user_id == current_user["user_id"])
+        query = query.order_by(LeagueDispute.created_at.desc())
+
+        result = await session.execute(query)
+        disputes = result.scalars().all()
+
+        # Fetch user names for display
+        user_ids = set()
+        for d in disputes:
+            user_ids.add(d.filed_by_user_id)
+            if d.against_user_id:
+                user_ids.add(d.against_user_id)
+            if d.resolved_by_user_id:
+                user_ids.add(d.resolved_by_user_id)
+
+        user_names: dict[int, str] = {}
+        if user_ids:
+            users_result = await session.execute(select(User).where(User.id.in_(user_ids)))
+            for u in users_result.scalars().all():
+                user_names[u.id] = u.name
+
+        dispute_responses = []
+        open_count = 0
+        resolved_count = 0
+
+        for d in disputes:
+            if d.status in ("open", "under_review"):
+                open_count += 1
+            elif d.status in ("resolved", "dismissed"):
+                resolved_count += 1
+
+            dispute_responses.append(
+                DisputeResponse(
+                    id=d.id,
+                    league_id=d.league_id,
+                    filed_by_user_id=d.filed_by_user_id,
+                    filed_by_name=user_names.get(d.filed_by_user_id),
+                    against_user_id=d.against_user_id,
+                    against_name=user_names.get(d.against_user_id) if d.against_user_id else None,
+                    category=d.category,
+                    subject=d.subject,
+                    description=d.description,
+                    status=d.status,
+                    resolution=d.resolution,
+                    resolved_by_name=user_names.get(d.resolved_by_user_id)
+                    if d.resolved_by_user_id
+                    else None,
+                    resolved_at=d.resolved_at.isoformat() if d.resolved_at else None,
+                    created_at=d.created_at.isoformat(),
+                )
+            )
+
+        return DisputeListResponse(
+            league_id=league_id,
+            total=len(disputes),
+            open=open_count,
+            resolved=resolved_count,
+            disputes=dispute_responses,
+        )
+
+
+@router.patch(
+    "/leagues/{league_id}/disputes/{dispute_id}",
+    response_model=DisputeResponse,
+)
+async def resolve_dispute(
+    league_id: int,
+    dispute_id: int,
+    request: ResolveDisputeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Resolve or dismiss a dispute. Commissioner only.
+    """
+    if request.status not in ("resolved", "dismissed"):
+        raise HTTPException(status_code=400, detail="Status must be 'resolved' or 'dismissed'")
+
+    async with db_service.session() as session:
+        await require_commissioner(league_id, current_user, session)
+
+        result = await session.execute(
+            select(LeagueDispute).where(
+                LeagueDispute.id == dispute_id,
+                LeagueDispute.league_id == league_id,
+            )
+        )
+        dispute = result.scalar_one_or_none()
+
+        if not dispute:
+            raise HTTPException(status_code=404, detail="Dispute not found")
+
+        if dispute.status in ("resolved", "dismissed"):
+            raise HTTPException(status_code=400, detail="Dispute is already closed")
+
+        dispute.status = request.status
+        dispute.resolution = request.resolution
+        dispute.resolved_by_user_id = current_user["user_id"]
+        dispute.resolved_at = datetime.now(UTC)
+
+        session.add(dispute)
+        await session.commit()
+        await session.refresh(dispute)
+
+        return DisputeResponse(
+            id=dispute.id,
+            league_id=dispute.league_id,
+            filed_by_user_id=dispute.filed_by_user_id,
+            against_user_id=dispute.against_user_id,
+            category=dispute.category,
+            subject=dispute.subject,
+            description=dispute.description,
+            status=dispute.status,
+            resolution=dispute.resolution,
+            resolved_by_name=current_user.get("name"),
+            resolved_at=dispute.resolved_at.isoformat() if dispute.resolved_at else None,
+            created_at=dispute.created_at.isoformat(),
         )

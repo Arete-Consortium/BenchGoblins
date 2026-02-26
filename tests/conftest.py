@@ -724,7 +724,6 @@ def espn_nhl_forward_stats():
     )
 
 
-
 @pytest.fixture
 def test_client():
     """FastAPI test client."""
