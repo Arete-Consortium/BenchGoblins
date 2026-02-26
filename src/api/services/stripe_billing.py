@@ -16,7 +16,7 @@ from typing import Any
 import stripe
 from sqlalchemy import select, update
 
-from models.database import User
+from models.database import League, LeagueMembership, User
 from services.database import db_service
 
 logger = logging.getLogger(__name__)
@@ -40,12 +40,53 @@ def is_configured() -> bool:
     return bool(stripe.api_key)
 
 
+async def is_league_pro(user_id: int) -> bool:
+    """Check if user inherits Pro via a commissioner's league subscription.
+
+    Returns True if the user is an active member of any league whose
+    commissioner has an active pro_league subscription (checked via
+    the commissioner's subscription_tier and stripe_subscription_id).
+    """
+    if not db_service.is_configured:
+        return False
+
+    async with db_service.session() as session:
+        # Find leagues where this user is an active member
+        result = await session.execute(
+            select(League)
+            .join(LeagueMembership, LeagueMembership.league_id == League.id)
+            .where(
+                LeagueMembership.user_id == user_id,
+                LeagueMembership.status == "active",
+            )
+        )
+        leagues = result.scalars().all()
+
+        for league in leagues:
+            if not league.commissioner_user_id:
+                continue
+
+            # Check if commissioner is a Pro subscriber
+            commish_result = await session.execute(
+                select(User).where(User.id == league.commissioner_user_id)
+            )
+            commissioner = commish_result.scalar_one_or_none()
+            if commissioner and commissioner.subscription_tier == "pro":
+                # Commissioner has Pro — check if they also have a pro_league subscription
+                # For now, having Pro is sufficient (the pro_league price is an add-on)
+                if commissioner.stripe_subscription_id:
+                    return True
+
+    return False
+
+
 async def create_checkout_session(
     user_id: int,
     user_email: str,
     price_id: str,
     success_url: str,
     cancel_url: str,
+    extra_metadata: dict[str, str] | None = None,
 ) -> str:
     """Create a Stripe Checkout session for subscription purchase.
 
@@ -55,6 +96,7 @@ async def create_checkout_session(
         price_id: Stripe Price ID for the subscription
         success_url: URL to redirect to on successful checkout
         cancel_url: URL to redirect to on cancelled checkout
+        extra_metadata: Additional metadata (e.g. league_id for pro_league)
 
     Returns:
         Checkout session URL for redirecting the user
@@ -73,6 +115,10 @@ async def create_checkout_session(
         # Check if user already has a Stripe customer ID
         customer_id = await _get_or_create_customer(user_id, user_email)
 
+        metadata = {"user_id": str(user_id)}
+        if extra_metadata:
+            metadata.update(extra_metadata)
+
         session = stripe.checkout.Session.create(
             customer=customer_id,
             mode="subscription",
@@ -84,13 +130,9 @@ async def create_checkout_session(
             ],
             success_url=success_url,
             cancel_url=cancel_url,
-            metadata={
-                "user_id": str(user_id),
-            },
+            metadata=metadata,
             subscription_data={
-                "metadata": {
-                    "user_id": str(user_id),
-                }
+                "metadata": metadata,
             },
         )
 

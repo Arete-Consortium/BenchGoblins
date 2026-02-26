@@ -673,6 +673,109 @@ class APIClient {
     return response.data;
   }
 
+  // Managed league endpoints
+  async getManagedLeagues(): Promise<{
+    id: number;
+    external_league_id: string;
+    platform: string;
+    name: string;
+    sport: string;
+    season: string;
+    role: string;
+    member_count: number;
+    has_pro: boolean;
+    invite_code: string | null;
+  }[]> {
+    const response = await this.client.get('/leagues/managed');
+    return response.data;
+  }
+
+  async getManagedLeague(leagueId: number): Promise<{
+    id: number;
+    external_league_id: string;
+    platform: string;
+    name: string;
+    sport: string;
+    season: string;
+    role: string;
+    member_count: number;
+    has_pro: boolean;
+    invite_code: string | null;
+  }> {
+    const response = await this.client.get(`/leagues/managed/${leagueId}`);
+    return response.data;
+  }
+
+  async getLeagueMembers(leagueId: number): Promise<{
+    user_id: number;
+    email: string;
+    name: string;
+    role: string;
+    external_team_id: string | null;
+    status: string;
+    joined_at: string;
+  }[]> {
+    const response = await this.client.get(`/leagues/managed/${leagueId}/members`);
+    return response.data;
+  }
+
+  async generateInvite(leagueId: number): Promise<{ invite_code: string; invite_url: string }> {
+    const response = await this.client.post(`/leagues/managed/${leagueId}/invite`);
+    return response.data;
+  }
+
+  async joinLeagueByInvite(inviteCode: string): Promise<{ joined: boolean; league_id: number; role?: string; reason?: string }> {
+    const response = await this.client.post(`/leagues/join/${inviteCode}`);
+    return response.data;
+  }
+
+  async removeLeagueMember(leagueId: number, userId: number): Promise<{ removed: boolean }> {
+    const response = await this.client.delete(`/leagues/managed/${leagueId}/members/${userId}`);
+    return response.data;
+  }
+
+  // Commissioner AI tools
+  async getPowerRankings(leagueId: number): Promise<{
+    league_id: number;
+    league_name: string;
+    rankings: { rank: number; owner_id: string; display_name: string | null; roster_size: number; strength_score: number }[];
+    generated_at: string;
+  }> {
+    const response = await this.client.get(`/commissioner/leagues/${leagueId}/power-rankings`);
+    return response.data;
+  }
+
+  async checkTradeFairness(leagueId: number, teamAPlayers: string[], teamBPlayers: string[]): Promise<{
+    fairness_score: number;
+    verdict: string;
+    reasoning: string;
+    source: string;
+  }> {
+    const response = await this.client.post(`/commissioner/leagues/${leagueId}/trade-check`, {
+      team_a_players: teamAPlayers,
+      team_b_players: teamBPlayers,
+    });
+    return response.data;
+  }
+
+  async getRosterAnalysis(leagueId: number): Promise<{
+    league_id: number;
+    teams: { owner_id: string; display_name: string | null; roster_size: number; starters_count: number; strengths: string[]; weaknesses: string[] }[];
+  }> {
+    const response = await this.client.get(`/commissioner/leagues/${leagueId}/roster-analysis`);
+    return response.data;
+  }
+
+  async getLeagueActivity(leagueId: number): Promise<{
+    league_id: number;
+    total_members: number;
+    active_members: number;
+    members: { user_id: number; name: string; email: string; queries_this_week: number; last_active: string | null; is_active: boolean }[];
+  }> {
+    const response = await this.client.get(`/commissioner/leagues/${leagueId}/activity`);
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

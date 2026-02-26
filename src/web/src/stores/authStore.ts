@@ -66,6 +66,10 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () => {
         if (typeof window !== 'undefined') {
           localStorage.removeItem(AUTH_TOKEN_KEY);
+          // Clear any auth cookies
+          document.cookie = 'benchgoblin_jwt=; path=/; max-age=0; secure; samesite=lax';
+          document.cookie = 'benchgoblin_user=; path=/; max-age=0; secure; samesite=lax';
+          document.cookie = 'benchgoblin_session=; path=/; max-age=0; secure; samesite=lax';
         }
         set({
           user: null,
@@ -157,34 +161,41 @@ export const useAuthStore = create<AuthState>()(
         onboardingComplete: state.onboardingComplete,
       }),
       onRehydrateStorage: () => (state) => {
-        // First check for cookie-based session (OAuth workaround)
-        const userCookie = getCookie('benchgoblin_user');
-        if (userCookie && state) {
-          try {
-            const cookieUser = JSON.parse(userCookie);
-            // Create a user object from cookie data
-            state.user = {
-              id: 0, // No ID in cookie session
-              email: cookieUser.email || '',
-              name: cookieUser.name || 'User',
-              picture_url: cookieUser.picture,
-              subscription_tier: 'free', // Default to free for cookie sessions
-              queries_today: 0,
-              queries_limit: 5,
-            };
-            state.isAuthenticated = true;
-            state.isLoading = false;
-            return; // Don't try to refresh from backend
-          } catch (e) {
-            console.error('Failed to parse user cookie:', e);
+        if (!state) return;
+
+        // Check for JWT cookie from OAuth redirect flow
+        const jwtCookie = getCookie('benchgoblin_jwt');
+        if (jwtCookie) {
+          // Migrate JWT from cookie to localStorage and clear the cookie
+          state.accessToken = jwtCookie;
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(AUTH_TOKEN_KEY, jwtCookie);
+            // Clear the cookie now that we've consumed it
+            document.cookie = 'benchgoblin_jwt=; path=/; max-age=0; secure; samesite=lax';
+            document.cookie = 'benchgoblin_user=; path=/; max-age=0; secure; samesite=lax';
           }
+          api.setAuthToken(jwtCookie);
+          state.refreshUser().then(() => {
+            useLeagueStore.getState().restoreFromBackend();
+          });
+          return;
         }
 
-        // Fall back to token-based auth with backend
-        if (state?.accessToken) {
-          // Set the token in API client
+        // Check for user cookie without JWT (legacy — prompt re-login)
+        const userCookie = getCookie('benchgoblin_user');
+        if (userCookie && !state.accessToken) {
+          // Cookie-only session has no JWT — clear stale cookies
+          if (typeof window !== 'undefined') {
+            document.cookie = 'benchgoblin_user=; path=/; max-age=0; secure; samesite=lax';
+            document.cookie = 'benchgoblin_session=; path=/; max-age=0; secure; samesite=lax';
+          }
+          // Don't set isAuthenticated — user needs to re-login
+          return;
+        }
+
+        // Token-based auth from localStorage
+        if (state.accessToken) {
           api.setAuthToken(state.accessToken);
-          // Refresh user data, then restore Sleeper connection
           state.refreshUser().then(() => {
             useLeagueStore.getState().restoreFromBackend();
           });

@@ -5,13 +5,15 @@ Handles Sleeper league connection, roster retrieval, and league settings.
 Sleeper API is public — no OAuth required, just a username.
 """
 
+import secrets
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
-from models.database import User
+from models.database import League, LeagueMembership, User
 from routes.auth import get_current_user
 from services.database import db_service
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
@@ -298,6 +300,21 @@ async def sync_sleeper(
         user.sleeper_synced_at = now
         session.add(user)
         await session.commit()
+
+    # Auto-create managed league + membership
+    if db_service.is_configured:
+        try:
+            await _ensure_league_on_sync(
+                external_league_id=request.league_id,
+                platform="sleeper",
+                season=request.season,
+                league_name=league.name,
+                sport=request.sport,
+                user_id=current_user["user_id"],
+                external_team_id=sleeper_user.user_id,
+            )
+        except Exception:
+            pass  # Non-blocking — managed league is a nice-to-have
 
     return SyncResponse(
         sleeper_username=sleeper_user.username,
@@ -650,3 +667,373 @@ async def disconnect_yahoo_profile(
         await session.commit()
 
     return {"disconnected": True}
+
+
+# -------------------------------------------------------------------------
+# Managed League Models
+# -------------------------------------------------------------------------
+
+
+class ManagedLeagueResponse(BaseModel):
+    """Managed league summary."""
+
+    id: int
+    external_league_id: str
+    platform: str
+    name: str
+    sport: str
+    season: str
+    role: str
+    member_count: int
+    has_pro: bool = False
+    invite_code: str | None = None
+
+
+class MemberResponse(BaseModel):
+    """League member info."""
+
+    user_id: int
+    email: str
+    name: str
+    role: str
+    external_team_id: str | None = None
+    status: str
+    joined_at: str
+
+
+class InviteResponse(BaseModel):
+    """Invite code response."""
+
+    invite_code: str
+    invite_url: str
+
+
+# -------------------------------------------------------------------------
+# Managed League Endpoints
+# -------------------------------------------------------------------------
+
+
+async def _ensure_league_on_sync(
+    external_league_id: str,
+    platform: str,
+    season: str,
+    league_name: str,
+    sport: str,
+    user_id: int,
+    external_team_id: str | None = None,
+) -> League:
+    """Find or create a managed league row, then add user membership.
+
+    First user to connect becomes commissioner; subsequent users become members.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(
+            select(League).where(
+                League.external_league_id == external_league_id,
+                League.platform == platform,
+                League.season == season,
+            )
+        )
+        league = result.scalar_one_or_none()
+
+        if not league:
+            league = League(
+                external_league_id=external_league_id,
+                platform=platform,
+                name=league_name,
+                sport=sport,
+                season=season,
+                commissioner_user_id=user_id,
+                invite_code=secrets.token_hex(16),
+            )
+            session.add(league)
+            await session.flush()
+
+            membership = LeagueMembership(
+                league_id=league.id,
+                user_id=user_id,
+                role="commissioner",
+                external_team_id=external_team_id,
+                status="active",
+            )
+            session.add(membership)
+            await session.commit()
+            await session.refresh(league)
+            return league
+
+        # League exists — add membership if not already present
+        existing = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league.id,
+                LeagueMembership.user_id == user_id,
+            )
+        )
+        membership = existing.scalar_one_or_none()
+
+        if not membership:
+            membership = LeagueMembership(
+                league_id=league.id,
+                user_id=user_id,
+                role="member",
+                external_team_id=external_team_id,
+                status="active",
+            )
+            session.add(membership)
+            await session.commit()
+        elif membership.status == "removed":
+            membership.status = "active"
+            membership.external_team_id = external_team_id
+            await session.commit()
+
+        return league
+
+
+@router.get("/managed", response_model=list[ManagedLeagueResponse])
+async def get_my_managed_leagues(
+    current_user: dict = Depends(get_current_user),
+):
+    """List all managed leagues the user belongs to (with role)."""
+    async with db_service.session() as session:
+        result = await session.execute(
+            select(LeagueMembership)
+            .options(selectinload(LeagueMembership.league))
+            .where(
+                LeagueMembership.user_id == current_user["user_id"],
+                LeagueMembership.status == "active",
+            )
+        )
+        memberships = result.scalars().all()
+
+        leagues = []
+        for m in memberships:
+            league = m.league
+            # Count active members
+            count_result = await session.execute(
+                select(LeagueMembership).where(
+                    LeagueMembership.league_id == league.id,
+                    LeagueMembership.status == "active",
+                )
+            )
+            member_count = len(count_result.scalars().all())
+
+            leagues.append(
+                ManagedLeagueResponse(
+                    id=league.id,
+                    external_league_id=league.external_league_id,
+                    platform=league.platform,
+                    name=league.name,
+                    sport=league.sport,
+                    season=league.season,
+                    role=m.role,
+                    member_count=member_count,
+                    invite_code=league.invite_code if m.role == "commissioner" else None,
+                )
+            )
+
+        return leagues
+
+
+@router.get("/managed/{league_id}", response_model=ManagedLeagueResponse)
+async def get_managed_league(
+    league_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get managed league details (must be a member)."""
+    async with db_service.session() as session:
+        result = await session.execute(
+            select(LeagueMembership)
+            .options(selectinload(LeagueMembership.league))
+            .where(
+                LeagueMembership.league_id == league_id,
+                LeagueMembership.user_id == current_user["user_id"],
+                LeagueMembership.status == "active",
+            )
+        )
+        membership = result.scalar_one_or_none()
+
+        if not membership:
+            raise HTTPException(status_code=404, detail="League not found or not a member")
+
+        league = membership.league
+
+        count_result = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league.id,
+                LeagueMembership.status == "active",
+            )
+        )
+        member_count = len(count_result.scalars().all())
+
+        return ManagedLeagueResponse(
+            id=league.id,
+            external_league_id=league.external_league_id,
+            platform=league.platform,
+            name=league.name,
+            sport=league.sport,
+            season=league.season,
+            role=membership.role,
+            member_count=member_count,
+            invite_code=league.invite_code if membership.role == "commissioner" else None,
+        )
+
+
+@router.get("/managed/{league_id}/members", response_model=list[MemberResponse])
+async def get_league_members(
+    league_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Get league member list. Commissioner sees all; members see active only."""
+    async with db_service.session() as session:
+        # Verify caller is a member
+        caller_result = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league_id,
+                LeagueMembership.user_id == current_user["user_id"],
+                LeagueMembership.status == "active",
+            )
+        )
+        caller = caller_result.scalar_one_or_none()
+        if not caller:
+            raise HTTPException(status_code=403, detail="Not a member of this league")
+
+        query = (
+            select(LeagueMembership)
+            .options(selectinload(LeagueMembership.user))
+            .where(LeagueMembership.league_id == league_id)
+        )
+        if caller.role != "commissioner":
+            query = query.where(LeagueMembership.status == "active")
+
+        result = await session.execute(query)
+        members = result.scalars().all()
+
+        return [
+            MemberResponse(
+                user_id=m.user_id,
+                email=m.user.email if m.user else "",
+                name=m.user.name if m.user else "",
+                role=m.role,
+                external_team_id=m.external_team_id,
+                status=m.status,
+                joined_at=m.joined_at.isoformat() if m.joined_at else "",
+            )
+            for m in members
+        ]
+
+
+@router.post("/managed/{league_id}/invite", response_model=InviteResponse)
+async def generate_invite(
+    league_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Generate or regenerate invite code (commissioner only)."""
+    async with db_service.session() as session:
+        result = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league_id,
+                LeagueMembership.user_id == current_user["user_id"],
+                LeagueMembership.role == "commissioner",
+                LeagueMembership.status == "active",
+            )
+        )
+        if not result.scalar_one_or_none():
+            raise HTTPException(
+                status_code=403, detail="Only the commissioner can generate invites"
+            )
+
+        league_result = await session.execute(select(League).where(League.id == league_id))
+        league = league_result.scalar_one_or_none()
+        if not league:
+            raise HTTPException(status_code=404, detail="League not found")
+
+        league.invite_code = secrets.token_hex(16)
+        session.add(league)
+        await session.commit()
+
+        return InviteResponse(
+            invite_code=league.invite_code,
+            invite_url=f"https://benchgoblins.com/leagues/join/{league.invite_code}",
+        )
+
+
+@router.post("/join/{invite_code}")
+async def join_league(
+    invite_code: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Join a league via invite code."""
+    async with db_service.session() as session:
+        result = await session.execute(select(League).where(League.invite_code == invite_code))
+        league = result.scalar_one_or_none()
+        if not league:
+            raise HTTPException(status_code=404, detail="Invalid invite code")
+
+        # Check if already a member
+        existing = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league.id,
+                LeagueMembership.user_id == current_user["user_id"],
+            )
+        )
+        membership = existing.scalar_one_or_none()
+
+        if membership:
+            if membership.status == "active":
+                return {"joined": False, "reason": "Already a member", "league_id": league.id}
+            # Reactivate removed membership
+            membership.status = "active"
+            membership.joined_at = datetime.now(UTC)
+            await session.commit()
+            return {"joined": True, "league_id": league.id, "role": "member"}
+
+        membership = LeagueMembership(
+            league_id=league.id,
+            user_id=current_user["user_id"],
+            role="member",
+            status="active",
+        )
+        session.add(membership)
+        await session.commit()
+
+        return {"joined": True, "league_id": league.id, "role": "member"}
+
+
+@router.delete("/managed/{league_id}/members/{user_id}")
+async def remove_member(
+    league_id: int,
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Remove a member from the league (commissioner only)."""
+    if user_id == current_user["user_id"]:
+        raise HTTPException(status_code=400, detail="Cannot remove yourself")
+
+    async with db_service.session() as session:
+        # Verify caller is commissioner
+        caller_result = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league_id,
+                LeagueMembership.user_id == current_user["user_id"],
+                LeagueMembership.role == "commissioner",
+                LeagueMembership.status == "active",
+            )
+        )
+        if not caller_result.scalar_one_or_none():
+            raise HTTPException(status_code=403, detail="Only the commissioner can remove members")
+
+        # Find and remove target member
+        target_result = await session.execute(
+            select(LeagueMembership).where(
+                LeagueMembership.league_id == league_id,
+                LeagueMembership.user_id == user_id,
+                LeagueMembership.status == "active",
+            )
+        )
+        target = target_result.scalar_one_or_none()
+        if not target:
+            raise HTTPException(status_code=404, detail="Member not found")
+
+        target.status = "removed"
+        await session.commit()
+
+        return {"removed": True, "user_id": user_id}

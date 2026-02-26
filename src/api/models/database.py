@@ -643,6 +643,85 @@ class DeviceToken(Base):
     )
 
 
+class League(Base):
+    """Managed league for commissioner/manager features."""
+
+    __tablename__ = "leagues"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    external_league_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    platform: Mapped[str] = mapped_column(String(20), nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    sport: Mapped[str] = mapped_column(String(20), nullable=False)
+    season: Mapped[str] = mapped_column(String(10), nullable=False)
+    commissioner_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    invite_code: Mapped[str | None] = mapped_column(String(32), unique=True, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=func.now(), onupdate=func.now()
+    )
+
+    # Relationships
+    commissioner: Mapped[Optional["User"]] = relationship(foreign_keys=[commissioner_user_id])
+    memberships: Mapped[list["LeagueMembership"]] = relationship(
+        back_populates="league", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("external_league_id", "platform", "season", name="uq_leagues_external"),
+        CheckConstraint("platform IN ('sleeper', 'espn', 'yahoo')", name="check_league_platform"),
+        CheckConstraint(
+            "sport IN ('nfl', 'nba', 'mlb', 'nhl', 'soccer')", name="check_league_sport"
+        ),
+        Index("idx_leagues_commissioner", "commissioner_user_id"),
+        Index(
+            "idx_leagues_invite_code",
+            "invite_code",
+            postgresql_where=text("invite_code IS NOT NULL"),
+        ),
+        Index("idx_leagues_platform_season", "platform", "season"),
+    )
+
+
+class LeagueMembership(Base):
+    """User membership in a managed league."""
+
+    __tablename__ = "league_memberships"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    league_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("leagues.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role: Mapped[str] = mapped_column(String(20), nullable=False, default="member")
+    external_team_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="active")
+    joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+
+    # Relationships
+    league: Mapped["League"] = relationship(back_populates="memberships")
+    user: Mapped["User"] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint("league_id", "user_id", name="uq_league_memberships"),
+        CheckConstraint("role IN ('commissioner', 'member')", name="check_membership_role"),
+        CheckConstraint(
+            "status IN ('active', 'invited', 'removed')", name="check_membership_status"
+        ),
+        Index("idx_league_memberships_league", "league_id"),
+        Index("idx_league_memberships_user", "user_id"),
+        Index(
+            "idx_league_memberships_status",
+            "status",
+            postgresql_where=text("status = 'active'"),
+        ),
+    )
+
+
 class NotificationLog(Base):
     """Log of sent notifications for dedup and cooldown tracking."""
 

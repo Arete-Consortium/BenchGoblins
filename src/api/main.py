@@ -36,6 +36,7 @@ from models.database import Session as SessionModel
 from monitoring import MetricsMiddleware, update_engagement_metrics
 from routes.auth import get_current_user, get_optional_user, require_admin_key
 from routes.auth import router as auth_router
+from routes.commissioner import router as commissioner_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
@@ -303,6 +304,9 @@ app.include_router(newsletter_router)
 
 # Push notification routes
 app.include_router(notifications_router)
+
+# Commissioner AI tools
+app.include_router(commissioner_router)
 
 
 # ---------------------------------------------------------------------------
@@ -707,10 +711,16 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
         if not user:
             return True, 0, FREE_TIER_WEEKLY_LIMIT
 
+        # Check direct Pro OR league-inherited Pro
+        is_pro = user.subscription_tier == "pro"
+        if not is_pro:
+            try:
+                is_pro = await stripe_billing.is_league_pro(user_id)
+            except Exception:
+                pass  # Graceful degradation — default to direct tier
+
         # Determine weekly limit based on tier
-        weekly_limit = (
-            PRO_TIER_WEEKLY_LIMIT if user.subscription_tier == "pro" else FREE_TIER_WEEKLY_LIMIT
-        )
+        weekly_limit = PRO_TIER_WEEKLY_LIMIT if is_pro else FREE_TIER_WEEKLY_LIMIT
 
         # Check if counter needs reset (new week — 7 days since last reset)
         now = datetime.now(UTC)
@@ -720,7 +730,7 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
             user.queries_reset_at = now
 
         # Pro tier has unlimited queries
-        if user.subscription_tier == "pro":
+        if is_pro:
             user.queries_today += 1
             session.add(user)
             await session.commit()
@@ -3670,6 +3680,9 @@ class CheckoutRequest(BaseModel):
     cancel_url: str = Field(
         ..., max_length=500, description="URL to redirect to if checkout is cancelled"
     )
+    league_id: int | None = Field(
+        default=None, description="League ID for pro_league checkout"
+    )
 
 
 class CheckoutResponse(BaseModel):
@@ -3743,12 +3756,20 @@ async def create_checkout(
     user_email = current_user["email"]
 
     try:
+        extra_metadata = None
+        if request.league_id is not None:
+            extra_metadata = {
+                "league_id": str(request.league_id),
+                "plan_type": "pro_league",
+            }
+
         checkout_url = await stripe_billing.create_checkout_session(
             user_id=user_id,
             user_email=user_email,
             price_id=request.price_id,
             success_url=request.success_url,
             cancel_url=request.cancel_url,
+            extra_metadata=extra_metadata,
         )
         return CheckoutResponse(checkout_url=checkout_url)
     except ValueError as e:
@@ -3845,8 +3866,16 @@ async def get_billing_status(
     if user.queries_reset_at is None or (now - user.queries_reset_at) >= timedelta(days=7):
         queries_today = 0
 
+    # Check direct Pro OR league-inherited Pro
+    is_pro = user.subscription_tier == "pro"
+    if not is_pro:
+        try:
+            is_pro = await stripe_billing.is_league_pro(user.id)
+        except Exception:
+            pass
+
     # Determine limits
-    if user.subscription_tier == "pro":
+    if is_pro:
         weekly_limit = -1  # Unlimited
         queries_remaining = None
     else:

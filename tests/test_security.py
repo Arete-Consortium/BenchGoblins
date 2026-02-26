@@ -97,6 +97,7 @@ class TestBillingAuthRequired:
                         response = test_client.post(
                             "/billing/create-checkout",
                             json={
+                                "price_id": "price_test_123",
                                 "success_url": "https://example.com/success",
                                 "cancel_url": "https://example.com/cancel",
                             },

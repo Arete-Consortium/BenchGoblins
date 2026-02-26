@@ -4,6 +4,9 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 const GOOGLE_REDIRECT_URI = `${APP_URL}/api/auth/callback`;
+const API_BASE_URL = process.env.NODE_ENV === 'production'
+  ? 'https://backend.benchgoblins.com'
+  : (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000');
 
 interface GoogleTokenResponse {
   access_token: string;
@@ -81,38 +84,46 @@ export async function GET(request: NextRequest) {
 
     const userInfo: GoogleUserInfo = await userResponse.json();
 
+    // Authenticate with our backend to get a JWT
+    const backendResponse = await fetch(`${API_BASE_URL}/auth/google`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id_token: tokens.id_token }),
+    });
+
+    if (!backendResponse.ok) {
+      const errText = await backendResponse.text();
+      console.error('Backend auth failed:', backendResponse.status, errText);
+      return NextResponse.redirect(`${APP_URL}/auth/login?error=backend_auth`);
+    }
+
+    const authData = await backendResponse.json();
+    const { access_token, user } = authData;
+
     // Create response with redirect to onboarding (skips to /ask if already completed)
     const response = NextResponse.redirect(`${APP_URL}/onboarding`);
 
-    // Store user info directly in cookies (temporary workaround while DB is being fixed)
-    // In production, this should create a session in the backend
-    const sessionData = {
-      user_id: userInfo.sub,
-      email: userInfo.email,
-      name: userInfo.name,
-      picture: userInfo.picture,
-      exp: Date.now() + (30 * 24 * 60 * 60 * 1000), // 30 days
-    };
-
-    // Set session data in httpOnly cookie (URL encoded for safety)
-    response.cookies.set('benchgoblin_session', encodeURIComponent(JSON.stringify(sessionData)), {
-      httpOnly: true,
-      secure: true, // Always secure on Vercel
+    // Store JWT in a JS-readable cookie so the auth store can pick it up
+    response.cookies.set('benchgoblin_jwt', access_token, {
+      httpOnly: false,
+      secure: true,
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60, // 30 days
+      maxAge: 7 * 24 * 60 * 60, // 7 days (matches JWT expiry)
       path: '/',
     });
 
-    // Set a non-httpOnly cookie for client-side to know user is logged in
+    // Store user info in a JS-readable cookie for quick hydration
     response.cookies.set('benchgoblin_user', encodeURIComponent(JSON.stringify({
-      name: userInfo.name,
-      email: userInfo.email,
-      picture: userInfo.picture,
+      id: user.id,
+      name: user.name || userInfo.name,
+      email: user.email || userInfo.email,
+      picture: user.picture_url || userInfo.picture,
+      subscription_tier: user.subscription_tier || 'free',
     })), {
       httpOnly: false,
-      secure: true, // Always secure on Vercel
+      secure: true,
       sameSite: 'lax',
-      maxAge: 30 * 24 * 60 * 60,
+      maxAge: 7 * 24 * 60 * 60,
       path: '/',
     });
 
