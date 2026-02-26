@@ -90,6 +90,9 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
       const sportLeagues = state.leaguesBySport[sport] || [];
       if (sportLeagues.length > 0) {
         setStep('leagues');
+      } else {
+        // Connected but no leagues for this sport — still advance to show empty state
+        setStep('leagues');
       }
     }
   };
@@ -331,12 +334,33 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
               </DialogDescription>
             </DialogHeader>
 
+            {/* Connected user confirmation */}
+            {connection && (
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                {connection.avatar && (
+                  <img
+                    src={`https://sleepercdn.com/avatars/thumbs/${connection.avatar}`}
+                    alt=""
+                    className="w-8 h-8 rounded-full"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-green-400 truncate">
+                    Connected as {connection.displayName}
+                  </p>
+                  <p className="text-xs text-dark-400">
+                    ID: {connection.sleeperUserId}
+                  </p>
+                </div>
+              </div>
+            )}
+
             {leagues.length === 0 ? (
               <div className="text-center py-6">
                 <p className="text-dark-400 text-sm">
                   No {SPORT_NAMES[sport]} leagues found for {connection?.sleeperUsername}.
                 </p>
-                <p className="text-dark-500 text-xs mt-1">Try selecting a different sport.</p>
+                <p className="text-dark-500 text-xs mt-1">Try selecting a different sport or check the season.</p>
               </div>
             ) : (
               <div className="space-y-2">
