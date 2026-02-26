@@ -52,6 +52,42 @@ export default function SettingsPage() {
   const darkMode = theme === 'dark';
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
 
+  // Billing status
+  const [billingTier, setBillingTier] = useState<string>('free');
+  const [billingStatus, setBillingStatus] = useState<string>('none');
+  const [renewalDate, setRenewalDate] = useState<string | null>(null);
+  const [cancelAtPeriodEnd, setCancelAtPeriodEnd] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
+
+  const fetchBillingStatus = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const data = await api.getBillingStatus();
+      setBillingTier(data.tier);
+      setBillingStatus(data.status);
+      if (data.current_period_end) {
+        setRenewalDate(new Date(data.current_period_end).toLocaleDateString());
+      }
+      setCancelAtPeriodEnd(data.cancel_at_period_end ?? false);
+    } catch {
+      // Billing endpoint may not be configured
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    fetchBillingStatus();
+  }, [fetchBillingStatus]);
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const { portal_url } = await api.createPortalSession();
+      window.location.href = portal_url;
+    } catch {
+      setPortalLoading(false);
+    }
+  };
+
   // Notification preferences
   const [notifPrefs, setNotifPrefs] = useState({
     injury_alerts: true,
@@ -397,20 +433,51 @@ export default function SettingsPage() {
             <SettingsSection title="Subscription">
               <div className="flex items-center justify-between p-4 bg-dark-700/50 rounded-lg mb-4">
                 <div>
-                  <div className="font-medium">Free Tier</div>
-                  <div className="text-sm text-dark-400">5 queries per week, all sports</div>
+                  <div className="font-medium">
+                    {billingTier === 'pro' ? 'Pro Plan' : 'Free Tier'}
+                  </div>
+                  <div className="text-sm text-dark-400">
+                    {billingTier === 'pro' ? 'Unlimited queries, all sports' : '5 queries per week, all sports'}
+                  </div>
+                  {billingTier === 'pro' && renewalDate && (
+                    <div className="text-xs text-dark-500 mt-1">
+                      {cancelAtPeriodEnd ? 'Cancels' : 'Renews'} {renewalDate}
+                    </div>
+                  )}
                 </div>
-                <span className="px-3 py-1 rounded-full bg-dark-600 text-dark-300 text-sm">
-                  Current Plan
+                <span className={cn(
+                  'px-3 py-1 rounded-full text-sm',
+                  billingTier === 'pro'
+                    ? 'bg-primary-600/20 text-primary-400'
+                    : 'bg-dark-600 text-dark-300'
+                )}>
+                  {billingTier === 'pro' ? 'Active' : 'Current Plan'}
                 </span>
               </div>
-              <button
-                onClick={() => router.push('/billing')}
-                className="w-full py-3 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
-              >
-                <CreditCard className="w-5 h-5" />
-                Upgrade to Pro
-              </button>
+              {billingTier === 'pro' ? (
+                <button
+                  onClick={handleManageSubscription}
+                  disabled={portalLoading}
+                  className="w-full py-3 rounded-lg border border-dark-600 text-dark-200 font-medium hover:bg-dark-700/50 transition-all flex items-center justify-center gap-2"
+                >
+                  {portalLoading ? (
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                  ) : (
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Manage Subscription
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={() => router.push('/billing')}
+                  className="w-full py-3 rounded-lg bg-primary-600 text-white font-medium hover:bg-primary-500 transition-all flex items-center justify-center gap-2"
+                >
+                  <CreditCard className="w-5 h-5" />
+                  Upgrade to Pro
+                </button>
+              )}
             </SettingsSection>
 
             {/* Data & Privacy */}

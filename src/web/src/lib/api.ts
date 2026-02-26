@@ -422,11 +422,14 @@ class APIClient {
   }
 
   async getBillingStatus(): Promise<{
-    subscription_tier: string;
-    stripe_customer_id: string | null;
-    stripe_subscription_id: string | null;
+    tier: string;
+    status: string;
     queries_today: number;
-    queries_limit: number;
+    weekly_limit: number;
+    queries_remaining: number | null;
+    subscription_id?: string;
+    current_period_end?: string;
+    cancel_at_period_end?: boolean;
   }> {
     const response = await this.client.get('/billing/status');
     return response.data;
