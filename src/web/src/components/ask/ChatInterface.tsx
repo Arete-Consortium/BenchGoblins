@@ -8,6 +8,7 @@ import { RiskModeSelector } from '@/components/RiskModeSelector';
 import { MessageBubble } from '@/components/MessageBubble';
 import { ChatInput } from '@/components/ChatInput';
 import { StreamingMessage } from './StreamingMessage';
+import useAuthStore from '@/stores/authStore';
 import api from '@/lib/api';
 import { generateId } from '@/lib/utils';
 import type { Message, DecisionResponse } from '@/types';
@@ -105,13 +106,20 @@ export function ChatInterface({ useStreaming = true }: ChatInterfaceProps) {
         messages: [...state.messages, assistantMessage],
         isLoading: false,
       }));
+      // Refresh user data to update query counter in header
+      useAuthStore.getState().refreshUser();
     } catch (error) {
       console.error('Streaming error:', error);
+
+      const errMsg = error instanceof Error ? error.message : 'Unknown error';
+      const isQuotaExceeded = errMsg.includes('query limit') || errMsg.includes('QUOTA_EXCEEDED');
 
       const errorMessage: Message = {
         id: generateId(),
         role: 'assistant',
-        content: 'Sorry, I encountered an error processing your request. Please try again.',
+        content: isQuotaExceeded
+          ? 'You\'ve reached your weekly question limit (5 questions). Upgrade to Pro for unlimited questions!'
+          : 'Sorry, I encountered an error processing your request. Please try again.',
         timestamp: new Date(),
       };
 
@@ -119,6 +127,9 @@ export function ChatInterface({ useStreaming = true }: ChatInterfaceProps) {
         messages: [...state.messages, errorMessage],
         isLoading: false,
       }));
+
+      // Refresh user data on quota errors too
+      useAuthStore.getState().refreshUser();
     } finally {
       setIsStreamingActive(false);
       setStreamingContent('');

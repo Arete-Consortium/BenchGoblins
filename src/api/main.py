@@ -787,6 +787,9 @@ PRO_TIER_WEEKLY_LIMIT = -1  # Unlimited
 async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int]:
     """Check if user can make a query and increment counter.
 
+    Uses SELECT FOR UPDATE to prevent race conditions where concurrent
+    requests could bypass the free-tier limit.
+
     Returns:
         Tuple of (allowed, queries_this_period, weekly_limit)
     """
@@ -794,7 +797,8 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
         return True, 0, FREE_TIER_WEEKLY_LIMIT
 
     async with db_service.session() as session:
-        result = await session.execute(select(User).where(User.id == user_id))
+        # Lock the row to prevent concurrent requests from reading stale counts
+        result = await session.execute(select(User).where(User.id == user_id).with_for_update())
         user = result.scalar_one_or_none()
 
         if not user:
@@ -813,7 +817,12 @@ async def _check_and_increment_query_count(user_id: int) -> tuple[bool, int, int
 
         # Check if counter needs reset (new week — 7 days since last reset)
         now = datetime.now(UTC)
-        if user.queries_reset_at is None or (now - user.queries_reset_at) >= timedelta(days=7):
+        reset_at = user.queries_reset_at
+        # Handle timezone-naive timestamps from DB (TIMESTAMP vs TIMESTAMPTZ)
+        if reset_at is not None and reset_at.tzinfo is None:
+            reset_at = reset_at.replace(tzinfo=UTC)
+
+        if reset_at is None or (now - reset_at) >= timedelta(days=7):
             # Reset counter for new week
             user.queries_today = 0
             user.queries_reset_at = now
@@ -3942,7 +3951,11 @@ async def get_billing_status(
     # Check if queries_reset_at needs update for new week
     now = datetime.now(UTC)
     queries_today = user.queries_today
-    if user.queries_reset_at is None or (now - user.queries_reset_at) >= timedelta(days=7):
+    reset_at = user.queries_reset_at
+    # Handle timezone-naive timestamps from DB (TIMESTAMP vs TIMESTAMPTZ)
+    if reset_at is not None and reset_at.tzinfo is None:
+        reset_at = reset_at.replace(tzinfo=UTC)
+    if reset_at is None or (now - reset_at) >= timedelta(days=7):
         queries_today = 0
 
     # Check direct Pro OR league-inherited Pro

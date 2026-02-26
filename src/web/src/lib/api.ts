@@ -272,7 +272,12 @@ class APIClient {
 
     if (!response.ok) {
       const error = await response.json();
-      throw new Error(error.detail || 'Failed to stream decision');
+      // detail can be a string or an object (e.g. quota exceeded)
+      const detail = error.detail;
+      if (typeof detail === 'object' && detail !== null) {
+        throw new Error(detail.message || JSON.stringify(detail));
+      }
+      throw new Error(detail || 'Failed to stream decision');
     }
 
     const reader = response.body?.getReader();

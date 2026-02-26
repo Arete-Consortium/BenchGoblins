@@ -4,6 +4,7 @@ import { Message, Sport, RiskMode, DecisionResponse } from '@/types';
 import { generateId } from '@/lib/utils';
 import api from '@/lib/api';
 import { useLeagueStore } from '@/stores/leagueStore';
+import useAuthStore from '@/stores/authStore';
 
 interface AppState {
   // Current settings
@@ -176,6 +177,9 @@ export const useAppStore = create<AppState>()(
             streamingContent: '',
             streamingMessageId: null,
           }));
+
+          // Refresh user data to update query counter in header
+          useAuthStore.getState().refreshUser();
         } catch (error: unknown) {
           console.error('Decision error:', error);
 
@@ -210,6 +214,9 @@ export const useAppStore = create<AppState>()(
             streamingContent: '',
             streamingMessageId: null,
           }));
+
+          // Refresh user data even on error (counter may have incremented)
+          useAuthStore.getState().refreshUser();
         }
       },
 
