@@ -166,16 +166,20 @@ export const useAuthStore = create<AuthState>()(
         // Check for JWT cookie from OAuth redirect flow
         const jwtCookie = getCookie('benchgoblin_jwt');
         if (jwtCookie) {
-          // Migrate JWT from cookie to localStorage and clear the cookie
-          state.accessToken = jwtCookie;
+          // Clear the cookie now that we've consumed it
           if (typeof window !== 'undefined') {
-            localStorage.setItem(AUTH_TOKEN_KEY, jwtCookie);
-            // Clear the cookie now that we've consumed it
             document.cookie = 'benchgoblin_jwt=; path=/; max-age=0; secure; samesite=lax';
             document.cookie = 'benchgoblin_user=; path=/; max-age=0; secure; samesite=lax';
           }
+
+          // Use setState so zustand persists the token (direct mutation on
+          // the rehydrated state object does NOT trigger set(), so get()
+          // inside refreshUser would see null and call clearAuth).
           api.setAuthToken(jwtCookie);
-          state.refreshUser().then(() => {
+          useAuthStore.setState({ accessToken: jwtCookie, isAuthenticated: true });
+
+          // Now refreshUser will see the token via get()
+          useAuthStore.getState().refreshUser().then(() => {
             useLeagueStore.getState().restoreFromBackend();
           });
           return;
@@ -196,7 +200,8 @@ export const useAuthStore = create<AuthState>()(
         // Token-based auth from localStorage
         if (state.accessToken) {
           api.setAuthToken(state.accessToken);
-          state.refreshUser().then(() => {
+          // Refresh user data from backend to validate the token
+          useAuthStore.getState().refreshUser().then(() => {
             useLeagueStore.getState().restoreFromBackend();
           });
         }
