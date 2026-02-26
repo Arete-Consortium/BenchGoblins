@@ -25,8 +25,12 @@ COPY --from=builder /install /usr/local
 # Copy all source code
 COPY src/ ./src/
 
+# Copy migration runner and SQL migration files
+COPY scripts/ ./scripts/
+COPY data/migrations/ ./data/migrations/
+
 # Set Python path so imports work (core module is in /app/src)
-ENV PYTHONPATH="/app/src:/app/src/api"
+ENV PYTHONPATH="/app:/app/src:/app/src/api"
 
 # Create non-root user
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
