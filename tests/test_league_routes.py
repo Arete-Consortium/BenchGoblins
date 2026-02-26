@@ -166,7 +166,9 @@ class TestConnectSleeper:
         )
 
         assert response.status_code == 200
-        mock_svc.get_user_leagues.assert_called_once_with(
+        # Multi-season query checks current year + next year
+        assert mock_svc.get_user_leagues.call_count >= 1
+        mock_svc.get_user_leagues.assert_any_call(
             user_id="sl_123", sport="nba", season="2025"
         )
 

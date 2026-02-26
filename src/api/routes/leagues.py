@@ -6,7 +6,7 @@ Sleeper API is public — no OAuth required, just a username.
 """
 
 import secrets
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
@@ -139,11 +139,31 @@ async def connect_sleeper(
             detail=f"Sleeper user '{request.username}' not found",
         )
 
-    leagues = await sleeper_service.get_user_leagues(
-        user_id=user.user_id,
-        sport=request.sport,
-        season=request.season,
-    )
+    # Query current year and next year to catch off-season league creation
+    # (Sleeper defaults new leagues to the upcoming season)
+    current_year = date.today().year
+    seasons_to_check = [request.season] if request.season != str(current_year) else []
+    seasons_to_check.extend([str(current_year), str(current_year + 1)])
+    # Deduplicate while preserving order
+    seen: set[str] = set()
+    unique_seasons = []
+    for s in seasons_to_check:
+        if s not in seen:
+            seen.add(s)
+            unique_seasons.append(s)
+
+    all_leagues = []
+    seen_ids: set[str] = set()
+    for season in unique_seasons:
+        leagues = await sleeper_service.get_user_leagues(
+            user_id=user.user_id,
+            sport=request.sport,
+            season=season,
+        )
+        for lg in leagues:
+            if lg.league_id not in seen_ids:
+                seen_ids.add(lg.league_id)
+                all_leagues.append(lg)
 
     return ConnectResponse(
         sleeper_user=SleeperUserResponse(
@@ -163,7 +183,7 @@ async def connect_sleeper(
                 roster_positions=lg.roster_positions,
                 scoring_settings=lg.scoring_settings,
             )
-            for lg in leagues
+            for lg in all_leagues
         ],
     )
 
