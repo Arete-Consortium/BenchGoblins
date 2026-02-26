@@ -112,6 +112,18 @@ function BillingContent() {
 
   const isPro = billingStatus?.tier === 'pro';
 
+  // Reset loading states when user returns to the page (e.g., back from Stripe)
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        setCheckoutLoading(null);
+        setPortalLoading(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, []);
+
   // Fetch prices and billing status on mount
   useEffect(() => {
     api.getBillingPrices()
