@@ -210,6 +210,69 @@ export interface HealthResponse {
   };
 }
 
+// Player Dossier types (commissioner/manager dashboard)
+export interface DossierIndices {
+  sci: number;
+  rmi: number;
+  gis: number;
+  od: number;
+  msf: number;
+  floor_score: number;
+  median_score: number;
+  ceiling_score: number;
+  calculated_at: string;
+  opponent: string | null;
+  game_date: string | null;
+}
+
+export interface DossierGameLog {
+  game_date: string;
+  opponent: string | null;
+  home_away: string | null;
+  result: string | null;
+  fantasy_points: number | null;
+  stats: Record<string, number>;
+}
+
+export interface DossierDecision {
+  id: string;
+  decision_type: string;
+  query: string;
+  decision: string;
+  confidence: string;
+  risk_mode: string;
+  source: string;
+  created_at: string;
+  outcome: string | null;
+}
+
+export interface PlayerDetailFull {
+  id: string;
+  name: string;
+  team: string;
+  team_abbrev: string;
+  position: string;
+  sport: Sport;
+  headshot_url: string | null;
+  stats: Record<string, number> | null;
+}
+
+export interface DossierResponse {
+  player: PlayerDetailFull;
+  indices: DossierIndices[];
+  game_logs: DossierGameLog[];
+  decisions: DossierDecision[];
+  summary: {
+    games_played: number;
+    total_indices: number;
+    total_game_logs: number;
+    total_decisions: number;
+    latest_floor?: number;
+    latest_median?: number;
+    latest_ceiling?: number;
+  };
+}
+
 // Subscription tier
 export type SubscriptionTier = 'free' | 'pro';
 

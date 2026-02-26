@@ -30,7 +30,7 @@ from pydantic import BaseModel, Field, constr, field_validator
 from sqlalchemy import Integer as SAInteger
 from sqlalchemy import func, select, text
 
-from models.database import BudgetConfig, User
+from models.database import BudgetConfig, GameLog, Player as PlayerModel, PlayerIndex, User
 from models.database import Decision as DecisionModel
 from models.database import Session as SessionModel
 from monitoring import MetricsMiddleware, update_engagement_metrics
@@ -558,6 +558,270 @@ async def get_player(sport: Sport, player_id: str):
         sport=sport,
         headshot_url=player.headshot_url,
         stats=stats_dict,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Player Dossier (Commissioner / Manager Dashboard)
+# ---------------------------------------------------------------------------
+
+
+class DossierIndices(BaseModel):
+    """Five-index scores for a player."""
+
+    sci: float
+    rmi: float
+    gis: float
+    od: float
+    msf: float
+    floor_score: float
+    median_score: float
+    ceiling_score: float
+    calculated_at: str
+    opponent: str | None = None
+    game_date: str | None = None
+
+
+class DossierGameLog(BaseModel):
+    """Single game entry for the dossier."""
+
+    game_date: str
+    opponent: str | None = None
+    home_away: str | None = None
+    result: str | None = None
+    fantasy_points: float | None = None
+    stats: dict
+
+
+class DossierDecision(BaseModel):
+    """Past decision involving this player."""
+
+    id: str
+    decision_type: str
+    query: str
+    decision: str
+    confidence: str
+    risk_mode: str
+    source: str
+    created_at: str
+    outcome: str | None = None
+
+
+class DossierResponse(BaseModel):
+    """Full player dossier for the commissioner/manager dashboard."""
+
+    player: PlayerDetail
+    indices: list[DossierIndices]
+    game_logs: list[DossierGameLog]
+    decisions: list[DossierDecision]
+    summary: dict
+
+
+@app.get("/dossier/{sport}/{player_id}", response_model=DossierResponse)
+async def get_player_dossier(sport: Sport, player_id: str):
+    """
+    Get a comprehensive player dossier for the commissioner/manager dashboard.
+
+    Aggregates player bio, stats, five-index scores, recent game logs,
+    and past decisions involving this player.
+    """
+    # 1. Fetch player info and stats from ESPN
+    player = await espn_service.get_player(player_id, sport.value)
+    if not player:
+        raise HTTPException(status_code=404, detail="Player not found")
+
+    stats = await espn_service.get_player_stats(player_id, sport.value)
+    stats_dict = None
+    if stats:
+        stats_dict = {
+            k: v
+            for k, v in stats.__dict__.items()
+            if v is not None and k not in ("player_id", "sport")
+        }
+
+    player_detail = PlayerDetail(
+        id=player.id,
+        name=player.name,
+        team=player.team,
+        team_abbrev=player.team_abbrev,
+        position=player.position,
+        sport=sport,
+        headshot_url=player.headshot_url,
+        stats=stats_dict,
+    )
+
+    # 2. Fetch five-index scores from database
+    indices_list: list[DossierIndices] = []
+    game_logs_list: list[DossierGameLog] = []
+    decisions_list: list[DossierDecision] = []
+
+    if db_service.is_configured:
+        try:
+            async with db_service.session() as session:
+                # Find the database player by ESPN ID
+                db_player_result = await session.execute(
+                    select(PlayerModel).where(PlayerModel.espn_id == player_id)
+                )
+                db_player = db_player_result.scalar_one_or_none()
+
+                if db_player:
+                    # Fetch indices (most recent first, limit 5)
+                    idx_result = await session.execute(
+                        select(PlayerIndex)
+                        .where(PlayerIndex.player_id == db_player.id)
+                        .order_by(PlayerIndex.calculated_at.desc())
+                        .limit(5)
+                    )
+                    for idx in idx_result.scalars().all():
+                        indices_list.append(
+                            DossierIndices(
+                                sci=float(idx.sci),
+                                rmi=float(idx.rmi),
+                                gis=float(idx.gis),
+                                od=float(idx.od),
+                                msf=float(idx.msf),
+                                floor_score=float(idx.floor_score),
+                                median_score=float(idx.median_score),
+                                ceiling_score=float(idx.ceiling_score),
+                                calculated_at=idx.calculated_at.isoformat(),
+                                opponent=idx.opponent,
+                                game_date=idx.game_date.isoformat() if idx.game_date else None,
+                            )
+                        )
+
+                    # Fetch recent game logs (last 10 games)
+                    gl_result = await session.execute(
+                        select(GameLog)
+                        .where(GameLog.player_id == db_player.id)
+                        .order_by(GameLog.game_date.desc())
+                        .limit(10)
+                    )
+                    for gl in gl_result.scalars().all():
+                        gl_stats = {}
+                        if sport.value == "nba":
+                            gl_stats = {
+                                k: v
+                                for k, v in {
+                                    "minutes": gl.minutes,
+                                    "points": gl.points,
+                                    "rebounds": gl.rebounds,
+                                    "assists": gl.assists,
+                                    "steals": gl.steals,
+                                    "blocks": gl.blocks,
+                                    "turnovers": gl.turnovers,
+                                }.items()
+                                if v is not None
+                            }
+                        elif sport.value == "nfl":
+                            gl_stats = {
+                                k: v
+                                for k, v in {
+                                    "pass_yards": gl.pass_yards_game,
+                                    "pass_tds": gl.pass_tds_game,
+                                    "rush_yards": gl.rush_yards_game,
+                                    "rush_tds": gl.rush_tds_game,
+                                    "receptions": gl.receptions_game,
+                                    "receiving_yards": gl.receiving_yards_game,
+                                    "targets": gl.targets_game,
+                                }.items()
+                                if v is not None
+                            }
+                        elif sport.value == "mlb":
+                            gl_stats = {
+                                k: v
+                                for k, v in {
+                                    "at_bats": gl.at_bats,
+                                    "hits": gl.hits,
+                                    "home_runs": gl.home_runs_game,
+                                    "rbis": gl.rbis_game,
+                                    "stolen_bases": gl.stolen_bases_game,
+                                }.items()
+                                if v is not None
+                            }
+                        elif sport.value == "nhl":
+                            gl_stats = {
+                                k: v
+                                for k, v in {
+                                    "goals": gl.goals_game,
+                                    "assists": gl.assists_game,
+                                    "plus_minus": gl.plus_minus_game,
+                                    "shots": gl.shots_game,
+                                }.items()
+                                if v is not None
+                            }
+                        elif sport.value == "soccer":
+                            gl_stats = {
+                                k: v
+                                for k, v in {
+                                    "goals": gl.soccer_goals_game,
+                                    "assists": gl.soccer_assists_game,
+                                    "minutes": gl.soccer_minutes_game,
+                                    "shots": gl.soccer_shots_game,
+                                    "tackles": gl.soccer_tackles_game,
+                                }.items()
+                                if v is not None
+                            }
+
+                        game_logs_list.append(
+                            DossierGameLog(
+                                game_date=gl.game_date.isoformat(),
+                                opponent=gl.opponent,
+                                home_away=gl.home_away,
+                                result=gl.result,
+                                fantasy_points=float(gl.fantasy_points)
+                                if gl.fantasy_points
+                                else None,
+                                stats=gl_stats,
+                            )
+                        )
+
+                # Fetch decisions involving this player (by name match)
+                decisions_result = await session.execute(
+                    select(DecisionModel)
+                    .where(
+                        (DecisionModel.player_a_name == player.name)
+                        | (DecisionModel.player_b_name == player.name)
+                    )
+                    .where(DecisionModel.sport == sport.value)
+                    .order_by(DecisionModel.created_at.desc())
+                    .limit(10)
+                )
+                for d in decisions_result.scalars().all():
+                    decisions_list.append(
+                        DossierDecision(
+                            id=str(d.id),
+                            decision_type=d.decision_type,
+                            query=d.query,
+                            decision=d.decision,
+                            confidence=d.confidence,
+                            risk_mode=d.risk_mode,
+                            source=d.source,
+                            created_at=d.created_at.isoformat(),
+                            outcome=d.actual_outcome,
+                        )
+                    )
+        except Exception as e:
+            logger.error("Dossier DB query error: %s", e)
+
+    # 3. Build summary
+    summary: dict = {
+        "games_played": stats.games_played if stats else 0,
+        "total_indices": len(indices_list),
+        "total_game_logs": len(game_logs_list),
+        "total_decisions": len(decisions_list),
+    }
+    if indices_list:
+        latest = indices_list[0]
+        summary["latest_floor"] = latest.floor_score
+        summary["latest_median"] = latest.median_score
+        summary["latest_ceiling"] = latest.ceiling_score
+
+    return DossierResponse(
+        player=player_detail,
+        indices=indices_list,
+        game_logs=game_logs_list,
+        decisions=decisions_list,
+        summary=summary,
     )
 
 

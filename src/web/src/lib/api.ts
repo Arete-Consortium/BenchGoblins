@@ -14,6 +14,7 @@ import type {
   SleeperConnectResponse,
   SleeperLeague,
   RosterResponse,
+  DossierResponse,
 } from '@/types';
 import { parseSSE } from './utils';
 
@@ -670,6 +671,13 @@ class APIClient {
 
   async sendTestNotification(title?: string, body?: string): Promise<{ sent: number; results: unknown[] }> {
     const response = await this.client.post('/notifications/test', { title, body });
+    return response.data;
+  }
+
+  // Player Dossier (commissioner/manager dashboard)
+  async getPlayerDossier(sport: Sport, playerId: string): Promise<DossierResponse> {
+    await this.ensureSession();
+    const response = await this.client.get<DossierResponse>(`/dossier/${sport}/${playerId}`);
     return response.data;
   }
 

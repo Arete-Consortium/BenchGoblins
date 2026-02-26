@@ -16,6 +16,7 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  FileText,
 } from 'lucide-react';
 
 function StatCard({
@@ -141,7 +142,7 @@ export default function DashboardPage() {
             {/* Quick Actions */}
             <div className="lg:col-span-2 bg-dark-800/50 border border-dark-700 rounded-xl p-6">
               <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 <Link
                   href="/"
                   className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
@@ -150,6 +151,16 @@ export default function DashboardPage() {
                   <div>
                     <div className="font-medium">New Decision</div>
                     <div className="text-sm text-dark-400">Ask a question</div>
+                  </div>
+                </Link>
+                <Link
+                  href="/dossier"
+                  className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
+                >
+                  <FileText className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <div className="font-medium">Player Dossier</div>
+                    <div className="text-sm text-dark-400">Full player profiles</div>
                   </div>
                 </Link>
                 <Link
