@@ -10,10 +10,11 @@ from routes.newsletter import (
     SubscribeResponse,
     UnsubscribeRequest,
     _check_subscribe_rate,
+    _get_client_ip,
     _subscribe_timestamps,
+    count,
     subscribe,
     unsubscribe,
-    count,
 )
 
 
@@ -93,6 +94,53 @@ class TestUnsubscribeRequestValidation:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Client IP Extraction
+# ---------------------------------------------------------------------------
+
+
+class TestGetClientIp:
+    def test_uses_x_forwarded_for_first_entry(self):
+        """Line 96: X-Forwarded-For header present — returns first IP."""
+        req = MagicMock()
+        req.headers = {"X-Forwarded-For": "203.0.113.50, 70.41.3.18, 150.172.238.178"}
+        req.client = MagicMock()
+        req.client.host = "10.0.0.1"
+
+        assert _get_client_ip(req) == "203.0.113.50"
+
+    def test_uses_x_forwarded_for_single_ip(self):
+        """Line 96: X-Forwarded-For with a single IP."""
+        req = MagicMock()
+        req.headers = {"X-Forwarded-For": " 192.168.1.1 "}
+        req.client = MagicMock()
+        req.client.host = "10.0.0.1"
+
+        assert _get_client_ip(req) == "192.168.1.1"
+
+    def test_falls_back_to_client_host(self):
+        """Uses request.client.host when no X-Forwarded-For."""
+        req = MagicMock()
+        req.headers = {}
+        req.client = MagicMock()
+        req.client.host = "172.16.0.1"
+
+        assert _get_client_ip(req) == "172.16.0.1"
+
+    def test_returns_unknown_when_no_client(self):
+        """Line 99: request.client is None — returns 'unknown'."""
+        req = MagicMock()
+        req.headers = {}
+        req.client = None
+
+        assert _get_client_ip(req) == "unknown"
+
+
+# ---------------------------------------------------------------------------
+# Rate Limiting
+# ---------------------------------------------------------------------------
+
+
 class TestSubscribeRateLimit:
     def setup_method(self):
         _subscribe_timestamps.clear()
@@ -118,6 +166,108 @@ class TestSubscribeRateLimit:
             await _check_subscribe_rate("10.0.0.1")
         assert await _check_subscribe_rate("10.0.0.1") is False
         assert await _check_subscribe_rate("10.0.0.2") is True
+
+
+# ---------------------------------------------------------------------------
+# Redis Rate Limiting (lines 114-121)
+# ---------------------------------------------------------------------------
+
+
+class TestRedisRateLimit:
+    """Tests for the Redis-based rate limiting path."""
+
+    def setup_method(self):
+        _subscribe_timestamps.clear()
+
+    @pytest.mark.asyncio
+    async def test_redis_rate_limit_allows_first_request(self):
+        """Lines 114-119: Redis connected, first request (count=1) sets expiry."""
+        mock_client = AsyncMock()
+        mock_client.incr = AsyncMock(return_value=1)
+        mock_client.expire = AsyncMock()
+
+        with patch("routes.newsletter.redis_service") as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+
+            result = await _check_subscribe_rate("redis-ip-1")
+
+        assert result is True
+        mock_client.incr.assert_called_once_with("newsletter_rate:redis-ip-1")
+        mock_client.expire.assert_called_once_with("newsletter_rate:redis-ip-1", 3600)
+
+    @pytest.mark.asyncio
+    async def test_redis_rate_limit_allows_within_limit(self):
+        """Lines 114-119: Redis connected, count within limit (count=3)."""
+        mock_client = AsyncMock()
+        mock_client.incr = AsyncMock(return_value=3)
+
+        with patch("routes.newsletter.redis_service") as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+
+            result = await _check_subscribe_rate("redis-ip-2")
+
+        assert result is True
+        # expire should NOT be called since count != 1
+        mock_client.expire.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_redis_rate_limit_blocks_over_limit(self):
+        """Lines 114-119: Redis connected, count exceeds limit (count=6)."""
+        mock_client = AsyncMock()
+        mock_client.incr = AsyncMock(return_value=6)
+
+        with patch("routes.newsletter.redis_service") as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+
+            result = await _check_subscribe_rate("redis-ip-3")
+
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_redis_rate_limit_at_exact_limit(self):
+        """Lines 114-119: Redis connected, count exactly at limit (count=5)."""
+        mock_client = AsyncMock()
+        mock_client.incr = AsyncMock(return_value=5)
+
+        with patch("routes.newsletter.redis_service") as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+
+            result = await _check_subscribe_rate("redis-ip-4")
+
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_redis_exception_falls_back_to_in_memory(self):
+        """Lines 120-121: Redis raises exception, falls back to in-memory."""
+        mock_client = AsyncMock()
+        mock_client.incr = AsyncMock(side_effect=ConnectionError("Redis down"))
+
+        with patch("routes.newsletter.redis_service") as mock_redis:
+            mock_redis.is_connected = True
+            mock_redis._client = mock_client
+
+            # Should fall through to in-memory and allow (first request)
+            result = await _check_subscribe_rate("redis-fail-ip")
+
+        assert result is True
+        # Verify it used the in-memory path by checking timestamps
+        assert "redis-fail-ip" in _subscribe_timestamps
+
+    @pytest.mark.asyncio
+    async def test_redis_not_connected_uses_in_memory(self):
+        """When Redis is not connected, uses in-memory fallback."""
+        with patch("routes.newsletter.redis_service") as mock_redis:
+            mock_redis.is_connected = False
+            mock_redis._client = None
+
+            result = await _check_subscribe_rate("no-redis-ip")
+
+        assert result is True
+        assert "no-redis-ip" in _subscribe_timestamps
 
 
 # ---------------------------------------------------------------------------
@@ -282,6 +432,16 @@ class TestUnsubscribeEndpoint:
         # Doesn't leak that the email doesn't exist
         assert result.success is True
 
+    @pytest.mark.asyncio
+    async def test_unsubscribe_db_not_configured(self):
+        """Line 193: unsubscribe raises 503 when db not configured."""
+        with patch("routes.newsletter.db_service") as mock_db:
+            mock_db.is_configured = False
+
+            with pytest.raises(Exception) as exc_info:
+                await unsubscribe(UnsubscribeRequest(email="x@test.com"))
+            assert exc_info.value.status_code == 503
+
 
 # ---------------------------------------------------------------------------
 # Count Endpoint (Admin)
@@ -314,3 +474,13 @@ class TestCountEndpoint:
         assert isinstance(result, CountResponse)
         assert result.active == 42
         assert result.total == 50
+
+    @pytest.mark.asyncio
+    async def test_count_db_not_configured(self):
+        """Line 213: count raises 503 when db not configured."""
+        with patch("routes.newsletter.db_service") as mock_db:
+            mock_db.is_configured = False
+
+            with pytest.raises(Exception) as exc_info:
+                await count()
+            assert exc_info.value.status_code == 503

@@ -151,6 +151,123 @@ class TestSyncMatchups:
         assert count == 3
         assert mock_sleeper.get_league_matchups.call_count == 3
 
+    @pytest.mark.asyncio
+    async def test_sync_swaps_roster_order_when_a_greater(self):
+        """Should swap a,b so lower roster_id is always first (line 62)."""
+        from services.rivalry import sync_matchups
+
+        mock_rosters = [
+            SleeperRoster(
+                roster_id=1, owner_id="owner_a", players=[], starters=[], reserve=None
+            ),
+            SleeperRoster(
+                roster_id=5, owner_id="owner_b", players=[], starters=[], reserve=None
+            ),
+        ]
+
+        # roster_id 5 comes first in pair — should trigger swap
+        mock_matchups = [
+            SleeperMatchup(matchup_id=1, roster_id=5, points=120.0),
+            SleeperMatchup(matchup_id=1, roster_id=1, points=90.0),
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        with patch("services.rivalry.sleeper_service") as mock_sleeper:
+            mock_sleeper.get_league_rosters = AsyncMock(return_value=mock_rosters)
+            mock_sleeper.get_league_matchups = AsyncMock(return_value=mock_matchups)
+
+            count = await sync_matchups(
+                mock_session,
+                league_id=1,
+                sleeper_league_id="12345",
+                season="2025",
+                weeks=[1],
+            )
+
+        assert count == 1
+        mock_session.execute.assert_called()
+
+    @pytest.mark.asyncio
+    async def test_sync_skips_when_owner_missing(self):
+        """Should skip matchup when a roster has no owner (line 68)."""
+        from services.rivalry import sync_matchups
+
+        # Roster 2 has no owner_id mapping
+        mock_rosters = [
+            SleeperRoster(
+                roster_id=1, owner_id="owner_a", players=[], starters=[], reserve=None
+            ),
+            SleeperRoster(
+                roster_id=2, owner_id="", players=[], starters=[], reserve=None
+            ),
+        ]
+
+        mock_matchups = [
+            SleeperMatchup(matchup_id=1, roster_id=1, points=100.0),
+            SleeperMatchup(matchup_id=1, roster_id=2, points=90.0),
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        with patch("services.rivalry.sleeper_service") as mock_sleeper:
+            mock_sleeper.get_league_rosters = AsyncMock(return_value=mock_rosters)
+            mock_sleeper.get_league_matchups = AsyncMock(return_value=mock_matchups)
+
+            count = await sync_matchups(
+                mock_session,
+                league_id=1,
+                sleeper_league_id="12345",
+                season="2025",
+                weeks=[1],
+            )
+
+        # Skipped because owner_b is empty
+        assert count == 0
+
+    @pytest.mark.asyncio
+    async def test_sync_b_wins_scenario(self):
+        """Should set winner to owner_b when b.points > a.points (lines 74-75)."""
+        from services.rivalry import sync_matchups
+
+        mock_rosters = [
+            SleeperRoster(
+                roster_id=1, owner_id="owner_a", players=[], starters=[], reserve=None
+            ),
+            SleeperRoster(
+                roster_id=2, owner_id="owner_b", players=[], starters=[], reserve=None
+            ),
+        ]
+
+        # roster 2 (b) scores higher
+        mock_matchups = [
+            SleeperMatchup(matchup_id=1, roster_id=1, points=80.0),
+            SleeperMatchup(matchup_id=1, roster_id=2, points=120.0),
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock()
+        mock_session.commit = AsyncMock()
+
+        with patch("services.rivalry.sleeper_service") as mock_sleeper:
+            mock_sleeper.get_league_rosters = AsyncMock(return_value=mock_rosters)
+            mock_sleeper.get_league_matchups = AsyncMock(return_value=mock_matchups)
+
+            count = await sync_matchups(
+                mock_session,
+                league_id=1,
+                sleeper_league_id="12345",
+                season="2025",
+                weeks=[1],
+            )
+
+        assert count == 1
+        mock_session.execute.assert_called()
+
 
 class TestGetH2HRecord:
     """Tests for head-to-head record retrieval."""
@@ -246,6 +363,25 @@ class TestGetH2HRecord:
         assert record["total_points_a"] == 90.0
         assert record["total_points_b"] == 110.0
 
+    @pytest.mark.asyncio
+    async def test_with_season_filter(self):
+        """Should add season filter when season param provided (line 137)."""
+        from services.rivalry import get_h2h_record
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        record = await get_h2h_record(
+            mock_session, 1, "owner_a", "owner_b", season="2025"
+        )
+
+        assert record["wins_a"] == 0
+        assert record["wins_b"] == 0
+        assert record["ties"] == 0
+        mock_session.execute.assert_called_once()
+
 
 class TestGetLeagueRivalries:
     """Tests for league-wide rivalry listing."""
@@ -288,6 +424,21 @@ class TestGetLeagueRivalries:
         assert rivalries[0]["games_played"] == 2  # Sorted by most games
         assert rivalries[1]["games_played"] == 1
 
+    @pytest.mark.asyncio
+    async def test_with_season_filter(self):
+        """Should add season filter when season param provided (line 204)."""
+        from services.rivalry import get_league_rivalries
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        rivalries = await get_league_rivalries(mock_session, 1, season="2025")
+
+        assert rivalries == []
+        mock_session.execute.assert_called_once()
+
 
 class TestGetUserRivalries:
     """Tests for user-specific rivalry listing."""
@@ -329,6 +480,21 @@ class TestGetUserRivalries:
         opp2 = next(r for r in rivalries if r["opponent"] == "opp2")
         assert opp2["wins"] == 1
         assert opp2["losses"] == 0
+
+    @pytest.mark.asyncio
+    async def test_with_season_filter(self):
+        """Should add season filter when season param provided (line 259)."""
+        from services.rivalry import get_user_rivalries
+
+        mock_session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        rivalries = await get_user_rivalries(mock_session, 1, "me", season="2025")
+
+        assert rivalries == []
+        mock_session.execute.assert_called_once()
 
 
 VALID_USER = {
