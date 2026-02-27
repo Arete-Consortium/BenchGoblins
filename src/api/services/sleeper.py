@@ -347,6 +347,7 @@ class SleeperService:
             return self._players_cache[sport]
 
         client = await self._get_client()
+        http_error = False
 
         try:
             response = await client.get(f"{SLEEPER_API}/players/{sport}")
@@ -364,10 +365,12 @@ class SleeperService:
 
         except httpx.HTTPError as e:
             logger.error("Sleeper API error fetching players: %s", e)
-            # Return stale cache if available
-            if sport in self._players_cache:
-                logger.warning("Returning stale players cache for %s", sport)
-                return self._players_cache[sport]
+            http_error = True
+
+        # Return stale cache on HTTP error if available
+        if http_error and sport in self._players_cache:
+            logger.warning("Returning stale players cache for %s", sport)
+            return self._players_cache[sport]
 
         return {}
 
