@@ -37,6 +37,7 @@ from monitoring import MetricsMiddleware, update_engagement_metrics
 from routes.auth import get_current_user, get_optional_user, require_admin_key
 from routes.auth import router as auth_router
 from routes.commissioner import router as commissioner_router
+from routes.dossier import router as dossier_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
@@ -311,6 +312,9 @@ app.include_router(commissioner_router)
 
 # Rivalry tracking
 app.include_router(rivalries_router)
+
+# Player dossier
+app.include_router(dossier_router)
 
 
 # ---------------------------------------------------------------------------

@@ -239,26 +239,11 @@ class TestMain:
 class TestDunderMain:
     def test_main_guard_calls_asyncio_run(self):
         """Line 193: if __name__ == '__main__': asyncio.run(main())."""
-        from unittest.mock import MagicMock
+        import runpy
 
-        import jobs.record_outcomes as mod
-
-        original_run = mod.asyncio.run
-        mock_run = MagicMock()
-        mod.asyncio.run = mock_run
-
-        original_main = mod.main
-        sentinel = object()
-        mod.main = MagicMock(return_value=sentinel)
-
-        try:
-            # Execute the __main__ guard directly
-            code = "if __name__ == '__main__':\n    asyncio.run(main())\n"
-            exec(  # noqa: S102
-                compile(code, "<test>", "exec"),
-                {"__name__": "__main__", "asyncio": mod.asyncio, "main": mod.main},
-            )
-            mock_run.assert_called_once_with(sentinel)
-        finally:
-            mod.asyncio.run = original_run
-            mod.main = original_main
+        with (
+            patch("asyncio.run") as mock_run,
+            patch("sys.argv", ["record_outcomes"]),
+        ):
+            runpy.run_module("jobs.record_outcomes", run_name="__main__")
+            mock_run.assert_called_once()

@@ -419,20 +419,26 @@ class TestGetAllPlayers:
         assert "nfl" in svc._players_cache
 
     @pytest.mark.asyncio
-    async def test_http_error_returns_stale_cache(self, svc, mock_client):
+    async def test_http_error_returns_stale_cache(self, svc):
         """Lines 365-370: HTTPError with stale cache returns stale data."""
-        svc._client = mock_client
-        svc._players_cache["nfl"] = {"stale": {"full_name": "Old Player"}}
-        svc._players_cache_ts["nfl"] = 0  # expired (epoch = ancient)
-        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
+        stale_data = {"stale": {"full_name": "Old Player"}}
+        svc._players_cache["nfl"] = stale_data
+        svc._players_cache_ts["nfl"] = 0  # expired
+
+        error_client = AsyncMock()
+        error_client.get = AsyncMock(side_effect=httpx.ConnectError("api down"))
+        svc._get_client = AsyncMock(return_value=error_client)
+
         result = await svc.get_all_players("nfl")
-        assert result == {"stale": {"full_name": "Old Player"}}
+        assert result is stale_data
 
     @pytest.mark.asyncio
-    async def test_http_error_no_cache_returns_empty(self, svc, mock_client):
+    async def test_http_error_no_cache_returns_empty(self, svc):
         """Lines 365-372: HTTPError with no stale cache returns {}."""
-        svc._client = mock_client
-        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
+        error_client = AsyncMock()
+        error_client.get = AsyncMock(side_effect=httpx.ConnectError("api down"))
+        svc._get_client = AsyncMock(return_value=error_client)
+
         result = await svc.get_all_players("nfl")
         assert result == {}
 
