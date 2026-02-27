@@ -334,3 +334,12 @@ class TestMakeDecisionStream:
         assert chunks[2]["output_tokens"] == 40
         assert chunks[2]["full_response"] == "Start LeBron"
         mock_track.assert_called_once_with(80, 40, success=True, variant="control")
+
+
+class TestClaudeServiceInit:
+    def test_init_with_api_key_creates_client(self):
+        """Line 31: creates Anthropic client when ANTHROPIC_API_KEY is set."""
+        with patch.dict("os.environ", {"ANTHROPIC_API_KEY": "sk-ant-test-key"}, clear=False):
+            svc = ClaudeService()
+            assert svc.client is not None
+            ClaudeService.clear_cache()

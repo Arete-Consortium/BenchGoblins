@@ -1,7 +1,7 @@
 """Tests for Sleeper Fantasy API service."""
 
 import time
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import httpx
 import pytest
@@ -421,19 +421,19 @@ class TestGetAllPlayers:
     @pytest.mark.asyncio
     async def test_http_error_returns_stale_cache(self, svc, mock_client):
         """Lines 365-370: HTTPError with stale cache returns stale data."""
-        svc._client = mock_client
+        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
         svc._players_cache["nfl"] = {"stale": {"full_name": "Old Player"}}
         svc._players_cache_ts["nfl"] = 0  # expired (epoch = ancient)
-        mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
-        result = await svc.get_all_players("nfl")
+        with patch.object(svc, "_get_client", return_value=mock_client):
+            result = await svc.get_all_players("nfl")
         assert result == {"stale": {"full_name": "Old Player"}}
 
     @pytest.mark.asyncio
     async def test_http_error_no_cache_returns_empty(self, svc, mock_client):
         """Lines 365-372: HTTPError with no stale cache returns {}."""
-        svc._client = mock_client
         mock_client.get = AsyncMock(side_effect=httpx.HTTPError("api down"))
-        result = await svc.get_all_players("nfl")
+        with patch.object(svc, "_get_client", return_value=mock_client):
+            result = await svc.get_all_players("nfl")
         assert result == {}
 
 
