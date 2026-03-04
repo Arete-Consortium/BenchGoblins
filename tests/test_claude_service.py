@@ -315,7 +315,7 @@ class TestMakeDecisionStream:
 
         mock_stream = MagicMock()
         mock_stream.text_stream = _async_text_stream()
-        mock_stream.get_final_message.return_value = mock_final
+        mock_stream.get_final_message = AsyncMock(return_value=mock_final)
         mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
         mock_stream.__aexit__ = AsyncMock(return_value=False)
         svc_with_client.client.messages.stream.return_value = mock_stream

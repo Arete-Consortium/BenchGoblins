@@ -237,7 +237,7 @@ class ClaudeService:
                 yield text
 
             # Track token usage after stream completes
-            final_message = stream.get_final_message()
+            final_message = await stream.get_final_message()
             input_tokens = final_message.usage.input_tokens
             output_tokens = final_message.usage.output_tokens
             track_claude_request(input_tokens, output_tokens, success=True, variant=prompt_variant)
