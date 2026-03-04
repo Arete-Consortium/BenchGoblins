@@ -289,19 +289,19 @@ class APIClient {
 
     while (true) {
       // Race each read against a timeout — if backend stalls, abort cleanly
-      const timeoutPromise = new Promise<{ done: true; value: undefined }>((resolve) =>
-        setTimeout(() => resolve({ done: true, value: undefined }), STREAM_TIMEOUT_MS)
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => resolve(null), STREAM_TIMEOUT_MS)
       );
-      const { done, value } = await Promise.race([reader.read(), timeoutPromise]);
+      const result = await Promise.race([reader.read(), timeoutPromise]);
 
-      if (done) {
-        if (!value) {
-          // Timeout — cancel the reader and throw a recoverable error
-          reader.cancel();
-          throw new Error('Response timed out. Please try again.');
-        }
-        break;
+      if (result === null) {
+        // Timeout — cancel the reader and throw a recoverable error
+        reader.cancel();
+        throw new Error('Response timed out. Please try again.');
       }
+
+      const { done, value } = result;
+      if (done) break;
 
       const chunk = decoder.decode(value, { stream: true });
       const events = parseSSE(chunk);
