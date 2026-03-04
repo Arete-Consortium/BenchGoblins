@@ -66,6 +66,10 @@ FANTASY_ACTIONS = {
     "sleeper",
     "rankings",
     "ranking",
+    "captain",
+    "captaincy",
+    "differential",
+    "differentials",
 }
 
 # Fantasy question patterns
