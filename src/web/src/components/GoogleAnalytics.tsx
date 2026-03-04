@@ -5,6 +5,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import { useEffect, Suspense } from 'react';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+const GOOGLE_ADS_ID = 'AW-17993335525';
 
 // Track page views on route change
 function AnalyticsTracker() {
@@ -42,6 +43,7 @@ export default function GoogleAnalytics() {
           gtag('config', '${GA_MEASUREMENT_ID}', {
             page_path: window.location.pathname,
           });
+          gtag('config', '${GOOGLE_ADS_ID}');
         `}
       </Script>
       <Suspense fallback={null}>
