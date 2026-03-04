@@ -9,7 +9,7 @@ import os
 import re
 from collections.abc import AsyncGenerator
 
-from anthropic import Anthropic
+from anthropic import AsyncAnthropic
 from cachetools import TTLCache
 
 from monitoring import track_claude_request
@@ -25,10 +25,10 @@ class ClaudeService:
     _cache_misses = 0
 
     def __init__(self):
-        self.client: Anthropic | None = None
+        self.client: AsyncAnthropic | None = None
         api_key = os.getenv("ANTHROPIC_API_KEY")
         if api_key:
-            self.client = Anthropic(api_key=api_key)
+            self.client = AsyncAnthropic(api_key=api_key, timeout=120.0)
 
     @staticmethod
     def _cache_key(
@@ -169,7 +169,7 @@ class ClaudeService:
             player_context=player_context,
         )
 
-        response = self.client.messages.create(
+        response = await self.client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=500,
             system=get_prompt(prompt_variant),
@@ -226,13 +226,13 @@ class ClaudeService:
         )
 
         full_response = ""
-        with self.client.messages.stream(
+        async with self.client.messages.stream(
             model="claude-sonnet-4-20250514",
             max_tokens=500,
             system=get_prompt(prompt_variant),
             messages=[{"role": "user", "content": user_message}],
         ) as stream:
-            for text in stream.text_stream:
+            async for text in stream.text_stream:
                 full_response += text
                 yield text
 

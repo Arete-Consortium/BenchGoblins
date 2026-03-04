@@ -1,6 +1,6 @@
 """Tests for Claude API service."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -23,7 +23,7 @@ def svc():
 
 @pytest.fixture
 def svc_with_client():
-    """ClaudeService with a mocked Anthropic client."""
+    """ClaudeService with a mocked AsyncAnthropic client."""
     s = ClaudeService()
     s.client = MagicMock()
     ClaudeService.clear_cache()
@@ -38,7 +38,7 @@ def svc_with_client():
             text='{"decision": "Start LeBron", "confidence": "high", "rationale": "Hot streak"}'
         )
     ]
-    s.client.messages.create.return_value = mock_response
+    s.client.messages.create = AsyncMock(return_value=mock_response)
     yield s
     ClaudeService.clear_cache()
 
@@ -304,16 +304,20 @@ class TestMakeDecisionStream:
     async def test_stream_yields_text_and_metadata(
         self, _mock_prompt, mock_track, svc_with_client
     ):
-        # Build mock stream context manager
+        # Build mock stream context manager (async)
         mock_final = MagicMock()
         mock_final.usage.input_tokens = 80
         mock_final.usage.output_tokens = 40
 
+        async def _async_text_stream():
+            for text in ["Start ", "LeBron"]:
+                yield text
+
         mock_stream = MagicMock()
-        mock_stream.text_stream = iter(["Start ", "LeBron"])
+        mock_stream.text_stream = _async_text_stream()
         mock_stream.get_final_message.return_value = mock_final
-        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
-        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
+        mock_stream.__aexit__ = AsyncMock(return_value=False)
         svc_with_client.client.messages.stream.return_value = mock_stream
 
         chunks = []

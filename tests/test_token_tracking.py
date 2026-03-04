@@ -14,16 +14,20 @@ class TestStreamingTokenMetadata:
 
     @pytest.fixture
     def mock_stream(self):
-        """Create a mock streaming response."""
+        """Create a mock streaming response (async)."""
         mock_message = MagicMock()
         mock_message.usage.input_tokens = 150
         mock_message.usage.output_tokens = 75
 
+        async def _async_text_stream():
+            for text in ["Hello", " world", "!"]:
+                yield text
+
         mock_stream = MagicMock()
-        mock_stream.text_stream = iter(["Hello", " world", "!"])
+        mock_stream.text_stream = _async_text_stream()
         mock_stream.get_final_message.return_value = mock_message
-        mock_stream.__enter__ = MagicMock(return_value=mock_stream)
-        mock_stream.__exit__ = MagicMock(return_value=False)
+        mock_stream.__aenter__ = AsyncMock(return_value=mock_stream)
+        mock_stream.__aexit__ = AsyncMock(return_value=False)
 
         return mock_stream
 
