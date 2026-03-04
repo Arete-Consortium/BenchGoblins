@@ -6,6 +6,7 @@ import { GoogleAuthProviderWrapper } from '@/components/providers/GoogleAuthProv
 import { RevenueCatProvider } from '@/components/providers/RevenueCatProvider';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { ToastProvider, ToastViewport } from '@/components/ui/toast';
+import Script from 'next/script';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import CookieConsent from '@/components/CookieConsent';
 import { Analytics } from '@vercel/analytics/next';
@@ -67,6 +68,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script
+          src="https://www.googletagmanager.com/gtag/js?id=AW-17993335525"
+          strategy="beforeInteractive"
+        />
+        <Script id="google-ads-init" strategy="beforeInteractive">
+          {`
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+            gtag('config', 'AW-17993335525');
+          `}
+        </Script>
+      </head>
       <GoogleAnalytics />
       <body className={`${inter.className} min-h-screen bg-dark-950 text-dark-100 antialiased`}>
         <ThemeProvider
