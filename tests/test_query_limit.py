@@ -150,8 +150,8 @@ class TestCheckAndIncrementQueryCount:
         """Should handle timezone-naive timestamps from DB without crashing."""
         from main import _check_and_increment_query_count
 
-        # Simulate TIMESTAMP (naive) from PostgreSQL
-        naive_reset_at = datetime(2026, 2, 20, 12, 0, 0)  # No tzinfo
+        # Simulate TIMESTAMP (naive) from PostgreSQL — must be within 7 days
+        naive_reset_at = (datetime.now(UTC) - timedelta(days=1)).replace(tzinfo=None)
         user = self._make_user(queries_today=3, reset_at=naive_reset_at)
         mock_session = self._patch_session(user)
 
@@ -179,7 +179,7 @@ class TestCheckAndIncrementQueryCount:
         from main import _check_and_increment_query_count
 
         # Simulate old naive TIMESTAMP from PostgreSQL (> 7 days ago)
-        naive_reset_at = datetime(2026, 2, 10, 12, 0, 0)  # No tzinfo, old
+        naive_reset_at = (datetime.now(UTC) - timedelta(days=10)).replace(tzinfo=None)
         user = self._make_user(queries_today=5, reset_at=naive_reset_at)
         mock_session = self._patch_session(user)
 
