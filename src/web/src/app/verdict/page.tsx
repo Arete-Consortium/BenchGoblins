@@ -211,6 +211,12 @@ export default function VerdictPage() {
           setError(null); // Show empty state, not error
           return;
         }
+        if (resp?.status === 403) {
+          // Pro gate — the global UpgradePrompt handles the dialog
+          setVerdict(null);
+          setError(null);
+          return;
+        }
       }
       setError(message);
     } finally {

@@ -23,12 +23,11 @@ def _override_admin():
 
 def _override_user(user_id=1, email="test@example.com"):
     from api.main import app
-    from routes.auth import get_current_user
+    from routes.auth import get_current_user, require_pro
 
-    app.dependency_overrides[get_current_user] = lambda: {
-        "user_id": user_id,
-        "email": email,
-    }
+    user = {"user_id": user_id, "email": email}
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[require_pro] = lambda: user
 
 
 def _clear_overrides():
@@ -859,21 +858,33 @@ class TestGenerateRecap:
         finally:
             _clear_overrides()
 
-    @patch("api.main.stripe_billing")
-    @patch("api.main._get_user_by_id", new_callable=AsyncMock)
-    @patch("api.main.db_service")
-    def test_not_pro(self, mock_db, mock_get_user, mock_stripe, test_client):
-        _override_user()
-        try:
-            mock_db.is_configured = True
-            user = MagicMock()
-            user.id = 1
-            user.subscription_tier = "free"
-            mock_get_user.return_value = user
-            mock_stripe.is_league_pro = AsyncMock(return_value=False)
+    def test_not_pro(self, test_client):
+        from api.main import app
+        from routes.auth import get_current_user, require_pro
 
-            resp = test_client.post("/recaps/weekly/generate")
-            assert resp.status_code == 403
+        # Override get_current_user but NOT require_pro so the pro gate runs
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": 1,
+            "email": "test@example.com",
+        }
+        app.dependency_overrides.pop(require_pro, None)
+        try:
+            with (
+                patch("routes.auth.db_service") as mock_db,
+                patch("routes.auth.get_user_by_id", new_callable=AsyncMock) as mock_get_user,
+                patch("services.stripe_billing.is_league_pro", new_callable=AsyncMock) as mock_league_pro,
+            ):
+                mock_db.is_configured = True
+                mock_ctx, mock_session = _mock_db_session()
+                mock_db.session.return_value = mock_ctx
+                user = MagicMock()
+                user.id = 1
+                user.subscription_tier = "free"
+                mock_get_user.return_value = user
+                mock_league_pro.return_value = False
+
+                resp = test_client.post("/recaps/weekly/generate")
+                assert resp.status_code == 403
         finally:
             _clear_overrides()
 

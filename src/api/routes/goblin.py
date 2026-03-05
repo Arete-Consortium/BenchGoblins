@@ -11,7 +11,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from routes.auth import get_current_user, require_admin_key
+from routes.auth import require_admin_key, require_pro
 from services.goblin_verdict import (
     GoblinVerdict,
     RiskMode,
@@ -67,7 +67,7 @@ class TrashTalkResponse(BaseModel):
 async def get_my_verdict(
     risk_mode: RiskMode = Query(default=RiskMode.MEDIAN, description="Risk mode for analysis"),
     week: int | None = Query(default=None, description="NFL week (auto-detected if omitted)"),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Get the Goblin's verdict for the authenticated user's lineup.
@@ -99,7 +99,7 @@ async def get_my_verdict(
 async def generate_verdict(
     risk_mode: RiskMode = Query(default=RiskMode.MEDIAN),
     week: int | None = Query(default=None),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Force-generate a fresh Goblin verdict (bypasses cache).
@@ -182,7 +182,7 @@ Return ONLY valid JSON:
 @router.post("/trash-talk", response_model=TrashTalkResponse)
 async def generate_trash_talk(
     request: TrashTalkRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Generate Goblin-voiced trash talk for a fantasy matchup.

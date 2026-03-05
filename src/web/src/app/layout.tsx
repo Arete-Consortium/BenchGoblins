@@ -9,6 +9,7 @@ import { ToastProvider, ToastViewport } from '@/components/ui/toast';
 import Script from 'next/script';
 import GoogleAnalytics from '@/components/GoogleAnalytics';
 import CookieConsent from '@/components/CookieConsent';
+import { ProGateProvider } from '@/components/providers/ProGateProvider';
 import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
@@ -95,7 +96,9 @@ export default function RootLayout({
               <QueryProvider>
                 <RevenueCatProvider>
                   <ToastProvider>
-                    {children}
+                    <ProGateProvider>
+                      {children}
+                    </ProGateProvider>
                     <ToastViewport />
                     <CookieConsent />
                     <Analytics />

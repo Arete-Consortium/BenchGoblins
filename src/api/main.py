@@ -34,7 +34,7 @@ from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
 from models.database import Session as SessionModel
 from monitoring import MetricsMiddleware, update_engagement_metrics
-from routes.auth import get_current_user, get_optional_user, require_admin_key
+from routes.auth import get_current_user, get_optional_user, require_admin_key, require_pro
 from routes.auth import router as auth_router
 from routes.commissioner import router as commissioner_router
 from routes.dossier import router as dossier_router
@@ -4071,7 +4071,7 @@ class WeeklyRecapResponse(BaseModel):
 @app.get("/recaps/weekly", response_model=list[WeeklyRecapResponse])
 async def get_weekly_recaps(
     limit: int = Query(default=10, ge=1, le=50),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Get stored weekly recaps for the authenticated user.
@@ -4111,7 +4111,7 @@ async def get_weekly_recaps(
 
 @app.post("/recaps/weekly/generate", response_model=WeeklyRecapResponse | None)
 async def generate_recap(
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Generate a weekly recap for the current week.
@@ -4125,18 +4125,6 @@ async def generate_recap(
     user = await _get_user_by_id(current_user["user_id"])
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-
-    # Pro-gate: recaps are a Pro feature
-    is_pro = user.subscription_tier == "pro"
-    if not is_pro:
-        try:
-            is_pro = await stripe_billing.is_league_pro(user.id)
-        except Exception:
-            pass
-    if not is_pro:
-        raise HTTPException(
-            status_code=403, detail="Weekly recaps are a Pro feature. Upgrade to access."
-        )
 
     from services.weekly_recap import generate_weekly_recap
 

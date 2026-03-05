@@ -46,6 +46,7 @@ __all__ = [
     "get_current_user_token",
     "get_optional_user",
     "require_admin_key",
+    "require_pro",
 ]
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -208,6 +209,39 @@ async def get_current_user(token: str = Depends(get_current_user_token)) -> dict
             detail=str(e),
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+
+async def require_pro(current_user: dict = Depends(get_current_user)) -> dict:
+    """Require Pro subscription. Checks direct tier then league-inherited Pro.
+
+    Use as dependency: current_user: dict = Depends(require_pro)
+    Raises 403 if user is not on Pro tier.
+    """
+    from services import stripe_billing
+
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    async with db_service.session() as session:
+        user = await get_user_by_id(current_user["user_id"], session)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    is_pro = user.subscription_tier == "pro"
+    if not is_pro:
+        try:
+            is_pro = await stripe_billing.is_league_pro(user.id)
+        except Exception:
+            pass
+
+    if not is_pro:
+        raise HTTPException(
+            status_code=403,
+            detail="This is a Pro feature. Upgrade to access.",
+        )
+
+    return current_user
 
 
 # ---------------------------------------------------------------------------

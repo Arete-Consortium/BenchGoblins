@@ -26,11 +26,11 @@ const FREE_FEATURES = [
 
 const PRO_FEATURES = [
   'Unlimited queries',
-  'Advanced AI analysis',
-  'Priority response times',
-  'Historical data access',
-  'Custom risk profiles',
-  'Export recommendations',
+  'Weekly Goblin Verdicts',
+  'Trash talk generator',
+  'Weekly recaps & highlights',
+  'Commissioner tools & alerts',
+  'Start/sit AI analysis',
 ];
 
 export function UpgradePrompt({ open, onOpenChange }: UpgradePromptProps) {
@@ -57,10 +57,10 @@ export function UpgradePrompt({ open, onOpenChange }: UpgradePromptProps) {
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2 text-xl">
                 <Zap className="h-5 w-5 text-yellow-400" />
-                Daily Limit Reached
+                Unlock Pro Features
               </DialogTitle>
               <DialogDescription>
-                You&apos;ve used all 5 free queries for today. Upgrade to Pro for unlimited access.
+                This feature requires a Pro subscription. Upgrade to unlock verdicts, recaps, commissioner tools, and more.
               </DialogDescription>
             </DialogHeader>
 

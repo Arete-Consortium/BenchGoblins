@@ -27,24 +27,28 @@ MEMBER_USER = {
 
 @pytest.fixture
 def commish_client(test_client):
-    """Test client with commissioner auth."""
+    """Test client with commissioner auth (pro tier)."""
     from api.main import app
-    from routes.auth import get_current_user
+    from routes.auth import get_current_user, require_pro
 
     app.dependency_overrides[get_current_user] = lambda: COMMISH_USER
+    app.dependency_overrides[require_pro] = lambda: COMMISH_USER
     yield test_client
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_pro, None)
 
 
 @pytest.fixture
 def member_client(test_client):
-    """Test client with member auth."""
+    """Test client with member auth (free tier, bypasses pro gate for role tests)."""
     from api.main import app
-    from routes.auth import get_current_user
+    from routes.auth import get_current_user, require_pro
 
     app.dependency_overrides[get_current_user] = lambda: MEMBER_USER
+    app.dependency_overrides[require_pro] = lambda: MEMBER_USER
     yield test_client
     app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_pro, None)
 
 
 def _mock_league(id_=1, commissioner_user_id=1, invite_code="abc123"):

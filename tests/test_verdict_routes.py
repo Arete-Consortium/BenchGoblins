@@ -18,13 +18,13 @@ VALID_USER = {
 
 @pytest.fixture
 def authed_client(test_client):
-    """Test client with auth bypassed."""
+    """Test client with auth bypassed (pro tier)."""
     from api.main import app
-    from routes.auth import get_current_user
+    from routes.auth import require_pro
 
-    app.dependency_overrides[get_current_user] = lambda: VALID_USER
+    app.dependency_overrides[require_pro] = lambda: VALID_USER
     yield test_client
-    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_pro, None)
 
 
 def _make_player_info(name="Patrick Mahomes", team="KC", position="QB"):

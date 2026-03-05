@@ -79,6 +79,7 @@ class APIClient {
   private sessionToken: string | null = null;
   private authToken: string | null = null;
   private onAuthError: (() => void) | null = null;
+  private onProGateError: (() => void) | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -119,6 +120,12 @@ class APIClient {
           this.clearSession();
           await this.ensureSession();
         }
+        if (error.response?.status === 403 && this.onProGateError) {
+          const detail = (error.response?.data as { detail?: string })?.detail;
+          if (detail?.includes('Pro feature')) {
+            this.onProGateError();
+          }
+        }
         return Promise.reject(error);
       }
     );
@@ -127,6 +134,11 @@ class APIClient {
   // Set callback for auth errors (used by auth store)
   setOnAuthError(callback: () => void): void {
     this.onAuthError = callback;
+  }
+
+  // Set callback for pro gate errors (403 on pro-only endpoints)
+  setOnProGateError(callback: () => void): void {
+    this.onProGateError = callback;
   }
 
   // Auth token management

@@ -31,12 +31,12 @@ def test_client():
 
 @pytest.fixture
 def authed_client(test_client):
-    """Test client with auth bypassed."""
-    from routes.auth import get_current_user
+    """Test client with auth bypassed (pro tier)."""
+    from routes.auth import require_pro
 
-    app.dependency_overrides[get_current_user] = lambda: _VALID_USER
+    app.dependency_overrides[require_pro] = lambda: _VALID_USER
     yield test_client
-    app.dependency_overrides.pop(get_current_user, None)
+    app.dependency_overrides.pop(require_pro, None)
 
 
 def _make_claude_response(data: dict) -> MagicMock:

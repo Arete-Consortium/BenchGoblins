@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from models.database import League, LeagueDispute, LeagueMembership, User
-from routes.auth import get_current_user
+from routes.auth import require_pro
 from services.claude import claude_service
 from services.database import db_service
 from services.sleeper import sleeper_service
@@ -159,7 +159,7 @@ class ActivityResponse(BaseModel):
 @router.get("/leagues/{league_id}/power-rankings", response_model=PowerRankingsResponse)
 async def get_power_rankings(
     league_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """Fetch all rosters in the league, score each, return ranked list.
 
@@ -220,7 +220,7 @@ async def get_power_rankings(
 async def check_trade(
     league_id: int,
     request: TradeCheckRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """Analyze trade fairness using Claude.
 
@@ -274,7 +274,7 @@ async def check_trade(
 @router.get("/leagues/{league_id}/roster-analysis", response_model=RosterAnalysisResponse)
 async def get_roster_analysis(
     league_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """Per-team breakdown: roster size, starters, basic analysis."""
     league = await require_commissioner(league_id, current_user)
@@ -326,7 +326,7 @@ async def get_roster_analysis(
 @router.get("/leagues/{league_id}/activity", response_model=ActivityResponse)
 async def get_league_activity(
     league_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """Which members are using BenchGoblins, last active, queries this week."""
     league = await require_commissioner(league_id, current_user)
@@ -384,7 +384,7 @@ async def get_league_activity(
 @router.get("/leagues/{league_id}/alerts")
 async def get_league_alerts(
     league_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Get proactive health alerts for a league.
@@ -465,7 +465,7 @@ class DisputeListResponse(BaseModel):
 async def file_dispute(
     league_id: int,
     request: FileDisputeRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     File a new dispute in the league.
@@ -524,7 +524,7 @@ async def file_dispute(
 )
 async def list_disputes(
     league_id: int,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     List all disputes in the league.
@@ -607,7 +607,7 @@ async def resolve_dispute(
     league_id: int,
     dispute_id: int,
     request: ResolveDisputeRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Resolve or dismiss a dispute. Commissioner only.

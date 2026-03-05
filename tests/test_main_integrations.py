@@ -26,12 +26,11 @@ def _mock_db_session():
 
 def _override_user(user_id=1, email="test@example.com"):
     from api.main import app
-    from routes.auth import get_current_user
+    from routes.auth import get_current_user, require_pro
 
-    app.dependency_overrides[get_current_user] = lambda: {
-        "user_id": user_id,
-        "email": email,
-    }
+    user = {"user_id": user_id, "email": email}
+    app.dependency_overrides[get_current_user] = lambda: user
+    app.dependency_overrides[require_pro] = lambda: user
 
 
 def _clear_overrides():
@@ -460,28 +459,34 @@ class TestBillingStatusLeagueProException:
 class TestGenerateRecapLeagueProException:
     """POST /recaps/weekly/generate — is_league_pro throws → is_pro False → 403."""
 
-    @patch("api.main.stripe_billing")
-    @patch("api.main._get_user_by_id", new_callable=AsyncMock)
-    @patch("api.main.db_service")
-    def test_league_pro_exception_stays_false(
-        self, mock_db, mock_get_user, mock_stripe, test_client
-    ):
-        _override_user()
+    def test_league_pro_exception_stays_false(self, test_client):
+        from api.main import app
+        from routes.auth import get_current_user, require_pro
+
+        # Override get_current_user but NOT require_pro so the pro gate runs
+        app.dependency_overrides[get_current_user] = lambda: {
+            "user_id": 1,
+            "email": "test@example.com",
+        }
+        app.dependency_overrides.pop(require_pro, None)
         try:
-            mock_db.is_configured = True
+            with (
+                patch("routes.auth.db_service") as mock_db,
+                patch("routes.auth.get_user_by_id", new_callable=AsyncMock) as mock_get_user,
+                patch("services.stripe_billing.is_league_pro", new_callable=AsyncMock) as mock_league_pro,
+            ):
+                mock_db.is_configured = True
+                mock_ctx, _ = _mock_db_session()
+                mock_db.session.return_value = mock_ctx
+                user = MagicMock()
+                user.id = 1
+                user.subscription_tier = "free"
+                mock_get_user.return_value = user
+                mock_league_pro.side_effect = RuntimeError("stripe broken")
 
-            user = MagicMock()
-            user.id = 1
-            user.name = "Test"
-            user.subscription_tier = "free"
-            mock_get_user.return_value = user
-            mock_stripe.is_league_pro = AsyncMock(
-                side_effect=RuntimeError("stripe broken")
-            )
-
-            resp = test_client.post("/recaps/weekly/generate")
-            assert resp.status_code == 403
-            assert "Pro feature" in resp.json()["detail"]
+                resp = test_client.post("/recaps/weekly/generate")
+                assert resp.status_code == 403
+                assert "Pro feature" in resp.json()["detail"]
         finally:
             _clear_overrides()
 

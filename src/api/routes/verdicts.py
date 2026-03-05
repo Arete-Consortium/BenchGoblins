@@ -11,7 +11,7 @@ from core.verdicts import Verdict, generate_verdict
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from routes.auth import get_current_user
+from routes.auth import require_pro
 from services.claude import claude_service
 from services.espn import espn_service
 from services.scoring_adapter import adapt_espn_to_core
@@ -205,7 +205,7 @@ def _verdict_to_response(
 @router.post("/start-sit", response_model=VerdictResponse)
 async def start_sit_verdict(
     request: StartSitRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_pro),
 ):
     """
     Generate a start/sit verdict with multi-mode scoring.

@@ -363,6 +363,40 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Social Proof */}
+      <section className="container mx-auto px-4 py-16 border-t border-dark-800/50">
+        <div className="grid gap-8 md:grid-cols-3 max-w-4xl mx-auto text-center">
+          <div>
+            <div className="text-4xl font-bold gradient-text">5</div>
+            <p className="text-dark-400 mt-1">Sports Covered</p>
+          </div>
+          <div>
+            <div className="text-4xl font-bold gradient-text">3</div>
+            <p className="text-dark-400 mt-1">Risk Modes</p>
+          </div>
+          <div>
+            <div className="text-4xl font-bold gradient-text">9</div>
+            <p className="text-dark-400 mt-1">Languages Supported</p>
+          </div>
+        </div>
+        <div className="mt-12 max-w-3xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-2">
+            <div className="p-6 rounded-xl bg-dark-800/50 border border-dark-700">
+              <p className="text-dark-300 italic mb-3">
+                &ldquo;The Goblin told me to bench my gut feeling and start the data. Won my league.&rdquo;
+              </p>
+              <p className="text-sm text-dark-500">— Fantasy manager, NFL</p>
+            </div>
+            <div className="p-6 rounded-xl bg-dark-800/50 border border-dark-700">
+              <p className="text-dark-300 italic mb-3">
+                &ldquo;Commissioner alerts saved my league from a collusion trade. Worth every penny.&rdquo;
+              </p>
+              <p className="text-sm text-dark-500">— League commissioner, NBA</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Pricing */}
       <section className="container mx-auto px-4 py-16">
         <div className="text-center mb-12">
