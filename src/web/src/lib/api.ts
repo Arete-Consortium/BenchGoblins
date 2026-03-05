@@ -16,6 +16,7 @@ import type {
   RosterResponse,
   WeeklyRecap,
   DossierResponse,
+  GoblinVerdict,
 } from '@/types';
 import { parseSSE } from './utils';
 
