@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Zap,
 } from 'lucide-react';
+import { ShareCard, VerdictShareData } from '@/components/ShareCard';
 
 // ---------------------------------------------------------------------------
 // Risk Mode Config
@@ -192,6 +193,7 @@ export default function VerdictPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [riskMode, setRiskMode] = useState<RiskMode>(appRiskMode);
+  const [showShareCard, setShowShareCard] = useState(false);
 
   const fetchVerdict = useCallback(async (mode: RiskMode, forceGenerate = false) => {
     setLoading(true);
@@ -242,17 +244,23 @@ export default function VerdictPage() {
 
   const handleShare = () => {
     if (!verdict || verdict.swaps.length === 0) return;
-
-    const swap = verdict.swaps[0];
-    const text = `The Goblin says: BENCH ${swap.bench_player}, START ${swap.start_player} this week. ${swap.confidence}% confidence.\n\nbenchgoblins.com`;
-
-    if (navigator.share) {
-      navigator.share({ title: 'Goblin Verdict', text }).catch(() => {});
-    } else {
-      const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}`;
-      window.open(twitterUrl, '_blank');
-    }
+    setShowShareCard(true);
   };
+
+  const shareCardData: VerdictShareData | null = verdict && verdict.swaps.length > 0
+    ? {
+        type: 'verdict',
+        headline: verdict.verdict_headline,
+        teamName: verdict.team_name ?? undefined,
+        week: verdict.week,
+        riskMode,
+        swaps: verdict.swaps.map((s) => ({
+          bench: s.bench_player,
+          start: s.start_player,
+          confidence: s.confidence,
+        })),
+      }
+    : null;
 
   if (!isAuthenticated) {
     return (
@@ -411,6 +419,10 @@ export default function VerdictPage() {
           )}
         </div>
       </main>
+
+      {showShareCard && shareCardData && (
+        <ShareCard data={shareCardData} onClose={() => setShowShareCard(false)} />
+      )}
     </div>
   );
 }
