@@ -38,12 +38,12 @@ from routes.auth import get_current_user, get_optional_user, require_admin_key
 from routes.auth import router as auth_router
 from routes.commissioner import router as commissioner_router
 from routes.dossier import router as dossier_router
+from routes.goblin import router as goblin_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
 from routes.rivalries import router as rivalries_router
 from routes.sessions import router as sessions_router
-from routes.goblin import router as goblin_router
 from routes.verdicts import router as verdicts_router
 from services import stripe_billing
 from services.accuracy import AccuracyTracker, DecisionOutcome
@@ -55,14 +55,13 @@ from services.engagement import engagement_tracker
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notification_triggers import notification_scheduler
-from services.outcome_scheduler import outcome_scheduler
-from services.rankings_scheduler import rankings_scheduler
-from services.recap_scheduler import recap_scheduler
-from services.verdict_scheduler import verdict_pregen_scheduler
 from services.notifications import PushNotification, notification_service
+from services.outcome_scheduler import outcome_scheduler
 from services.query_classifier import QueryCategory
 from services.query_classifier import classify_query as classify_sports_query
+from services.rankings_scheduler import rankings_scheduler
 from services.rate_limiter import rate_limiter
+from services.recap_scheduler import recap_scheduler
 from services.redis import redis_service
 from services.router import (
     QueryComplexity,
@@ -81,6 +80,7 @@ from services.variants import (
     get_experiment_config,
     get_experiment_history,
 )
+from services.verdict_scheduler import verdict_pregen_scheduler
 from services.waiver_wire import analyze_roster, build_waiver_prompt
 from services.websocket import connection_manager
 from services.yahoo import yahoo_service
