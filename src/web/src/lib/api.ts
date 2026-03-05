@@ -939,6 +939,27 @@ class APIClient {
     return response.data;
   }
 
+  // Referral
+  async getReferralCode(): Promise<{ referral_code: string; share_url: string }> {
+    const response = await this.client.get('/referral/code');
+    return response.data;
+  }
+
+  async applyReferralCode(code: string): Promise<{ success: boolean; message: string; pro_days: number }> {
+    const response = await this.client.post('/referral/apply', { code });
+    return response.data;
+  }
+
+  async getReferralStats(): Promise<{
+    referral_code: string | null;
+    total_referrals: number;
+    pro_days_remaining: number;
+    max_referrals: number;
+  }> {
+    const response = await this.client.get('/referral/stats');
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

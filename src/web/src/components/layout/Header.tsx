@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen, Sparkles } from 'lucide-react';
+import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen, Sparkles, Gift } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from './ThemeToggle';
@@ -160,6 +160,10 @@ export function Header() {
                   <DropdownMenuItem onClick={() => router.push('/billing')}>
                     <CreditCard className="mr-2 h-4 w-4" />
                     Billing
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => router.push('/referral')}>
+                    <Gift className="mr-2 h-4 w-4" />
+                    Invite Friends
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut} className="text-red-400 focus:text-red-400">
