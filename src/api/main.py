@@ -52,6 +52,7 @@ from services.budget_alerts import check_and_send_alerts, send_test_webhook
 from services.claude import claude_service
 from services.database import db_service
 from services.draft_assistant import draft_assistant, extract_draft_players
+from services.drip_scheduler import drip_scheduler
 from services.engagement import engagement_tracker
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
@@ -225,9 +226,17 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Rankings scheduler skipped (requires DB + Redis)")
 
+    # Start drip email scheduler (requires DB, optionally Resend)
+    if db_service.is_configured:
+        await drip_scheduler.start()
+        logger.info("Drip scheduler started")
+    else:
+        logger.info("Drip scheduler skipped (requires DB)")
+
     yield
 
     # Cleanup
+    await drip_scheduler.stop()
     await rankings_scheduler.stop()
     await recap_scheduler.stop()
     await verdict_pregen_scheduler.stop()

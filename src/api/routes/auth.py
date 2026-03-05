@@ -16,6 +16,7 @@ Usage in other routes:
         return {"user_id": current_user["user_id"]}
 """
 
+import asyncio
 import logging
 import os
 import secrets
@@ -338,6 +339,15 @@ async def authenticate_with_google(request: GoogleAuthRequest, req: Request):
         user = await get_or_create_user(google_user_info, db)
         # Flush to assign auto-generated id before reading it
         await db.flush()
+
+        # Send welcome email for new users (no drip history = first login)
+        if not user.drip_emails_sent:
+            try:
+                from services.email_drip import send_welcome
+
+                asyncio.create_task(send_welcome(user.id, user.name, user.email))
+            except Exception:
+                pass  # Email is best-effort, never block auth
 
         # Create JWT token
         try:
