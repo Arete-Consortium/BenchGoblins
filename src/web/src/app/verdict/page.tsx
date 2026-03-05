@@ -58,7 +58,7 @@ const URGENCY_STYLES: Record<string, { bg: string; text: string; label: string }
 // Components
 // ---------------------------------------------------------------------------
 
-function SwapCard({ swap, index }: { swap: SwapRecommendation; index: number }) {
+function SwapCard({ swap }: { swap: SwapRecommendation }) {
   const urgency = URGENCY_STYLES[swap.urgency] || URGENCY_STYLES.recommended;
 
   return (
@@ -188,12 +188,13 @@ export default function VerdictPage() {
   const { riskMode: appRiskMode, setRiskMode: setAppRiskMode } = useAppStore();
 
   const [verdict, setVerdict] = useState<GoblinVerdict | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(isAuthenticated);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [riskMode, setRiskMode] = useState<RiskMode>(appRiskMode);
 
   const fetchVerdict = useCallback(async (mode: RiskMode, forceGenerate = false) => {
+    setLoading(true);
     setError(null);
     try {
       const result = forceGenerate
@@ -212,17 +213,14 @@ export default function VerdictPage() {
         }
       }
       setError(message);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    fetchVerdict(riskMode).finally(() => setLoading(false));
+    if (!isAuthenticated) return;
+    fetchVerdict(riskMode);
   }, [isAuthenticated, riskMode, fetchVerdict]);
 
   const handleRiskModeChange = (mode: RiskMode) => {
@@ -380,7 +378,7 @@ export default function VerdictPage() {
                   </h3>
                   <div className="space-y-4">
                     {verdict.swaps.map((swap, i) => (
-                      <SwapCard key={i} swap={swap} index={i} />
+                      <SwapCard key={i} swap={swap} />
                     ))}
                   </div>
                 </div>
