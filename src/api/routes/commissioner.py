@@ -377,6 +377,33 @@ async def get_league_activity(
 
 
 # -------------------------------------------------------------------------
+# Commissioner Alerts
+# -------------------------------------------------------------------------
+
+
+@router.get("/leagues/{league_id}/alerts")
+async def get_league_alerts(
+    league_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Get proactive health alerts for a league.
+
+    Checks for injured starters, empty slots, inactive members,
+    and roster imbalances. Commissioner only.
+    """
+    league = await require_commissioner(league_id, current_user)
+
+    from services.commissioner_alerts import commissioner_alert_service
+
+    summary = await commissioner_alert_service.generate_alerts(
+        league_id=league.id,
+        external_league_id=league.external_league_id,
+    )
+    return summary
+
+
+# -------------------------------------------------------------------------
 # Dispute Resolution
 # -------------------------------------------------------------------------
 

@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen } from 'lucide-react';
+import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from './ThemeToggle';
@@ -21,6 +21,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
 const navItems = [
   { href: '/ask', label: 'Ask', icon: MessageSquare },
+  { href: '/verdict', label: 'Verdict', icon: Sparkles },
   { href: '/history', label: 'History', icon: History },
   { href: '/recaps', label: 'Recaps', icon: BookOpen },
   { href: '/accuracy', label: 'Accuracy', icon: Target },

@@ -47,6 +47,19 @@ export async function unregisterPushToken(token: string): Promise<void> {
   await api.post('/notifications/unregister', { token });
 }
 
+export interface NotificationPreferences {
+  injury_alerts: boolean;
+  lineup_reminders: boolean;
+  decision_updates: boolean;
+  trending_players: boolean;
+}
+
+export async function updateNotificationPreferences(
+  prefs: NotificationPreferences,
+): Promise<void> {
+  await api.put('/notifications/preferences', prefs);
+}
+
 // ---------------------------------------------------------------------------
 // ESPN Integration
 // ---------------------------------------------------------------------------

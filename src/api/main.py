@@ -43,6 +43,7 @@ from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
 from routes.rivalries import router as rivalries_router
 from routes.sessions import router as sessions_router
+from routes.goblin import router as goblin_router
 from routes.verdicts import router as verdicts_router
 from services import stripe_billing
 from services.accuracy import AccuracyTracker, DecisionOutcome
@@ -54,6 +55,10 @@ from services.engagement import engagement_tracker
 from services.espn import espn_service, format_player_context
 from services.espn_fantasy import ESPNCredentials, espn_fantasy_service
 from services.notification_triggers import notification_scheduler
+from services.outcome_scheduler import outcome_scheduler
+from services.rankings_scheduler import rankings_scheduler
+from services.recap_scheduler import recap_scheduler
+from services.verdict_scheduler import verdict_pregen_scheduler
 from services.notifications import PushNotification, notification_service
 from services.query_classifier import QueryCategory
 from services.query_classifier import classify_query as classify_sports_query
@@ -191,9 +196,41 @@ async def lifespan(app: FastAPI):
     else:
         logger.info("Notification scheduler skipped (requires DB + Redis)")
 
+    # Start outcome sync scheduler (only requires DB, not Redis)
+    if db_service.is_configured:
+        await outcome_scheduler.start()
+        logger.info("Outcome scheduler started")
+    else:
+        logger.info("Outcome scheduler skipped (requires DB)")
+
+    # Start verdict pre-generation scheduler (requires DB + Redis + Claude)
+    if db_service.is_configured and redis_service.is_connected:
+        await verdict_pregen_scheduler.start()
+        logger.info("Verdict pre-gen scheduler started")
+    else:
+        logger.info("Verdict pre-gen scheduler skipped (requires DB + Redis)")
+
+    # Start recap scheduler (requires DB + Claude)
+    if db_service.is_configured:
+        await recap_scheduler.start()
+        logger.info("Recap scheduler started")
+    else:
+        logger.info("Recap scheduler skipped (requires DB)")
+
+    # Start rankings scheduler (requires DB + Redis + Sleeper)
+    if db_service.is_configured and redis_service.is_connected:
+        await rankings_scheduler.start()
+        logger.info("Rankings scheduler started")
+    else:
+        logger.info("Rankings scheduler skipped (requires DB + Redis)")
+
     yield
 
     # Cleanup
+    await rankings_scheduler.stop()
+    await recap_scheduler.stop()
+    await verdict_pregen_scheduler.stop()
+    await outcome_scheduler.stop()
     await notification_scheduler.stop()
     await espn_service.close()
     await espn_fantasy_service.close()
@@ -315,6 +352,9 @@ app.include_router(rivalries_router)
 
 # Player dossier
 app.include_router(dossier_router)
+
+# Goblin lineup verdicts
+app.include_router(goblin_router)
 
 
 # ---------------------------------------------------------------------------

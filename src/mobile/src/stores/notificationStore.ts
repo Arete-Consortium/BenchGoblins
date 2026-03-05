@@ -15,7 +15,11 @@ import {
   addNotificationReceivedListener,
   getLastNotificationResponse,
 } from '../utils/notifications';
-import { registerPushToken, unregisterPushToken } from '../services/api';
+import {
+  registerPushToken,
+  unregisterPushToken,
+  updateNotificationPreferences,
+} from '../services/api';
 import type { Subscription } from 'expo-notifications';
 
 export interface NotificationPreferences {
@@ -122,16 +126,18 @@ export const useNotificationStore = create<NotificationState>()(
       },
 
       updatePreference: (key, value) => {
-        set((state) => ({
-          preferences: {
-            ...state.preferences,
-            [key]: value,
-          },
-        }));
+        const updated = { ...get().preferences, [key]: value };
+        set({ preferences: updated });
+
+        // Sync to backend (fire-and-forget, don't block UI)
+        syncPreferencesToBackend(updated);
       },
 
       setAllPreferences: (prefs) => {
         set({ preferences: prefs });
+
+        // Sync to backend
+        syncPreferencesToBackend(prefs);
       },
     }),
     {
@@ -145,6 +151,22 @@ export const useNotificationStore = create<NotificationState>()(
     },
   ),
 );
+
+/**
+ * Sync local preferences to the backend.
+ * Maps camelCase keys to snake_case for the API.
+ * Fire-and-forget — failures are logged but don't affect local state.
+ */
+function syncPreferencesToBackend(prefs: NotificationPreferences): void {
+  updateNotificationPreferences({
+    injury_alerts: prefs.injuryAlerts,
+    lineup_reminders: prefs.lineupReminders,
+    decision_updates: prefs.decisionUpdates,
+    trending_players: prefs.trendingPlayers,
+  }).catch((error) => {
+    console.error('Failed to sync notification preferences to backend:', error);
+  });
+}
 
 // Notification navigation handler
 function handleNotificationNavigation(data: Record<string, unknown> | undefined) {

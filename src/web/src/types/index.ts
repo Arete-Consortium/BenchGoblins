@@ -211,6 +211,27 @@ export interface HealthResponse {
   };
 }
 
+// Goblin Verdict types
+export interface SwapRecommendation {
+  bench_player: string;
+  start_player: string;
+  confidence: number;
+  reasoning: string;
+  urgency: 'critical' | 'recommended' | 'optional';
+}
+
+export interface GoblinVerdict {
+  team_name: string;
+  week: number;
+  season: number;
+  risk_mode: RiskMode;
+  swaps: SwapRecommendation[];
+  verdict_headline: string;
+  overall_outlook: string;
+  generated_at: string;
+  cached: boolean;
+}
+
 // Weekly recap
 export interface WeeklyRecap {
   id: string;

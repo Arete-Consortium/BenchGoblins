@@ -898,6 +898,21 @@ class APIClient {
     return response.data;
   }
 
+  // Goblin Verdicts
+  async getGoblinVerdict(riskMode = 'median', week?: number): Promise<GoblinVerdict> {
+    const params: Record<string, string | number> = { risk_mode: riskMode };
+    if (week) params.week = week;
+    const response = await this.client.get<GoblinVerdict>('/goblin/verdict', { params });
+    return response.data;
+  }
+
+  async generateGoblinVerdict(riskMode = 'median', week?: number): Promise<GoblinVerdict> {
+    const params: Record<string, string | number> = { risk_mode: riskMode };
+    if (week) params.week = week;
+    const response = await this.client.post<GoblinVerdict>('/goblin/verdict/generate', null, { params });
+    return response.data;
+  }
+
   // Weekly recaps
   async getWeeklyRecaps(limit = 10): Promise<WeeklyRecap[]> {
     const response = await this.client.get<WeeklyRecap[]>('/recaps/weekly', {
