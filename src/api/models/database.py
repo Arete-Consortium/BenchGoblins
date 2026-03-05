@@ -78,6 +78,14 @@ class User(Base):
     yahoo_sport: Mapped[str | None] = mapped_column(String(10), nullable=True)
     yahoo_roster_snapshot: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     yahoo_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Referral system
+    referral_code: Mapped[str | None] = mapped_column(String(12), unique=True, nullable=True)
+    referred_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id"), nullable=True
+    )
+    referral_pro_expires_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=func.now(), onupdate=func.now()
@@ -94,6 +102,23 @@ class User(Base):
             postgresql_where=text("subscription_tier != 'free'"),
         ),
     )
+
+
+class Referral(Base):
+    """Tracks referral relationships and reward status."""
+
+    __tablename__ = "referrals"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    referrer_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    referred_user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default="pending")
+    referrer_reward_applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    referred_reward_applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=func.now())
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    __table_args__ = (UniqueConstraint("referrer_user_id", "referred_user_id"),)
 
 
 class Player(Base):

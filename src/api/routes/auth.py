@@ -230,6 +230,13 @@ async def require_pro(current_user: dict = Depends(get_current_user)) -> dict:
 
     is_pro = user.subscription_tier == "pro"
     if not is_pro:
+        # Check referral-granted Pro
+        if hasattr(user, "referral_pro_expires_at") and user.referral_pro_expires_at:
+            from datetime import UTC, datetime
+
+            if user.referral_pro_expires_at > datetime.now(UTC):
+                is_pro = True
+    if not is_pro:
         try:
             is_pro = await stripe_billing.is_league_pro(user.id)
         except Exception:

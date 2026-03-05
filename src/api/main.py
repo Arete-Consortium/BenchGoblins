@@ -42,6 +42,7 @@ from routes.goblin import router as goblin_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
+from routes.referral import router as referral_router
 from routes.rivalries import router as rivalries_router
 from routes.sessions import router as sessions_router
 from routes.verdicts import router as verdicts_router
@@ -355,6 +356,9 @@ app.include_router(dossier_router)
 
 # Goblin lineup verdicts
 app.include_router(goblin_router)
+
+# Referral system
+app.include_router(referral_router)
 
 
 # ---------------------------------------------------------------------------

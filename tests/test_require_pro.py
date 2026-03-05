@@ -17,6 +17,7 @@ def _make_user(tier="pro"):
     user = MagicMock()
     user.id = 1
     user.subscription_tier = tier
+    user.referral_pro_expires_at = None
     return user
 
 

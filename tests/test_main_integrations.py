@@ -481,6 +481,7 @@ class TestGenerateRecapLeagueProException:
                 user = MagicMock()
                 user.id = 1
                 user.subscription_tier = "free"
+                user.referral_pro_expires_at = None
                 mock_get_user.return_value = user
                 mock_league_pro.side_effect = RuntimeError("stripe broken")
 
