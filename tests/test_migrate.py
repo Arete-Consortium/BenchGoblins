@@ -55,12 +55,12 @@ class TestDiscoverMigrations:
     def test_discovers_real_migrations(self):
         """Should find the actual migration files in data/migrations/."""
         migrations = discover_migrations()
-        assert len(migrations) == 20
+        assert len(migrations) == 21
         # Should be sorted by version
         versions = [v for v, _ in migrations]
         assert versions == sorted(versions)
         assert versions[0] == 2
-        assert versions[-1] == 21
+        assert versions[-1] == 22
 
     def test_migrations_are_sql_files(self):
         migrations = discover_migrations()
@@ -232,6 +232,7 @@ class TestRunMigrationsAsync:
                 19,
                 20,
                 21,
+                22,
             ]
         )
         result = asyncio.get_event_loop().run_until_complete(
