@@ -14,6 +14,7 @@ import {
   purchasePackage,
   UserCancelledError,
 } from '@/lib/revenuecat';
+import api from '@/lib/api';
 
 // Local storage key for anonymous RC user ID
 const RC_ANON_USER_KEY = 'benchgoblin_rc_anon_user_id';
@@ -46,83 +47,102 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
   error: null,
 
   initialize: async (appUserId?: string) => {
-    // Skip entirely if not client-side or API key isn't configured
-    if (!isRevenueCatAvailable()) {
-      set({ isInitialized: false, isLoading: false });
-      return;
+    if (get().isInitialized) return;
+
+    // Try RevenueCat first if available
+    if (isRevenueCatAvailable()) {
+      if (await isRevenueCatConfigured()) return;
+
+      set({ isLoading: true, error: null });
+
+      try {
+        const userId = appUserId || await getOrCreateAnonymousUserId();
+        await configureRevenueCat(userId);
+
+        const [customerInfo, offerings] = await Promise.all([
+          getCustomerInfo(),
+          getOfferings(),
+        ]);
+
+        set({
+          isInitialized: true,
+          isLoading: false,
+          customerInfo,
+          offerings,
+          isPro: hasProEntitlement(customerInfo),
+        });
+        return;
+      } catch (error) {
+        console.error('RevenueCat initialization failed:', error);
+        // Fall through to backend check
+      }
     }
 
-    if (get().isInitialized && await isRevenueCatConfigured()) return;
-
+    // Fallback: check backend billing status (Stripe)
     set({ isLoading: true, error: null });
-
     try {
-      const userId = appUserId || await getOrCreateAnonymousUserId();
-      await configureRevenueCat(userId);
-
-      // Fetch customer info and offerings in parallel
-      const [customerInfo, offerings] = await Promise.all([
-        getCustomerInfo(),
-        getOfferings(),
-      ]);
-
+      const status = await api.getBillingStatus();
       set({
         isInitialized: true,
         isLoading: false,
-        customerInfo,
-        offerings,
-        isPro: hasProEntitlement(customerInfo),
+        isPro: status.tier === 'pro',
       });
-    } catch (error) {
-      console.error('RevenueCat initialization failed:', error);
-      set({
-        isInitialized: false,
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to initialize subscriptions',
-      });
+    } catch {
+      // Not authenticated or backend unavailable — default to free
+      set({ isInitialized: true, isLoading: false, isPro: false });
     }
   },
 
   switchUser: async (appUserId: string) => {
-    if (!isRevenueCatAvailable()) return;
-
     set({ isLoading: true, error: null });
 
-    try {
-      if (!await isRevenueCatConfigured()) {
-        await configureRevenueCat(appUserId);
-      } else {
-        await changeUser(appUserId);
+    if (isRevenueCatAvailable()) {
+      try {
+        if (!await isRevenueCatConfigured()) {
+          await configureRevenueCat(appUserId);
+        } else {
+          await changeUser(appUserId);
+        }
+
+        const [customerInfo, offerings] = await Promise.all([
+          getCustomerInfo(),
+          getOfferings(),
+        ]);
+
+        set({
+          isInitialized: true,
+          isLoading: false,
+          customerInfo,
+          offerings,
+          isPro: hasProEntitlement(customerInfo),
+        });
+        return;
+      } catch (error) {
+        console.error('RevenueCat user switch failed:', error);
       }
+    }
 
-      const [customerInfo, offerings] = await Promise.all([
-        getCustomerInfo(),
-        getOfferings(),
-      ]);
-
-      set({
-        isInitialized: true,
-        isLoading: false,
-        customerInfo,
-        offerings,
-        isPro: hasProEntitlement(customerInfo),
-      });
-    } catch (error) {
-      console.error('RevenueCat user switch failed:', error);
-      set({
-        isLoading: false,
-        error: error instanceof Error ? error.message : 'Failed to switch user',
-      });
+    // Fallback: check backend billing status
+    try {
+      const status = await api.getBillingStatus();
+      set({ isInitialized: true, isLoading: false, isPro: status.tier === 'pro' });
+    } catch {
+      set({ isInitialized: true, isLoading: false, isPro: false });
     }
   },
 
   refreshCustomerInfo: async () => {
     try {
-      const customerInfo = await getCustomerInfo();
-      set({
-        customerInfo,
-        isPro: hasProEntitlement(customerInfo),
-      });
+      if (isRevenueCatAvailable()) {
+        const customerInfo = await getCustomerInfo();
+        set({
+          customerInfo,
+          isPro: hasProEntitlement(customerInfo),
+        });
+      } else {
+        const status = await api.getBillingStatus();
+        set({ isPro: status.tier === 'pro' });
+      }
     } catch (error) {
       console.error('Failed to refresh customer info:', error);
     }
