@@ -127,10 +127,27 @@ export const useLeagueStore = create<LeagueState>()(
       restoreFromBackend: async () => {
         if (!api.isUserAuthenticated()) return;
 
-        // Don't overwrite existing local connection
-        const { connection } = get();
-        if (connection) return;
+        const { connection, selectedLeagueIds } = get();
 
+        // If we have a local connection, push it to the backend so the DB
+        // has the league data (verdicts, commissioner tools, etc. need it).
+        if (connection) {
+          const leagueId = selectedLeagueIds.nfl || selectedLeagueIds.nba || selectedLeagueIds.mlb || selectedLeagueIds.nhl;
+          if (leagueId) {
+            const sport = selectedLeagueIds.nfl ? 'nfl'
+              : selectedLeagueIds.nba ? 'nba'
+              : selectedLeagueIds.mlb ? 'mlb'
+              : 'nhl';
+            try {
+              await api.syncLeague(connection.sleeperUsername, leagueId, sport as Sport);
+            } catch {
+              // Non-blocking — best effort sync
+            }
+          }
+          return;
+        }
+
+        // No local connection — try restoring from backend
         try {
           const data = await api.getMyLeague();
           if (data.connected && data.sleeper_username && data.sleeper_user_id && data.sleeper_league_id) {

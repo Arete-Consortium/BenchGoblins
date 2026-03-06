@@ -64,12 +64,24 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
           getOfferings(),
         ]);
 
+        let pro = hasProEntitlement(customerInfo);
+
+        // RevenueCat may not know about Stripe subscriptions — check backend too
+        if (!pro) {
+          try {
+            const status = await api.getBillingStatus();
+            if (status.tier === 'pro') pro = true;
+          } catch {
+            // Not authenticated or backend unavailable — keep RC result
+          }
+        }
+
         set({
           isInitialized: true,
           isLoading: false,
           customerInfo,
           offerings,
-          isPro: hasProEntitlement(customerInfo),
+          isPro: pro,
         });
         return;
       } catch (error) {
@@ -109,12 +121,24 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
           getOfferings(),
         ]);
 
+        let pro = hasProEntitlement(customerInfo);
+
+        // RevenueCat may not know about Stripe subscriptions — check backend too
+        if (!pro) {
+          try {
+            const status = await api.getBillingStatus();
+            if (status.tier === 'pro') pro = true;
+          } catch {
+            // Not authenticated or backend unavailable — keep RC result
+          }
+        }
+
         set({
           isInitialized: true,
           isLoading: false,
           customerInfo,
           offerings,
-          isPro: hasProEntitlement(customerInfo),
+          isPro: pro,
         });
         return;
       } catch (error) {
@@ -135,10 +159,19 @@ export const useSubscriptionStore = create<SubscriptionState>()((set, get) => ({
     try {
       if (isRevenueCatAvailable()) {
         const customerInfo = await getCustomerInfo();
-        set({
-          customerInfo,
-          isPro: hasProEntitlement(customerInfo),
-        });
+        let pro = hasProEntitlement(customerInfo);
+
+        // RevenueCat may not know about Stripe subscriptions — check backend too
+        if (!pro) {
+          try {
+            const status = await api.getBillingStatus();
+            if (status.tier === 'pro') pro = true;
+          } catch {
+            // keep RC result
+          }
+        }
+
+        set({ customerInfo, isPro: pro });
       } else {
         const status = await api.getBillingStatus();
         set({ isPro: status.tier === 'pro' });
