@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Users2, Crown, Shield, ArrowLeft, Loader2, Plus } from 'lucide-react';
+import { Users2, Crown, Shield, ArrowLeft, Loader2, Plus, Link2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuthStore } from '@/stores/authStore';
+import { useLeagueStore } from '@/stores/leagueStore';
 import api from '@/lib/api';
 
 interface ManagedLeague {
@@ -23,12 +24,40 @@ interface ManagedLeague {
 
 export default function LeaguesPage() {
   const { isAuthenticated } = useAuthStore();
+  const { connection, leaguesBySport, selectedLeagueIds } = useLeagueStore();
   const [leagues, setLeagues] = useState<ManagedLeague[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Collect locally-connected Sleeper leagues (from zustand) that aren't
+  // already represented in the managed leagues list from the backend.
+  const localLeagues: { name: string; sport: string; leagueId: string; platform: string }[] = [];
+  if (connection) {
+    for (const [sport, leagueId] of Object.entries(selectedLeagueIds)) {
+      if (!leagueId) continue;
+      const alreadyManaged = leagues.some(
+        (l) => l.external_league_id === leagueId && l.platform === 'sleeper'
+      );
+      if (alreadyManaged) continue;
+
+      const sportLeagues = leaguesBySport[sport as keyof typeof leaguesBySport];
+      const match = sportLeagues?.find((l) => l.league_id === leagueId);
+      localLeagues.push({
+        name: match?.name ?? `Sleeper League (${sport.toUpperCase()})`,
+        sport,
+        leagueId,
+        platform: 'sleeper',
+      });
+    }
+  }
+
+  const hasAnyLeague = leagues.length > 0 || localLeagues.length > 0;
+
   useEffect(() => {
-    if (!isAuthenticated) return;
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
 
     const fetchLeagues = async () => {
       try {
@@ -92,7 +121,7 @@ export default function LeaguesPage() {
           <div className="text-center py-20 text-destructive">{error}</div>
         )}
 
-        {!loading && !error && leagues.length === 0 && (
+        {!loading && !error && !hasAnyLeague && (
           <div className="text-center py-20">
             <Users2 className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-semibold mb-2">No leagues yet</h2>
@@ -106,6 +135,31 @@ export default function LeaguesPage() {
         )}
 
         <div className="grid gap-4">
+          {localLeagues.map((local) => (
+            <Card key={`local-${local.leagueId}`} className="border-dashed">
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <Link2 className="w-5 h-5 text-green-500" />
+                    <div>
+                      <CardTitle className="text-lg">{local.name}</CardTitle>
+                      <p className="text-sm text-muted-foreground">
+                        {local.sport.toUpperCase()} &middot; {local.platform}
+                      </p>
+                    </div>
+                  </div>
+                  <span className="text-xs text-muted-foreground bg-muted px-2 py-1 rounded">
+                    Connected locally
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm text-muted-foreground">
+                  Connected via Sleeper as {connection?.sleeperUsername}
+                </p>
+              </CardContent>
+            </Card>
+          ))}
           {leagues.map((league) => (
             <Link key={league.id} href={`/league/${league.id}`}>
               <Card className="hover:border-primary/50 transition-colors cursor-pointer">

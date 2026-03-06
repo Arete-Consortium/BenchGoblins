@@ -5,6 +5,7 @@ Handles Sleeper league connection, roster retrieval, and league settings.
 Sleeper API is public — no OAuth required, just a username.
 """
 
+import logging
 import secrets
 from datetime import UTC, date, datetime
 
@@ -333,8 +334,12 @@ async def sync_sleeper(
                 user_id=current_user["user_id"],
                 external_team_id=sleeper_user.user_id,
             )
-        except Exception:
-            pass  # Non-blocking — managed league is a nice-to-have
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "Failed to create managed league for %s: %s",
+                request.league_id,
+                exc,
+            )
 
     return SyncResponse(
         sleeper_username=sleeper_user.username,
