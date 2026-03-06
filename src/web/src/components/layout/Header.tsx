@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen, Sparkles, Gift, Trophy } from 'lucide-react';
+import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen, Sparkles, Gift, Trophy, Crown } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from './ThemeToggle';
@@ -19,14 +19,16 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
+// Primary nav items always visible; secondary hidden on mobile
 const navItems = [
-  { href: '/ask', label: 'Ask', icon: MessageSquare },
-  { href: '/verdict', label: 'Verdict', icon: Sparkles },
-  { href: '/history', label: 'History', icon: History },
-  { href: '/recaps', label: 'Recaps', icon: BookOpen },
-  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy },
-  { href: '/accuracy', label: 'Accuracy', icon: Target },
-  { href: '/settings', label: 'Settings', icon: Settings },
+  { href: '/ask', label: 'Ask', icon: MessageSquare, primary: true },
+  { href: '/verdict', label: 'Verdict', icon: Sparkles, primary: true },
+  { href: '/history', label: 'History', icon: History, primary: true },
+  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, primary: true },
+  { href: '/recaps', label: 'Recaps', icon: BookOpen, primary: false },
+  { href: '/commissioner', label: 'Commissioner', icon: Crown, primary: false },
+  { href: '/accuracy', label: 'Accuracy', icon: Target, primary: false },
+  { href: '/settings', label: 'Settings', icon: Settings, primary: false },
 ];
 
 function getInitials(name: string): string {
@@ -90,7 +92,7 @@ export function Header() {
             {navItems.map((item) => {
               const isActive = pathname === item.href;
               return (
-                <Link key={item.href} href={item.href}>
+                <Link key={item.href} href={item.href} className={item.primary ? '' : 'hidden md:block'}>
                   <Button
                     variant={isActive ? 'secondary' : 'ghost'}
                     size="sm"
@@ -100,7 +102,7 @@ export function Header() {
                     )}
                   >
                     <item.icon className="h-4 w-4" />
-                    <span className="hidden sm:inline">{item.label}</span>
+                    <span className="hidden lg:inline">{item.label}</span>
                   </Button>
                 </Link>
               );

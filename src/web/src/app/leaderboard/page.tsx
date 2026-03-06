@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { useAppStore } from '@/stores/appStore';
 import api from '@/lib/api';
@@ -94,7 +95,7 @@ function IndexBar({ value, max = 100 }: { value: number; max?: number }) {
   );
 }
 
-function PlayerRow({ player, mode }: { player: LeaderboardPlayer; mode: RiskMode }) {
+function PlayerRow({ player, mode, sport }: { player: LeaderboardPlayer; mode: RiskMode; sport: string }) {
   const score = mode === 'floor' ? player.floor_score : mode === 'ceiling' ? player.ceiling_score : player.median_score;
   const isTop3 = player.rank <= 3;
 
@@ -114,7 +115,7 @@ function PlayerRow({ player, mode }: { player: LeaderboardPlayer; mode: RiskMode
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-dark-100 truncate">{player.name}</span>
+          <Link href={`/dossier/${sport}/${player.player_id}`} className="font-semibold text-dark-100 truncate hover:text-primary-400 transition-colors">{player.name}</Link>
           {player.position && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-primary-600/20 text-primary-400 font-medium flex-shrink-0">
               {player.position}
@@ -143,7 +144,7 @@ function PlayerRow({ player, mode }: { player: LeaderboardPlayer; mode: RiskMode
   );
 }
 
-function TrendingRow({ player }: { player: TrendingPlayer }) {
+function TrendingRow({ player, sport }: { player: TrendingPlayer; sport: string }) {
   const isUp = player.delta >= 0;
   const isTop3 = player.rank <= 3;
 
@@ -163,7 +164,7 @@ function TrendingRow({ player }: { player: TrendingPlayer }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="font-semibold text-dark-100 truncate">{player.name}</span>
+          <Link href={`/dossier/${sport}/${player.player_id}`} className="font-semibold text-dark-100 truncate hover:text-primary-400 transition-colors">{player.name}</Link>
           {player.position && (
             <span className="text-xs px-1.5 py-0.5 rounded bg-primary-600/20 text-primary-400 font-medium flex-shrink-0">
               {player.position}
@@ -419,7 +420,7 @@ export default function LeaderboardPage() {
           )}
 
           {tab === 'trending' && (
-            <div className="flex items-center gap-4 mb-6">
+            <div className="flex flex-wrap items-center gap-3 mb-6">
               {/* Risk Mode */}
               <div className="flex gap-2">
                 {MODE_CONFIG.map((m) => {
@@ -501,7 +502,7 @@ export default function LeaderboardPage() {
             ) : (
               <div className="space-y-2">
                 {players.map((player) => (
-                  <PlayerRow key={player.player_id} player={player} mode={mode} />
+                  <PlayerRow key={player.player_id} player={player} mode={mode} sport={sport} />
                 ))}
               </div>
             )
@@ -518,7 +519,7 @@ export default function LeaderboardPage() {
             ) : (
               <div className="space-y-2">
                 {trending.map((player) => (
-                  <TrendingRow key={player.player_id} player={player} />
+                  <TrendingRow key={player.player_id} player={player} sport={sport} />
                 ))}
               </div>
             )

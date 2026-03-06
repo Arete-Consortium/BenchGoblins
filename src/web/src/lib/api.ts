@@ -815,6 +815,14 @@ class APIClient {
     return response.data;
   }
 
+  // League alerts
+  async getLeagueAlerts(leagueId: number): Promise<{
+    alerts: { category: string; severity: string; message: string; details?: string }[];
+  }> {
+    const response = await this.client.get(`/commissioner/leagues/${leagueId}/alerts`);
+    return response.data;
+  }
+
   // Dispute resolution
   async fileDispute(leagueId: number, data: {
     category: string;
