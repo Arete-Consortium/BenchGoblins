@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
-import { ArrowLeft, ArrowRight, Link2, Check, Sparkles } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Link2, Check, Sparkles, Circle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
@@ -150,19 +150,26 @@ export default function OnboardingPage() {
                       className={cn(
                         'w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left',
                         connected
-                          ? 'border-primary-500 bg-primary-500/10'
+                          ? 'border-green-500 bg-green-500/10'
                           : 'border-dark-700 bg-dark-800/50 hover:border-dark-600'
                       )}
                     >
-                      <Link2 className={cn('w-5 h-5', connected ? 'text-primary-400' : 'text-dark-400')} />
+                      <div className="relative">
+                        <Link2 className={cn('w-5 h-5', connected ? 'text-green-400' : 'text-dark-400')} />
+                        {connected && (
+                          <Circle className="w-2.5 h-2.5 text-green-400 fill-green-400 absolute -top-0.5 -right-0.5" />
+                        )}
+                      </div>
                       <div className="flex-1">
                         <div className="font-medium">{labels[platform]}</div>
                         {connected && (
-                          <div className="text-xs text-primary-400 mt-0.5">Connected</div>
+                          <div className="text-xs text-green-400 mt-0.5">
+                            Connected{connection?.sleeperUsername ? ` · ${connection.sleeperUsername}` : ''}
+                          </div>
                         )}
                       </div>
                       {connected ? (
-                        <Check className="w-5 h-5 text-primary-400" />
+                        <Check className="w-5 h-5 text-green-400" />
                       ) : (
                         <ArrowRight className="w-4 h-4 text-dark-500" />
                       )}
@@ -176,11 +183,19 @@ export default function OnboardingPage() {
                   <ArrowLeft className="w-4 h-4" />
                   Back
                 </Button>
-                <Button onClick={() => setStep(2)} className="flex-1 gap-2">
-                  {isLeagueConnected ? 'Continue' : 'Skip for now'}
+                <Button
+                  onClick={() => setStep(2)}
+                  className={cn('flex-1 gap-2', isLeagueConnected && 'bg-green-600 hover:bg-green-700')}
+                >
+                  {isLeagueConnected ? 'Continue' : 'Continue without league'}
                   <ArrowRight className="w-4 h-4" />
                 </Button>
               </div>
+              {!isLeagueConnected && (
+                <p className="text-xs text-dark-500 text-center">
+                  You can always connect a league later from Settings.
+                </p>
+              )}
             </div>
           )}
 
@@ -212,15 +227,27 @@ export default function OnboardingPage() {
                     <div className="text-xs text-dark-400">Risk mode</div>
                   </div>
                 </div>
-                {isLeagueConnected && (
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-dark-800/50 border border-dark-700">
-                    <Link2 className="w-6 h-6 text-primary-400" />
-                    <div>
-                      <div className="font-medium">{connection?.sleeperUsername}</div>
-                      <div className="text-xs text-dark-400">Sleeper league connected</div>
+                <div className={cn(
+                  'flex items-center gap-3 p-4 rounded-xl border',
+                  isLeagueConnected
+                    ? 'bg-green-500/10 border-green-500/30'
+                    : 'bg-dark-800/50 border-dark-700'
+                )}>
+                  <div className="relative">
+                    <Link2 className={cn('w-6 h-6', isLeagueConnected ? 'text-green-400' : 'text-dark-500')} />
+                    {isLeagueConnected && (
+                      <Circle className="w-2.5 h-2.5 text-green-400 fill-green-400 absolute -top-0.5 -right-0.5" />
+                    )}
+                  </div>
+                  <div>
+                    <div className="font-medium">
+                      {isLeagueConnected ? connection?.sleeperUsername : 'No league connected'}
+                    </div>
+                    <div className={cn('text-xs', isLeagueConnected ? 'text-green-400' : 'text-dark-500')}>
+                      {isLeagueConnected ? 'Sleeper league connected' : 'Connect anytime from Settings'}
                     </div>
                   </div>
-                )}
+                </div>
               </div>
 
               <div className="flex gap-3">
