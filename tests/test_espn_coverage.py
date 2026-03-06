@@ -4,7 +4,7 @@ Missing lines: 342-358, 396, 455, 459, 464, 628-630, 661-662, 740-763,
 825-826, 842-843, 869-870, 893-894, 916-917, 931-940, 1023-1037, 1093-1104
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -951,3 +951,160 @@ class TestFormatPlayerContextSoccer:
         )
         ctx = format_player_context(player, stats, "soccer")
         assert "Saves: 80" in ctx
+
+
+# -------------------------------------------------------------------------
+# Gamelog nested seasonTypes fallback + type guards
+# -------------------------------------------------------------------------
+
+
+class TestGamelogNestedSeasonTypes:
+    """Tests for ESPN gamelog API response format changes."""
+
+    @pytest.mark.asyncio
+    async def test_events_not_a_list_falls_back(self):
+        """If events is a string/dict instead of list, treat as empty."""
+        svc = ESPNService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {"events": "not-a-list"}
+
+        with patch.object(svc, "client") as mock_client:
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            result = await svc.get_player_game_logs("123", "nba", limit=5)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_nested_season_types_extraction(self):
+        """Events nested under seasonTypes[].categories[].events[] are extracted."""
+        svc = ESPNService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": [],
+            "seasonTypes": [
+                {
+                    "categories": [
+                        {
+                            "events": [
+                                {
+                                    "id": "g1",
+                                    "date": "2026-03-01",
+                                    "opponent": {"abbreviation": "LAL"},
+                                    "homeAway": "home",
+                                    "gameResult": "W",
+                                    "stats": [30, 5, 7, 2, 1, 3],
+                                    "statNames": ["PTS", "REB", "AST", "STL", "BLK", "TO"],
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+        }
+
+        with patch.object(svc, "client") as mock_client:
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            result = await svc.get_player_game_logs("123", "nba", limit=5)
+
+        assert len(result) == 1
+        assert result[0]["game_id"] == "g1"
+        assert result[0]["points"] == 30
+
+    @pytest.mark.asyncio
+    async def test_season_types_with_non_dict_entries(self):
+        """Non-dict entries in seasonTypes/categories are skipped."""
+        svc = ESPNService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": [],
+            "seasonTypes": [
+                "not-a-dict",
+                {"categories": ["also-not-a-dict"]},
+                {"categories": [{"events": "not-a-list"}]},
+            ],
+        }
+
+        with patch.object(svc, "client") as mock_client:
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            result = await svc.get_player_game_logs("123", "nba", limit=5)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_non_dict_event_skipped(self):
+        """Non-dict items in the events list are skipped."""
+        svc = ESPNService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": ["not-a-dict", 42, None],
+        }
+
+        with patch.object(svc, "client") as mock_client:
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            result = await svc.get_player_game_logs("123", "nba", limit=5)
+
+        assert result == []
+
+    @pytest.mark.asyncio
+    async def test_stats_data_not_list_becomes_empty(self):
+        """If event.stats is not a list, parsing still succeeds with zeros."""
+        svc = ESPNService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": [
+                {
+                    "id": "g2",
+                    "date": "2026-03-01",
+                    "opponent": {"abbreviation": "BOS"},
+                    "homeAway": "away",
+                    "gameResult": "L",
+                    "stats": "not-a-list",
+                    "statNames": ["PTS"],
+                }
+            ],
+        }
+
+        with patch.object(svc, "client") as mock_client:
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            result = await svc.get_player_game_logs("123", "nba", limit=5)
+
+        assert len(result) == 1
+        assert result[0]["points"] == 0
+
+    @pytest.mark.asyncio
+    async def test_opponent_not_dict_becomes_empty(self):
+        """If event.opponent is not a dict, abbreviation defaults to empty."""
+        svc = ESPNService()
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": [
+                {
+                    "id": "g3",
+                    "date": "2026-03-01",
+                    "opponent": "not-a-dict",
+                    "homeAway": "home",
+                    "gameResult": "W",
+                    "stats": [],
+                    "statNames": [],
+                }
+            ],
+        }
+
+        with patch.object(svc, "client") as mock_client:
+            mock_client.get = AsyncMock(return_value=mock_resp)
+            result = await svc.get_player_game_logs("123", "nba", limit=5)
+
+        assert len(result) == 1
+        assert result[0]["opponent"] == ""

@@ -1034,3 +1034,105 @@ class TestEngagement:
         resp = test_client.get("/engagement")
         assert resp.status_code == 200
         assert "error" in resp.json()
+
+
+# =============================================================================
+# CRON SYNC
+# =============================================================================
+
+
+class TestCronSync:
+    def setup_method(self):
+        _override_admin()
+
+    def teardown_method(self):
+        _clear_overrides()
+
+    @patch("api.main.redis_service")
+    @patch("api.main.db_service")
+    def test_db_not_configured(self, mock_db, mock_redis, test_client):
+        mock_db.is_configured = False
+        mock_redis.is_connected = False
+        resp = test_client.post("/cron/sync")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["results"]["outcomes"]["status"] == "skipped"
+        assert data["results"]["rankings"]["status"] == "skipped"
+
+    @patch("api.main.redis_service")
+    @patch("api.main.db_service")
+    def test_outcome_sync_success(self, mock_db, mock_redis, test_client):
+        mock_db.is_configured = True
+        mock_redis.is_connected = False
+        with patch(
+            "services.outcome_recorder.sync_recent_outcomes",
+            new_callable=AsyncMock,
+            return_value={"total_decisions_processed": 5, "total_outcomes_recorded": 2},
+        ):
+            resp = test_client.post("/cron/sync")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["results"]["outcomes"]["total_outcomes_recorded"] == 2
+
+    @patch("api.main.redis_service")
+    @patch("api.main.db_service")
+    def test_outcome_sync_returns_none(self, mock_db, mock_redis, test_client):
+        mock_db.is_configured = True
+        mock_redis.is_connected = False
+        with patch(
+            "services.outcome_recorder.sync_recent_outcomes",
+            new_callable=AsyncMock,
+            return_value=None,
+        ):
+            resp = test_client.post("/cron/sync")
+        assert resp.status_code == 200
+        assert resp.json()["results"]["outcomes"]["status"] == "no_results"
+
+    @patch("api.main.redis_service")
+    @patch("api.main.db_service")
+    def test_outcome_sync_error(self, mock_db, mock_redis, test_client):
+        mock_db.is_configured = True
+        mock_redis.is_connected = False
+        with patch(
+            "services.outcome_recorder.sync_recent_outcomes",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("ESPN down"),
+        ):
+            resp = test_client.post("/cron/sync")
+        assert resp.status_code == 200
+        assert "error" in resp.json()["results"]["outcomes"]
+
+    @patch("api.main.redis_service")
+    @patch("api.main.db_service")
+    def test_rankings_sync_success(self, mock_db, mock_redis, test_client):
+        mock_db.is_configured = True
+        mock_redis.is_connected = True
+        with patch(
+            "services.outcome_recorder.sync_recent_outcomes",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rankings_scheduler.rankings_scheduler._run_rankings",
+            new_callable=AsyncMock,
+        ):
+            resp = test_client.post("/cron/sync")
+        assert resp.status_code == 200
+        assert resp.json()["results"]["rankings"]["status"] == "completed"
+
+    @patch("api.main.redis_service")
+    @patch("api.main.db_service")
+    def test_rankings_sync_error(self, mock_db, mock_redis, test_client):
+        mock_db.is_configured = True
+        mock_redis.is_connected = True
+        with patch(
+            "services.outcome_recorder.sync_recent_outcomes",
+            new_callable=AsyncMock,
+            return_value=None,
+        ), patch(
+            "services.rankings_scheduler.rankings_scheduler._run_rankings",
+            new_callable=AsyncMock,
+            side_effect=RuntimeError("Rankings fail"),
+        ):
+            resp = test_client.post("/cron/sync")
+        assert resp.status_code == 200
+        assert "error" in resp.json()["results"]["rankings"]

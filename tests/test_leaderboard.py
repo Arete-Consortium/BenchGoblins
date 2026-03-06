@@ -956,3 +956,26 @@ class TestSeasonQuery:
 
         assert resp.status_code == 500
         assert "season" in resp.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_with_position_filter(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nba/season?position=SF")
+
+        assert resp.status_code == 200
+        assert resp.json()["players"] == []
