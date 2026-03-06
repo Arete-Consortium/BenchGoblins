@@ -734,7 +734,7 @@ class TestCacheWrite:
 
 
 VALID_USER = {
-    "user_id": "google-123",
+    "user_id": "1",
     "email": "test@example.com",
     "name": "Test User",
     "tier": "pro",
@@ -972,7 +972,7 @@ class TestGetUserLeagueData:
         mock_db = MagicMock()
         mock_db.is_configured = True
 
-        mock_row = ("google-123", "league-abc", "sleeper-456", "Team Alpha")
+        mock_row = ("1", "league-abc", "sleeper-456", "Team Alpha")
         mock_result = MagicMock()
         mock_result.first.return_value = mock_row
 
@@ -986,10 +986,10 @@ class TestGetUserLeagueData:
         with patch(_DB, mock_db), patch(
             "services.goblin_verdict.text", create=True
         ):
-            result = await svc._get_user_league_data("google-123")
+            result = await svc._get_user_league_data("1")
 
         assert result is not None
-        assert result["user_id"] == "google-123"
+        assert result["user_id"] == "1"
         assert result["sleeper_league_id"] == "league-abc"
         assert result["sleeper_user_id"] == "sleeper-456"
         assert result["team_name"] == "Team Alpha"
@@ -1024,7 +1024,7 @@ class TestGetUserLeagueData:
         mock_db = MagicMock()
         mock_db.is_configured = True
 
-        mock_row = ("google-123", "league-abc", "sleeper-456", None)
+        mock_row = ("1", "league-abc", "sleeper-456", None)
         mock_result = MagicMock()
         mock_result.first.return_value = mock_row
 
@@ -1038,7 +1038,7 @@ class TestGetUserLeagueData:
         with patch(_DB, mock_db), patch(
             "services.goblin_verdict.text", create=True
         ):
-            result = await svc._get_user_league_data("google-123")
+            result = await svc._get_user_league_data("1")
 
         assert result is not None
         assert result["team_name"] == "My Team"

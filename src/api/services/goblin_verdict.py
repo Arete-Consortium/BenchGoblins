@@ -340,17 +340,17 @@ class GoblinVerdictService:
             async with db_service.session() as session:
                 result = await session.execute(
                     text("""
-                        SELECT google_id, sleeper_league_id, sleeper_user_id, name
+                        SELECT id, sleeper_league_id, sleeper_user_id, name
                         FROM users
-                        WHERE google_id = :uid
+                        WHERE id = :uid
                           AND sleeper_league_id IS NOT NULL
                     """),
-                    {"uid": user_id},
+                    {"uid": int(user_id)},
                 )
                 row = result.first()
                 if row:
                     return {
-                        "user_id": row[0],
+                        "user_id": str(row[0]),
                         "sleeper_league_id": row[1],
                         "sleeper_user_id": row[2],
                         "team_name": row[3] or "My Team",
@@ -525,12 +525,12 @@ class GoblinVerdictService:
             async with db_service.session() as session:
                 result = await session.execute(
                     text("""
-                        SELECT google_id FROM users
+                        SELECT id FROM users
                         WHERE sleeper_league_id IS NOT NULL
                           AND sleeper_user_id IS NOT NULL
                     """)
                 )
-                return [row[0] for row in result.all()]
+                return [str(row[0]) for row in result.all()]
         except Exception:
             logger.exception("Failed to fetch league users for pre-gen")
             return []
