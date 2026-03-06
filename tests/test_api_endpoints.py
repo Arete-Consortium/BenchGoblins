@@ -451,6 +451,7 @@ class TestAdminEndpointProtection:
 
     # All admin endpoints: (method, path, needs_body)
     ADMIN_ENDPOINTS = [
+        ("POST", "/cron/sync", False),
         ("POST", "/cache/clear", False),
         ("POST", "/cache/invalidate/nba", False),
         ("GET", "/budget", False),

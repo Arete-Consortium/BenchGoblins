@@ -19,14 +19,16 @@ import {
   ArrowDownRight,
   CheckCircle,
   XCircle,
+  Calendar,
 } from 'lucide-react';
 
-type Tab = 'top' | 'trending' | 'accuracy';
+type Tab = 'top' | 'trending' | 'accuracy' | 'season';
 
 const TABS: { key: Tab; label: string; icon: typeof Trophy }[] = [
   { key: 'top', label: 'Top Players', icon: Trophy },
   { key: 'trending', label: 'Trending', icon: TrendingUp },
   { key: 'accuracy', label: 'Accuracy', icon: Target },
+  { key: 'season', label: 'Season', icon: Calendar },
 ];
 
 // Position config per sport
@@ -81,6 +83,19 @@ interface AccuracyLeader {
   correct: number;
   incorrect: number;
   accuracy_pct: number;
+}
+
+interface SeasonPlayer {
+  player_id: string;
+  name: string;
+  team: string | null;
+  position: string | null;
+  avg_floor: number;
+  avg_median: number;
+  avg_ceiling: number;
+  games: number;
+  first_seen: string;
+  last_seen: string;
 }
 
 function IndexBar({ value, max = 100 }: { value: number; max?: number }) {
@@ -247,6 +262,57 @@ function AccuracyRow({ leader }: { leader: AccuracyLeader }) {
   );
 }
 
+function SeasonRow({ player, rank, mode, sport }: { player: SeasonPlayer; rank: number; mode: RiskMode; sport: string }) {
+  const score = mode === 'floor' ? player.avg_floor : mode === 'ceiling' ? player.avg_ceiling : player.avg_median;
+  const isTop3 = rank <= 3;
+
+  return (
+    <div className={`flex items-center gap-4 p-4 rounded-xl transition-all ${
+      isTop3
+        ? 'bg-dark-800/80 border border-dark-600'
+        : 'bg-dark-800/40 border border-dark-700/50 hover:border-dark-600'
+    }`}>
+      <div className={`text-2xl font-bold w-8 text-center flex-shrink-0 ${
+        rank === 1 ? 'text-yellow-400' :
+        rank === 2 ? 'text-gray-300' :
+        rank === 3 ? 'text-amber-600' :
+        'text-dark-500'
+      }`}>
+        {rank}
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2">
+          <Link href={`/dossier/${sport}/${player.player_id}`} className="font-semibold text-dark-100 truncate hover:text-primary-400 transition-colors">{player.name}</Link>
+          {player.position && (
+            <span className="text-xs px-1.5 py-0.5 rounded bg-primary-600/20 text-primary-400 font-medium flex-shrink-0">
+              {player.position}
+            </span>
+          )}
+        </div>
+        <div className="text-xs text-dark-500 mt-0.5">{player.team ?? 'FA'} &middot; {player.games} games</div>
+      </div>
+      <div className="hidden sm:flex items-center gap-4 text-xs text-dark-400">
+        <div className="text-center">
+          <div className="text-dark-500">FLR</div>
+          <div>{player.avg_floor.toFixed(1)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-dark-500">MED</div>
+          <div>{player.avg_median.toFixed(1)}</div>
+        </div>
+        <div className="text-center">
+          <div className="text-dark-500">CEL</div>
+          <div>{player.avg_ceiling.toFixed(1)}</div>
+        </div>
+      </div>
+      <div className="text-right flex-shrink-0">
+        <div className="text-xl font-bold text-primary-400">{score.toFixed(1)}</div>
+        <div className="text-[10px] text-dark-500 uppercase">avg {mode}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function LeaderboardPage() {
   const { sport: appSport } = useAppStore();
   const [tab, setTab] = useState<Tab>('top');
@@ -255,10 +321,14 @@ export default function LeaderboardPage() {
   const [mode, setMode] = useState<RiskMode>('median');
   const [trendingDirection, setTrendingDirection] = useState<'up' | 'down'>('up');
 
+  // Season date range
+  const [seasonRange, setSeasonRange] = useState<'7d' | '30d' | '90d'>('30d');
+
   // Data states
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
   const [trending, setTrending] = useState<TrendingPlayer[]>([]);
   const [accuracy, setAccuracy] = useState<AccuracyLeader[]>([]);
+  const [seasonPlayers, setSeasonPlayers] = useState<SeasonPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -282,20 +352,32 @@ export default function LeaderboardPage() {
           limit: 10,
         });
         setTrending(data.players);
-      } else {
+      } else if (tab === 'accuracy') {
         const data = await api.getAccuracyLeaders({
           sport,
           min_decisions: 5,
           limit: 10,
         });
         setAccuracy(data.leaders);
+      } else {
+        const days = seasonRange === '7d' ? 7 : seasonRange === '90d' ? 90 : 30;
+        const endDate = new Date();
+        const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+        const data = await api.getSeasonSnapshot(sport, {
+          start: startDate.toISOString().slice(0, 10),
+          end: endDate.toISOString().slice(0, 10),
+          position: position ?? undefined,
+          mode,
+          limit: 25,
+        });
+        setSeasonPlayers(data.players);
       }
     } catch {
-      setError(`Failed to load ${tab === 'top' ? 'leaderboard' : tab === 'trending' ? 'trending' : 'accuracy'} data`);
+      setError(`Failed to load ${tab} data`);
     } finally {
       setLoading(false);
     }
-  }, [tab, sport, position, mode, trendingDirection]);
+  }, [tab, sport, position, mode, trendingDirection, seasonRange]);
 
   useEffect(() => {
     fetchData();
@@ -419,6 +501,48 @@ export default function LeaderboardPage() {
             </>
           )}
 
+          {tab === 'season' && (
+            <div className="flex flex-wrap items-center gap-3 mb-6">
+              {/* Date Range */}
+              <div className="flex gap-1 bg-dark-800/50 rounded-lg p-0.5 border border-dark-700">
+                {(['7d', '30d', '90d'] as const).map((r) => (
+                  <button
+                    key={r}
+                    onClick={() => setSeasonRange(r)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      seasonRange === r
+                        ? 'bg-primary-600/20 text-primary-400'
+                        : 'text-dark-400 hover:text-dark-200'
+                    }`}
+                  >
+                    {r === '7d' ? 'Last 7 days' : r === '30d' ? 'Last 30 days' : 'Last 90 days'}
+                  </button>
+                ))}
+              </div>
+              {/* Risk Mode */}
+              <div className="flex gap-2">
+                {MODE_CONFIG.map((m) => {
+                  const Icon = m.icon;
+                  const isSelected = mode === m.key;
+                  return (
+                    <button
+                      key={m.key}
+                      onClick={() => setMode(m.key)}
+                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+                        isSelected
+                          ? m.color
+                          : 'border-dark-700 text-dark-400 hover:border-dark-600 hover:text-dark-300'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {m.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {tab === 'trending' && (
             <div className="flex flex-wrap items-center gap-3 mb-6">
               {/* Risk Mode */}
@@ -523,7 +647,7 @@ export default function LeaderboardPage() {
                 ))}
               </div>
             )
-          ) : (
+          ) : tab === 'accuracy' ? (
             accuracy.length === 0 ? (
               <div className="text-center py-16">
                 <Target className="w-16 h-16 text-dark-600 mx-auto mb-4" />
@@ -537,6 +661,23 @@ export default function LeaderboardPage() {
               <div className="space-y-2">
                 {accuracy.map((leader) => (
                   <AccuracyRow key={leader.user_id} leader={leader} />
+                ))}
+              </div>
+            )
+          ) : (
+            seasonPlayers.length === 0 ? (
+              <div className="text-center py-16">
+                <Calendar className="w-16 h-16 text-dark-600 mx-auto mb-4" />
+                <h2 className="text-xl font-semibold text-dark-300">No season data yet</h2>
+                <p className="text-dark-500 mt-2">
+                  Season averages build up as more player indices are calculated.
+                  Try a wider date range or check back later!
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {seasonPlayers.map((player, i) => (
+                  <SeasonRow key={player.player_id} player={player} rank={i + 1} mode={mode} sport={sport} />
                 ))}
               </div>
             )

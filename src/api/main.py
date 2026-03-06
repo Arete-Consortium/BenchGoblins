@@ -2031,6 +2031,44 @@ async def get_cache_stats():
     }
 
 
+@app.post("/cron/sync", tags=["Admin"])
+async def cron_sync(_admin=Depends(require_admin_key)):
+    """Trigger background sync jobs on demand.
+
+    Designed for external cron (GitHub Actions, Fly.io scheduled machine)
+    to work around scale-to-zero killing long-running asyncio schedulers.
+    """
+    results = {}
+
+    # Outcome sync
+    if db_service.is_configured:
+        try:
+            from services.outcome_recorder import sync_recent_outcomes
+
+            outcome = await sync_recent_outcomes(days_back=2)
+            results["outcomes"] = outcome or {"status": "no_results"}
+        except Exception as e:
+            logger.exception("Cron outcome sync failed")
+            results["outcomes"] = {"error": str(e)}
+    else:
+        results["outcomes"] = {"status": "skipped", "reason": "db not configured"}
+
+    # Rankings recalculation
+    if db_service.is_configured and redis_service.is_connected:
+        try:
+            from services.rankings_scheduler import rankings_scheduler
+
+            await rankings_scheduler._run_rankings()
+            results["rankings"] = {"status": "completed"}
+        except Exception as e:
+            logger.exception("Cron rankings sync failed")
+            results["rankings"] = {"error": str(e)}
+    else:
+        results["rankings"] = {"status": "skipped", "reason": "db or redis not available"}
+
+    return {"status": "completed", "results": results}
+
+
 @app.post("/cache/clear", tags=["Admin"])
 async def clear_cache(_admin=Depends(require_admin_key)):
     """Clear all caches (Claude in-memory + Redis). Requires admin API key."""

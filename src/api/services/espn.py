@@ -785,9 +785,28 @@ class ESPNService:
             data = response.json()
 
             game_logs = []
+
+            # ESPN may return events at top level or nested under
+            # seasonTypes[].categories[].events[]
             events = data.get("events", [])
+            if not isinstance(events, list):
+                events = []
+
+            # Fallback: extract from nested seasonTypes structure
+            if not events:
+                for st in data.get("seasonTypes", []):
+                    if not isinstance(st, dict):
+                        continue
+                    for cat in st.get("categories", []):
+                        if not isinstance(cat, dict):
+                            continue
+                        cat_events = cat.get("events", [])
+                        if isinstance(cat_events, list):
+                            events.extend(cat_events)
 
             for event in events[:limit]:
+                if not isinstance(event, dict):
+                    continue
                 game_log = self._parse_game_log(event, sport)
                 if game_log:
                     game_logs.append(game_log)
@@ -803,7 +822,11 @@ class ESPNService:
         """Parse a single game log entry."""
         try:
             stats_data = event.get("stats", [])
+            if not isinstance(stats_data, list):
+                stats_data = []
             opponent = event.get("opponent", {})
+            if not isinstance(opponent, dict):
+                opponent = {}
 
             game_log = {
                 "game_id": event.get("id", ""),

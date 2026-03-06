@@ -1054,6 +1054,37 @@ class APIClient {
     return response.data;
   }
 
+  // Season snapshot
+  async getSeasonSnapshot(
+    sport: string,
+    options?: { start?: string; end?: string; position?: string; limit?: number; mode?: string }
+  ): Promise<{
+    sport: string;
+    start_date: string;
+    end_date: string;
+    players: {
+      player_id: string;
+      name: string;
+      team: string | null;
+      position: string | null;
+      avg_floor: number;
+      avg_median: number;
+      avg_ceiling: number;
+      games: number;
+      first_seen: string;
+      last_seen: string;
+    }[];
+  }> {
+    const params = new URLSearchParams();
+    if (options?.start) params.set('start', options.start);
+    if (options?.end) params.set('end', options.end);
+    if (options?.position) params.set('position', options.position);
+    if (options?.limit) params.set('limit', String(options.limit));
+    if (options?.mode) params.set('mode', options.mode);
+    const response = await this.client.get(`/leaderboard/${sport}/season?${params}`);
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

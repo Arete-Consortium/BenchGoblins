@@ -481,3 +481,156 @@ async def get_accuracy_leaders(
         min_decisions=min_decisions,
         leaders=leaders,
     )
+
+
+# -------------------------------------------------------------------------
+# Season Snapshot (historical comparison)
+# -------------------------------------------------------------------------
+
+
+class SeasonPlayer(BaseModel):
+    """A player's aggregated stats over a date range."""
+
+    player_id: str
+    name: str
+    team: str | None = None
+    position: str | None = None
+    avg_floor: float
+    avg_median: float
+    avg_ceiling: float
+    games: int
+    first_seen: str
+    last_seen: str
+
+
+class SeasonResponse(BaseModel):
+    """Season snapshot for a sport within a date range."""
+
+    sport: str
+    start_date: str
+    end_date: str
+    players: list[SeasonPlayer]
+
+
+@router.get("/{sport}/season", response_model=SeasonResponse)
+async def get_season_snapshot(
+    sport: str,
+    req: Request,
+    start: str | None = Query(None, description="Start date YYYY-MM-DD (default: 30 days ago)"),
+    end: str | None = Query(None, description="End date YYYY-MM-DD (default: today)"),
+    position: str | None = Query(None, description="Filter by position"),
+    limit: int = Query(25, ge=1, le=50, description="Number of players"),
+    mode: str = Query("median", description="Sort by: floor, median, or ceiling"),
+) -> Any:
+    """
+    Get aggregated player scores over a date range for season comparison.
+
+    Returns average floor/median/ceiling scores and game counts.
+    Use different date ranges to compare performance across time periods.
+    """
+    sport = sport.lower()
+    if sport not in VALID_SPORTS:
+        raise HTTPException(status_code=400, detail=f"Invalid sport: {sport}")
+
+    mode = mode.lower()
+    if mode not in VALID_MODES:
+        raise HTTPException(status_code=400, detail=f"Invalid mode: {mode}")
+
+    now = datetime.now(UTC)
+    try:
+        end_dt = datetime.strptime(end, "%Y-%m-%d").replace(tzinfo=UTC) if end else now
+        start_dt = (
+            datetime.strptime(start, "%Y-%m-%d").replace(tzinfo=UTC)
+            if start
+            else end_dt - timedelta(days=30)
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+
+    if start_dt > end_dt:
+        raise HTTPException(status_code=400, detail="start must be before end")
+
+    sport_positions = POSITIONS.get(sport, [])
+    if position:
+        position = position.strip().upper()
+        if position not in sport_positions:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid position '{position}' for {sport}",
+            )
+
+    client_ip = req.client.host if req.client else "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"season:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    try:
+        async with db_service.session() as session:
+            query = (
+                select(
+                    Player.espn_id,
+                    Player.name,
+                    func.coalesce(Player.team_abbrev, Player.team).label("team"),
+                    Player.position,
+                    func.avg(PlayerIndex.floor_score).label("avg_floor"),
+                    func.avg(PlayerIndex.median_score).label("avg_median"),
+                    func.avg(PlayerIndex.ceiling_score).label("avg_ceiling"),
+                    func.count(PlayerIndex.id).label("games"),
+                    func.min(PlayerIndex.calculated_at).label("first_seen"),
+                    func.max(PlayerIndex.calculated_at).label("last_seen"),
+                )
+                .join(PlayerIndex, Player.id == PlayerIndex.player_id)
+                .where(
+                    Player.sport == sport,
+                    PlayerIndex.calculated_at >= start_dt,
+                    PlayerIndex.calculated_at <= end_dt,
+                )
+            )
+
+            if position:
+                query = query.where(func.upper(func.trim(Player.position)) == position)
+
+            query = (
+                query.group_by(
+                    Player.espn_id, Player.name, Player.team_abbrev, Player.team, Player.position
+                )
+                .order_by(func.avg(getattr(PlayerIndex, f"{mode}_score")).desc())
+                .limit(limit)
+            )
+
+            result = await session.execute(query)
+            rows = result.all()
+
+            players = [
+                SeasonPlayer(
+                    player_id=str(r.espn_id),
+                    name=r.name,
+                    team=r.team,
+                    position=r.position,
+                    avg_floor=round(float(r.avg_floor), 2),
+                    avg_median=round(float(r.avg_median), 2),
+                    avg_ceiling=round(float(r.avg_ceiling), 2),
+                    games=int(r.games),
+                    first_seen=str(r.first_seen),
+                    last_seen=str(r.last_seen),
+                )
+                for r in rows
+            ]
+
+    except SQLAlchemyError:
+        logger.exception("Season snapshot query error")
+        raise HTTPException(status_code=500, detail="Failed to load season data")
+
+    return SeasonResponse(
+        sport=sport,
+        start_date=str(start_dt.date()),
+        end_date=str(end_dt.date()),
+        players=players,
+    )

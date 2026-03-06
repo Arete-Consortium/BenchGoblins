@@ -16,6 +16,9 @@ import {
   CheckCircle,
   XCircle,
   Clock,
+  Trophy,
+  Crown,
+  Target,
 } from 'lucide-react';
 
 function StatCard({
@@ -60,21 +63,37 @@ function StatusIndicator({ status, label }: { status: boolean; label: string }) 
   );
 }
 
+interface AccuracyData {
+  accuracy_pct: number;
+  total: number;
+  correct: number;
+}
+
 export default function DashboardPage() {
   const { sport, messages } = useAppStore();
   const [usage, setUsage] = useState<UsageStats | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [accuracy, setAccuracy] = useState<AccuracyData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       try {
-        const [usageData, healthData] = await Promise.all([
+        const [usageData, healthData, accuracyData] = await Promise.all([
           api.getUsage().catch(() => null),
           api.getHealth().catch(() => null),
+          api.getAccuracyLeaders({ limit: 1 }).catch(() => null),
         ]);
         setUsage(usageData);
         setHealth(healthData);
+        if (accuracyData?.leaders?.length) {
+          const top = accuracyData.leaders[0];
+          setAccuracy({
+            accuracy_pct: top.accuracy_pct,
+            total: top.total_decisions,
+            correct: top.correct,
+          });
+        }
       } finally {
         setLoading(false);
       }
@@ -129,9 +148,9 @@ export default function DashboardPage() {
               color="bg-orange-500/20 text-orange-400"
             />
             <StatCard
-              title="Success Rate"
-              value="—"
-              subtitle="Coming soon"
+              title="Top Accuracy"
+              value={accuracy ? `${accuracy.accuracy_pct.toFixed(0)}%` : '—'}
+              subtitle={accuracy ? `${accuracy.correct}/${accuracy.total} correct` : 'No decisions yet'}
               icon={TrendingUp}
               color="bg-green-500/20 text-green-400"
             />
@@ -141,9 +160,9 @@ export default function DashboardPage() {
             {/* Quick Actions */}
             <div className="lg:col-span-2 bg-dark-800/50 border border-dark-700 rounded-xl p-6">
               <h2 className="text-xl font-semibold mb-4">Quick Actions</h2>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                 <Link
-                  href="/"
+                  href="/ask"
                   className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
                 >
                   <MessageSquare className="w-5 h-5 text-primary-400" />
@@ -160,6 +179,46 @@ export default function DashboardPage() {
                   <div>
                     <div className="font-medium">View History</div>
                     <div className="text-sm text-dark-400">Past decisions</div>
+                  </div>
+                </Link>
+                <Link
+                  href="/leaderboard"
+                  className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
+                >
+                  <Trophy className="w-5 h-5 text-yellow-400" />
+                  <div>
+                    <div className="font-medium">Leaderboard</div>
+                    <div className="text-sm text-dark-400">Player rankings</div>
+                  </div>
+                </Link>
+                <Link
+                  href="/accuracy"
+                  className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
+                >
+                  <Target className="w-5 h-5 text-green-400" />
+                  <div>
+                    <div className="font-medium">Accuracy</div>
+                    <div className="text-sm text-dark-400">Track your calls</div>
+                  </div>
+                </Link>
+                <Link
+                  href="/commissioner"
+                  className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
+                >
+                  <Crown className="w-5 h-5 text-purple-400" />
+                  <div>
+                    <div className="font-medium">Commissioner</div>
+                    <div className="text-sm text-dark-400">League tools</div>
+                  </div>
+                </Link>
+                <Link
+                  href={`/dossier/${sport}`}
+                  className="flex items-center gap-3 p-4 rounded-lg bg-dark-700/50 hover:bg-dark-700 transition-all"
+                >
+                  <Activity className="w-5 h-5 text-orange-400" />
+                  <div>
+                    <div className="font-medium">Dossier</div>
+                    <div className="text-sm text-dark-400">Player intel</div>
                   </div>
                 </Link>
               </div>

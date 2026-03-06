@@ -756,3 +756,203 @@ class TestAccuracyQuery:
 
         assert resp.status_code == 500
         assert "accuracy" in resp.json()["detail"].lower()
+
+
+# -------------------------------------------------------------------------
+# Season Snapshot Endpoint Tests
+# -------------------------------------------------------------------------
+
+
+class TestSeasonValidation:
+    @pytest.mark.asyncio
+    async def test_invalid_sport(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/curling/season")
+        assert resp.status_code == 400
+        assert "Invalid sport" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_mode(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/nfl/season?mode=yolo")
+        assert resp.status_code == 400
+        assert "Invalid mode" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_date_format(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/nfl/season?start=not-a-date")
+        assert resp.status_code == 400
+        assert "date format" in resp.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_start_after_end(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get(
+                "/leaderboard/nfl/season?start=2026-03-10&end=2026-03-01"
+            )
+        assert resp.status_code == 400
+        assert "before" in resp.json()["detail"].lower()
+
+    @pytest.mark.asyncio
+    async def test_db_not_configured(self, _allow_rate_limit):
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = False
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/season")
+        assert resp.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_rate_limit(self):
+        with patch(
+            "routes.leaderboard.rate_limiter.check_rate_limit",
+            new_callable=AsyncMock,
+            return_value=(False, 30),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/season")
+        assert resp.status_code == 429
+
+    @pytest.mark.asyncio
+    async def test_invalid_position(self, _allow_rate_limit, _db_configured):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/nba/season?position=QB")
+        assert resp.status_code == 400
+        assert "Invalid position" in resp.json()["detail"]
+
+
+class TestSeasonQuery:
+    @pytest.mark.asyncio
+    async def test_returns_season_players(self, _allow_rate_limit):
+        from collections import namedtuple
+
+        SeasonRow = namedtuple(
+            "SeasonRow",
+            ["espn_id", "name", "team", "position", "avg_floor", "avg_median",
+             "avg_ceiling", "games", "first_seen", "last_seen"],
+        )
+        mock_result = MagicMock()
+        mock_result.all.return_value = [
+            SeasonRow(
+                espn_id="55",
+                name="Season Star",
+                team="LAL",
+                position="SF",
+                avg_floor=Decimal("65.0"),
+                avg_median=Decimal("78.5"),
+                avg_ceiling=Decimal("92.0"),
+                games=12,
+                first_seen=datetime(2026, 2, 1, tzinfo=timezone.utc),
+                last_seen=datetime(2026, 3, 1, tzinfo=timezone.utc),
+            )
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nba/season")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sport"] == "nba"
+        assert len(data["players"]) == 1
+        p = data["players"][0]
+        assert p["name"] == "Season Star"
+        assert p["avg_floor"] == 65.0
+        assert p["avg_median"] == 78.5
+        assert p["avg_ceiling"] == 92.0
+        assert p["games"] == 12
+
+    @pytest.mark.asyncio
+    async def test_empty_season(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/season")
+
+        assert resp.status_code == 200
+        assert resp.json()["players"] == []
+
+    @pytest.mark.asyncio
+    async def test_custom_date_range(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(
+                    "/leaderboard/nfl/season?start=2026-01-01&end=2026-03-01"
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["start_date"] == "2026-01-01"
+        assert data["end_date"] == "2026-03-01"
+
+    @pytest.mark.asyncio
+    async def test_db_error(self, _allow_rate_limit):
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(side_effect=SQLAlchemyError("DB down"))
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/season")
+
+        assert resp.status_code == 500
+        assert "season" in resp.json()["detail"].lower()
