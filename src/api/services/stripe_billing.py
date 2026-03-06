@@ -309,6 +309,7 @@ async def _get_or_create_customer(user_id: int, email: str) -> str:
         # Store customer ID
         if user:
             user.stripe_customer_id = customer.id
+            await session.commit()
         else:
             logger.warning(f"User {user_id} not found in database")
 
@@ -346,6 +347,7 @@ async def _handle_checkout_completed(data: dict) -> dict[str, Any]:
                 )
             )
             await session.execute(stmt)
+            await session.commit()
 
     logger.info(f"User {user_id} upgraded to Pro via checkout")
     return {
@@ -373,6 +375,7 @@ async def _handle_subscription_updated(data: dict) -> dict[str, Any]:
         async with db_service.session() as session:
             stmt = update(User).where(User.id == user_id).values(subscription_tier=tier)
             await session.execute(stmt)
+            await session.commit()
         logger.info(f"User {user_id} subscription updated: status={status}, tier={tier}")
     else:
         logger.warning(f"Subscription {subscription_id} updated but no user_id found")
@@ -406,6 +409,7 @@ async def _handle_subscription_deleted(data: dict) -> dict[str, Any]:
                 )
             )
             await session.execute(stmt)
+            await session.commit()
         logger.info(f"User {user_id} subscription cancelled, downgraded to free")
     else:
         logger.warning(f"Subscription {subscription_id} deleted but no user_id found")
