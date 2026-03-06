@@ -125,7 +125,7 @@ export default function DossierDetailPage() {
                     <h1 className="text-3xl font-bold">{dossier.player.name}</h1>
                     <div className="flex items-center gap-3 mt-2 text-dark-400">
                       <span className="px-2 py-0.5 rounded bg-primary-600/20 text-primary-400 text-sm font-medium">
-                        {dossier.player.position}
+                        {dossier.player.position ?? 'N/A'}
                       </span>
                       <span>{dossier.player.team}</span>
                       <span className="text-dark-600">|</span>

@@ -39,6 +39,7 @@ from routes.auth import router as auth_router
 from routes.commissioner import router as commissioner_router
 from routes.dossier import router as dossier_router
 from routes.goblin import router as goblin_router
+from routes.leaderboard import router as leaderboard_router
 from routes.leagues import router as leagues_router
 from routes.newsletter import router as newsletter_router
 from routes.notifications import router as notifications_router
@@ -368,6 +369,9 @@ app.include_router(goblin_router)
 
 # Referral system
 app.include_router(referral_router)
+
+# Player leaderboards
+app.include_router(leaderboard_router)
 
 
 # ---------------------------------------------------------------------------

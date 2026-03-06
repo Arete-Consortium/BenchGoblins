@@ -127,7 +127,7 @@ export default function DossierSearchPage() {
                   <div className="flex-1 min-w-0">
                     <div className="font-semibold text-dark-100">{player.name}</div>
                     <div className="text-sm text-dark-400">
-                      {player.position} — {player.team}
+                      {player.position ?? 'N/A'} — {player.team}
                     </div>
                   </div>
                   <div className="text-dark-500">

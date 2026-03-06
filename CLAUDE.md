@@ -7,8 +7,8 @@ A fantasy sports decision engine that evaluates start/sit, waiver, and trade dec
 ## Current State
 
 - **Language**: Python
-- **Files**: 342 across 7 languages
-- **Lines**: 103,145
+- **Files**: 376 across 7 languages
+- **Lines**: 111,379
 
 ## Architecture
 
@@ -35,6 +35,7 @@ BenchGoblins/
 ├── .gitignore
 ├── .gitleaks.toml
 ├── .pre-commit-config.yaml
+├── CLAUDE.md
 ├── DECISIONS.md
 ├── DEPLOYMENT.md
 ├── Dockerfile
@@ -79,10 +80,10 @@ BenchGoblins/
 - Do NOT use bare `except:` — catch specific exceptions
 - Do NOT use mutable default arguments
 - Do NOT use `print()` for logging — use the `logging` module
-- Do NOT hardcode secrets in Dockerfiles — use environment variables
-- Do NOT use `latest` tag — pin specific versions
 - Do NOT use `any` type — define proper type interfaces
 - Do NOT use `var` — use `const` or `let`
+- Do NOT hardcode secrets in Dockerfiles — use environment variables
+- Do NOT use `latest` tag — pin specific versions
 
 ## Domain Context
 
@@ -93,15 +94,15 @@ BenchGoblins/
 - `ActivityResponse`
 - `AdvancedNBAStats`
 - `AdvancedNFLStats`
+- `AlertCategory`
+- `AlertSeverity`
+- `ApplyReferralRequest`
+- `ApplyReferralResponse`
 - `AuthResponse`
 - `AuthServiceError`
 - `AuthStatusResponse`
 - `BadDict`
 - `Base`
-- `BasketballReferenceService`
-- `BillingStatusResponse`
-- `BudgetAlertResponse`
-- `BudgetConfig`
 
 ### Domain Terms
 - AI
@@ -121,6 +122,7 @@ BenchGoblins/
 - `/accuracy/outcome/{decision_id}`
 - `/accuracy/outcomes`
 - `/accuracy/sync`
+- `/apply`
 - `/billing/create-checkout`
 - `/billing/create-portal`
 - `/billing/prices`
@@ -130,7 +132,6 @@ BenchGoblins/
 - `/budget/alerts`
 - `/budget/webhooks/test`
 - `/cache/clear`
-- `/cache/invalidate/{sport}`
 
 ### Enums/Constants
 - `ACCENT`

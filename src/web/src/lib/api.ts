@@ -960,6 +960,41 @@ class APIClient {
     return response.data;
   }
 
+  // Leaderboard
+  async getLeaderboard(
+    sport: string,
+    options?: { position?: string; mode?: string; limit?: number }
+  ): Promise<{
+    sport: string;
+    position: string | null;
+    mode: string;
+    players: {
+      rank: number;
+      player_id: string;
+      name: string;
+      team: string | null;
+      position: string | null;
+      score: number;
+      floor_score: number;
+      median_score: number;
+      ceiling_score: number;
+      sci: number;
+      rmi: number;
+      gis: number;
+      od: number;
+      msf: number;
+      calculated_at: string;
+    }[];
+    positions: string[];
+  }> {
+    const params = new URLSearchParams();
+    if (options?.position) params.set('position', options.position);
+    if (options?.mode) params.set('mode', options.mode);
+    if (options?.limit) params.set('limit', String(options.limit));
+    const response = await this.client.get(`/leaderboard/${sport}/top?${params}`);
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');
