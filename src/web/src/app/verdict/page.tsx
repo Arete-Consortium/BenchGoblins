@@ -20,6 +20,7 @@ import {
   Zap,
 } from 'lucide-react';
 import { ShareCard, VerdictShareData } from '@/components/ShareCard';
+import { ProBanner } from '@/components/ProBanner';
 
 // ---------------------------------------------------------------------------
 // Risk Mode Config
@@ -332,6 +333,11 @@ export default function VerdictPage() {
               onSelect={handleRiskModeChange}
               disabled={loading || refreshing}
             />
+          </div>
+
+          {/* Pro upgrade prompt */}
+          <div className="mb-6">
+            <ProBanner feature="weekly Goblin Verdicts" />
           </div>
 
           {/* Content */}

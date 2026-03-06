@@ -995,6 +995,57 @@ class APIClient {
     return response.data;
   }
 
+  // Trending players
+  async getTrending(
+    sport: string,
+    options?: { mode?: string; direction?: string; limit?: number }
+  ): Promise<{
+    sport: string;
+    mode: string;
+    direction: string;
+    players: {
+      rank: number;
+      player_id: string;
+      name: string;
+      team: string | null;
+      position: string | null;
+      current_score: number;
+      previous_score: number;
+      delta: number;
+      direction: string;
+    }[];
+  }> {
+    const params = new URLSearchParams();
+    if (options?.mode) params.set('mode', options.mode);
+    if (options?.direction) params.set('direction', options.direction);
+    if (options?.limit) params.set('limit', String(options.limit));
+    const response = await this.client.get(`/leaderboard/${sport}/trending?${params}`);
+    return response.data;
+  }
+
+  // Accuracy leaders
+  async getAccuracyLeaders(
+    options?: { sport?: string; min_decisions?: number; limit?: number }
+  ): Promise<{
+    sport: string | null;
+    min_decisions: number;
+    leaders: {
+      rank: number;
+      user_id: string;
+      total_decisions: number;
+      correct: number;
+      incorrect: number;
+      accuracy_pct: number;
+    }[];
+  }> {
+    const params = new URLSearchParams();
+    if (options?.sport) params.set('sport', options.sport);
+    if (options?.min_decisions) params.set('min_decisions', String(options.min_decisions));
+    if (options?.limit) params.set('limit', String(options.limit));
+    const response = await this.client.get(`/leaderboard/accuracy?${params}`);
+    return response.data;
+  }
+
   // Health check
   async getHealth(): Promise<HealthResponse> {
     const response = await this.client.get<HealthResponse>('/health');

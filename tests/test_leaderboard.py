@@ -2,7 +2,7 @@
 Tests for the leaderboard API routes.
 
 Covers: input validation, position filtering, score modes, rate limiting,
-        DB error handling, and response structure.
+        DB error handling, response structure, trending movers, and accuracy leaders.
 """
 
 from datetime import datetime, timezone
@@ -13,6 +13,7 @@ from uuid import uuid4
 import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy.exc import SQLAlchemyError
 
 from routes.leaderboard import POSITIONS, VALID_MODES, VALID_SPORTS, router
 
@@ -344,8 +345,6 @@ class TestLeaderboardQuery:
 
     @pytest.mark.asyncio
     async def test_db_error_returns_500(self, _allow_rate_limit):
-        from sqlalchemy.exc import SQLAlchemyError
-
         mock_session = AsyncMock()
         mock_session.execute = AsyncMock(side_effect=SQLAlchemyError("DB down"))
 
@@ -447,3 +446,313 @@ class TestLeaderboardQuery:
                     assert resp.status_code == 200
                     data = resp.json()
                     assert data["positions"] == POSITIONS[sport]
+
+
+# -------------------------------------------------------------------------
+# Trending Endpoint Tests
+# -------------------------------------------------------------------------
+
+
+class TestTrendingValidation:
+    @pytest.mark.asyncio
+    async def test_invalid_sport(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/curling/trending")
+        assert resp.status_code == 400
+        assert "Invalid sport" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_mode(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/nfl/trending?mode=yolo")
+        assert resp.status_code == 400
+        assert "Invalid mode" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_invalid_direction(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/nfl/trending?direction=sideways")
+        assert resp.status_code == 400
+        assert "Direction must be" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_db_not_configured(self, _allow_rate_limit):
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = False
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/trending")
+        assert resp.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_rate_limit(self):
+        with patch(
+            "routes.leaderboard.rate_limiter.check_rate_limit",
+            new_callable=AsyncMock,
+            return_value=(False, 60),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/trending")
+        assert resp.status_code == 429
+
+
+class TestTrendingQuery:
+    @pytest.mark.asyncio
+    async def test_returns_trending_up(self, _allow_rate_limit):
+        p1 = _make_player(name="Rising Star", espn_id="10")
+
+        mock_result = MagicMock()
+        mock_result.all.return_value = [
+            (p1, Decimal("85.0"), Decimal("70.0"), Decimal("15.0"))
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get(
+                    "/leaderboard/nfl/trending?direction=up&mode=median"
+                )
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["sport"] == "nfl"
+        assert data["mode"] == "median"
+        assert data["direction"] == "up"
+        assert len(data["players"]) == 1
+        assert data["players"][0]["name"] == "Rising Star"
+        assert data["players"][0]["delta"] == 15.0
+        assert data["players"][0]["direction"] == "up"
+
+    @pytest.mark.asyncio
+    async def test_returns_trending_down(self, _allow_rate_limit):
+        p1 = _make_player(name="Falling Star", espn_id="11")
+
+        mock_result = MagicMock()
+        mock_result.all.return_value = [
+            (p1, Decimal("60.0"), Decimal("80.0"), Decimal("-20.0"))
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/trending?direction=down")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["direction"] == "down"
+        assert data["players"][0]["delta"] == -20.0
+        assert data["players"][0]["direction"] == "down"
+
+    @pytest.mark.asyncio
+    async def test_empty_trending(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/trending")
+
+        assert resp.status_code == 200
+        assert resp.json()["players"] == []
+
+    @pytest.mark.asyncio
+    async def test_db_error(self, _allow_rate_limit):
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(side_effect=SQLAlchemyError("DB down"))
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/nfl/trending")
+
+        assert resp.status_code == 500
+        assert "trending" in resp.json()["detail"].lower()
+
+
+# -------------------------------------------------------------------------
+# Accuracy Endpoint Tests
+# -------------------------------------------------------------------------
+
+
+class TestAccuracyValidation:
+    @pytest.mark.asyncio
+    async def test_invalid_sport(self, _allow_rate_limit):
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            resp = await client.get("/leaderboard/accuracy?sport=curling")
+        assert resp.status_code == 400
+        assert "Invalid sport" in resp.json()["detail"]
+
+    @pytest.mark.asyncio
+    async def test_db_not_configured(self, _allow_rate_limit):
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = False
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/accuracy")
+        assert resp.status_code == 503
+
+    @pytest.mark.asyncio
+    async def test_rate_limit(self):
+        with patch(
+            "routes.leaderboard.rate_limiter.check_rate_limit",
+            new_callable=AsyncMock,
+            return_value=(False, 30),
+        ):
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/accuracy")
+        assert resp.status_code == 429
+
+
+class TestAccuracyQuery:
+    @pytest.mark.asyncio
+    async def test_returns_accuracy_leaders(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = [
+            ("user-001", 8, 2, 10),
+            ("user-002", 6, 4, 10),
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/accuracy")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["min_decisions"] == 5
+        assert len(data["leaders"]) == 2
+        assert data["leaders"][0]["rank"] == 1
+        assert data["leaders"][0]["accuracy_pct"] == 80.0
+        assert data["leaders"][0]["correct"] == 8
+        assert data["leaders"][0]["incorrect"] == 2
+        assert data["leaders"][0]["total_decisions"] == 10
+
+    @pytest.mark.asyncio
+    async def test_empty_accuracy(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = []
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/accuracy")
+
+        assert resp.status_code == 200
+        assert resp.json()["leaders"] == []
+
+    @pytest.mark.asyncio
+    async def test_with_sport_filter(self, _allow_rate_limit):
+        mock_result = MagicMock()
+        mock_result.all.return_value = [
+            ("user-003", 7, 3, 10),
+        ]
+
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/accuracy?sport=nba")
+
+        assert resp.status_code == 200
+        assert resp.json()["sport"] == "nba"
+
+    @pytest.mark.asyncio
+    async def test_db_error(self, _allow_rate_limit):
+        mock_session = AsyncMock()
+        mock_session.execute = AsyncMock(side_effect=SQLAlchemyError("DB down"))
+
+        with patch("routes.leaderboard.db_service") as mock_db:
+            mock_db.is_configured = True
+            mock_db.session.return_value.__aenter__ = AsyncMock(
+                return_value=mock_session
+            )
+            mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
+
+            async with AsyncClient(
+                transport=ASGITransport(app=app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/leaderboard/accuracy")
+
+        assert resp.status_code == 500
+        assert "accuracy" in resp.json()["detail"].lower()

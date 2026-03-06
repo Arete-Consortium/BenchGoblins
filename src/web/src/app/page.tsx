@@ -118,6 +118,16 @@ export default function LandingPage() {
       title: t('landing.featureMultiSport'),
       description: t('landing.featureMultiSportDesc'),
     },
+    {
+      icon: Trophy,
+      title: 'Leaderboards',
+      description: 'See top-ranked players across every sport and position, powered by our five-index scoring.',
+    },
+    {
+      icon: Crown,
+      title: 'Commissioner Tools',
+      description: 'League-level analytics, trade fairness scoring, and collusion detection for league managers.',
+    },
   ];
 
   const riskModes = [
@@ -165,15 +175,18 @@ export default function LandingPage() {
               <Image src="/logo.png" alt="Bench Goblins" width={40} height={40} className="rounded" />
               <span className="text-xl font-bold gradient-text">Bench Goblins</span>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <LanguageSelector />
-              <Button asChild variant="ghost" size="sm">
-                <Link href="/history">{t('common.history')}</Link>
+              <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+                <Link href="/leaderboard">Leaderboard</Link>
+              </Button>
+              <Button asChild variant="ghost" size="sm" className="hidden sm:inline-flex">
+                <Link href="/dossier">Dossier</Link>
               </Button>
               <Button asChild variant="outline" size="sm" className="gap-1.5 border-dark-700">
                 <Link href="/auth/login">
                   <LogIn className="h-4 w-4" />
-                  {t('common.signIn')}
+                  <span className="hidden sm:inline">{t('common.signIn')}</span>
                 </Link>
               </Button>
               <Button asChild size="sm" className="shadow-lg shadow-primary-500/20">
@@ -188,56 +201,18 @@ export default function LandingPage() {
       </header>
 
       {/* Hero */}
-      <section className="container mx-auto px-4 py-16 text-center">
+      <section className="container mx-auto px-4 pt-12 pb-16 text-center">
         <div className="mx-auto max-w-3xl">
-          {/* Centered Logo */}
-          <div className="flex justify-center mb-8">
-            <Image
-              src="/logo.png"
-              alt="Bench Goblins"
-              width={280}
-              height={280}
-              className="drop-shadow-2xl"
-              priority
-            />
-          </div>
-
-          {/* Dynamic Sports Countdown */}
-          <div className="mb-8 inline-flex items-center gap-2 rounded-full bg-dark-800/80 border border-dark-700 px-4 py-2">
-            <Clock className="h-4 w-4 text-primary-400" />
-            <span className="text-sm font-medium text-dark-300">
-              {event.name}{event.location ? ` — ${event.location}` : ''}
-            </span>
-            <span className="text-xs text-dark-500 border-l border-dark-700 pl-2">{event.sport}</span>
-          </div>
-          <div className="mb-8 flex justify-center gap-4">
-            {[
-              { value: countdown.days, label: 'Days' },
-              { value: countdown.hours, label: 'Hrs' },
-              { value: countdown.minutes, label: 'Min' },
-              { value: countdown.seconds, label: 'Sec' },
-            ].map((unit) => (
-              <div key={unit.label} className="flex flex-col items-center">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-dark-800/80 border border-dark-700 flex items-center justify-center">
-                  <span className="text-2xl sm:text-3xl font-bold tabular-nums gradient-text">
-                    {String(unit.value).padStart(2, '0')}
-                  </span>
-                </div>
-                <span className="mt-1 text-xs text-dark-500 uppercase tracking-wider">{unit.label}</span>
-              </div>
-            ))}
-          </div>
-
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
+          <h1 className="text-4xl font-bold tracking-tight sm:text-6xl">
             <span className="gradient-text">{t('landing.heroTitle1')}</span>
             <br />
             <span className="text-dark-100">{t('landing.heroTitle2')}</span>
           </h1>
-          <p className="mt-6 text-lg text-dark-400">
+          <p className="mt-6 text-lg sm:text-xl text-dark-400 max-w-2xl mx-auto">
             {t('landing.heroSubtitle')}
           </p>
-          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Button asChild size="lg" className="gap-2 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-shadow">
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button asChild size="lg" className="gap-2 shadow-lg shadow-primary-500/25 hover:shadow-primary-500/40 transition-shadow text-base px-8 py-3">
               <Link href="/ask">
                 <Sparkles className="h-5 w-5" />
                 {t('landing.startAsking')}
@@ -249,6 +224,18 @@ export default function LandingPage() {
                 {t('common.signIn')}
               </Link>
             </Button>
+          </div>
+
+          {/* Countdown badge — compact, below CTA */}
+          <div className="mt-8 inline-flex items-center gap-3 rounded-full bg-dark-800/80 border border-dark-700 px-5 py-2.5">
+            <Clock className="h-4 w-4 text-primary-400" />
+            <span className="text-sm font-medium text-dark-300">
+              {event.name}{event.location ? ` — ${event.location}` : ''}
+            </span>
+            <span className="text-sm font-bold tabular-nums gradient-text">
+              {countdown.days}d {String(countdown.hours).padStart(2, '0')}h {String(countdown.minutes).padStart(2, '0')}m
+            </span>
+            <span className="text-xs text-dark-500 border-l border-dark-700 pl-2">{event.sport}</span>
           </div>
         </div>
       </section>
@@ -365,7 +352,7 @@ export default function LandingPage() {
 
       {/* Social Proof */}
       <section className="container mx-auto px-4 py-16 border-t border-dark-800/50">
-        <div className="grid gap-8 md:grid-cols-3 max-w-4xl mx-auto text-center">
+        <div className="grid gap-8 grid-cols-2 md:grid-cols-4 max-w-4xl mx-auto text-center">
           <div>
             <div className="text-4xl font-bold gradient-text">5</div>
             <p className="text-dark-400 mt-1">Sports Covered</p>
@@ -375,12 +362,16 @@ export default function LandingPage() {
             <p className="text-dark-400 mt-1">Risk Modes</p>
           </div>
           <div>
+            <div className="text-4xl font-bold gradient-text">5</div>
+            <p className="text-dark-400 mt-1">Index Scores Per Player</p>
+          </div>
+          <div>
             <div className="text-4xl font-bold gradient-text">9</div>
-            <p className="text-dark-400 mt-1">Languages Supported</p>
+            <p className="text-dark-400 mt-1">Languages</p>
           </div>
         </div>
-        <div className="mt-12 max-w-3xl mx-auto">
-          <div className="grid gap-6 md:grid-cols-2">
+        <div className="mt-12 max-w-5xl mx-auto">
+          <div className="grid gap-6 md:grid-cols-3">
             <div className="p-6 rounded-xl bg-dark-800/50 border border-dark-700">
               <p className="text-dark-300 italic mb-3">
                 &ldquo;The Goblin told me to bench my gut feeling and start the data. Won my league.&rdquo;
@@ -392,6 +383,12 @@ export default function LandingPage() {
                 &ldquo;Commissioner alerts saved my league from a collusion trade. Worth every penny.&rdquo;
               </p>
               <p className="text-sm text-dark-500">— League commissioner, NBA</p>
+            </div>
+            <div className="p-6 rounded-xl bg-dark-800/50 border border-dark-700">
+              <p className="text-dark-300 italic mb-3">
+                &ldquo;The five-index player dossiers are insane. Like having a fantasy analyst on speed dial.&rdquo;
+              </p>
+              <p className="text-sm text-dark-500">— Dynasty league owner, MLB</p>
             </div>
           </div>
         </div>
@@ -623,16 +620,25 @@ export default function LandingPage() {
       {/* CTA */}
       <section className="container mx-auto px-4 py-24 text-center">
         <div className="mx-auto max-w-2xl">
-          <h2 className="text-3xl font-bold mb-4">{t('landing.ctaTitle')}</h2>
-          <p className="text-dark-400 mb-8">
+          <h2 className="text-3xl sm:text-4xl font-bold mb-4">{t('landing.ctaTitle')}</h2>
+          <p className="text-dark-400 mb-8 text-lg">
             {t('landing.ctaSubtitle')}
           </p>
-          <Button asChild size="lg" className="gap-2">
-            <Link href="/ask">
-              <Sparkles className="h-5 w-5" />
-              {t('common.startFree')}
-            </Link>
-          </Button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Button asChild size="lg" className="gap-2 text-base px-8 py-3 shadow-lg shadow-primary-500/25">
+              <Link href="/ask">
+                <Sparkles className="h-5 w-5" />
+                {t('common.startFree')}
+              </Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="gap-2 border-dark-700">
+              <Link href="/leaderboard">
+                <Trophy className="h-5 w-5" />
+                View Leaderboard
+              </Link>
+            </Button>
+          </div>
+          <p className="mt-4 text-sm text-dark-500">No credit card required. Free tier includes 3 queries/day.</p>
         </div>
       </section>
 

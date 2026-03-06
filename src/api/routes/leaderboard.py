@@ -3,17 +3,19 @@ Leaderboard API Routes.
 
 Top players by position using BenchGoblins five-index scoring system.
 Supports filtering by sport, position, and risk mode (floor/median/ceiling).
+Includes trending movers (7-day score delta) and decision accuracy leaders.
 """
 
 import logging
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel
-from sqlalchemy import func, select
+from sqlalchemy import Numeric, case, func, select
 from sqlalchemy.exc import SQLAlchemyError
 
-from models.database import Player, PlayerIndex
+from models.database import Decision, Player, PlayerIndex
 from services.database import db_service
 from services.rate_limiter import rate_limiter
 
@@ -193,4 +195,289 @@ async def get_top_players(
         mode=mode,
         players=players,
         positions=sport_positions,
+    )
+
+
+# -------------------------------------------------------------------------
+# Trending Movers (7-day score change)
+# -------------------------------------------------------------------------
+
+
+class TrendingPlayer(BaseModel):
+    """A player with score change over the last 7 days."""
+
+    rank: int
+    player_id: str
+    name: str
+    team: str | None = None
+    position: str | None = None
+    current_score: float
+    previous_score: float
+    delta: float
+    direction: str  # "up" or "down"
+
+
+class TrendingResponse(BaseModel):
+    """Trending movers for a sport."""
+
+    sport: str
+    mode: str
+    direction: str
+    players: list[TrendingPlayer]
+
+
+@router.get("/{sport}/trending", response_model=TrendingResponse)
+async def get_trending_players(
+    sport: str,
+    req: Request,
+    mode: str = Query("median", description="Score mode: floor, median, or ceiling"),
+    direction: str = Query("up", description="Sort direction: up (risers) or down (fallers)"),
+    limit: int = Query(10, ge=1, le=25, description="Number of players to return"),
+) -> Any:
+    """
+    Get trending players based on 7-day score change.
+
+    Compares each player's latest index score against their score from ~7 days ago.
+    Returns the biggest risers (direction=up) or fallers (direction=down).
+    """
+    sport = sport.lower()
+    if sport not in VALID_SPORTS:
+        raise HTTPException(status_code=400, detail=f"Invalid sport: {sport}")
+
+    mode = mode.lower()
+    if mode not in VALID_MODES:
+        raise HTTPException(
+            status_code=400, detail=f"Invalid mode: {mode}. Use floor, median, or ceiling"
+        )
+
+    direction = direction.lower()
+    if direction not in {"up", "down"}:
+        raise HTTPException(status_code=400, detail="Direction must be 'up' or 'down'")
+
+    # Rate limit
+    client_ip = req.client.host if req.client else "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"trending:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    score_col_name = f"{mode}_score"
+    now = datetime.now(UTC)
+    seven_days_ago = now - timedelta(days=7)
+
+    try:
+        async with db_service.session() as session:
+            # Latest index per player
+            latest_sub = (
+                select(
+                    PlayerIndex.player_id,
+                    func.max(PlayerIndex.calculated_at).label("max_calc"),
+                )
+                .group_by(PlayerIndex.player_id)
+                .subquery()
+            )
+
+            # Previous index: latest before 7 days ago
+            prev_sub = (
+                select(
+                    PlayerIndex.player_id,
+                    func.max(PlayerIndex.calculated_at).label("prev_calc"),
+                )
+                .where(PlayerIndex.calculated_at < seven_days_ago)
+                .group_by(PlayerIndex.player_id)
+                .subquery()
+            )
+
+            # Alias PlayerIndex for current and previous
+            current_idx = PlayerIndex.__table__.alias("current_idx")
+            prev_idx = PlayerIndex.__table__.alias("prev_idx")
+
+            current_score = current_idx.c[score_col_name]
+            prev_score = prev_idx.c[score_col_name]
+            delta_col = (current_score - prev_score).label("delta")
+
+            query = (
+                select(
+                    Player,
+                    current_score.label("current_score"),
+                    prev_score.label("previous_score"),
+                    delta_col,
+                )
+                .join(current_idx, Player.id == current_idx.c.player_id)
+                .join(
+                    latest_sub,
+                    (current_idx.c.player_id == latest_sub.c.player_id)
+                    & (current_idx.c.calculated_at == latest_sub.c.max_calc),
+                )
+                .join(prev_idx, Player.id == prev_idx.c.player_id)
+                .join(
+                    prev_sub,
+                    (prev_idx.c.player_id == prev_sub.c.player_id)
+                    & (prev_idx.c.calculated_at == prev_sub.c.prev_calc),
+                )
+                .where(Player.sport == sport)
+            )
+
+            if direction == "up":
+                query = query.order_by(delta_col.desc())
+            else:
+                query = query.order_by(delta_col.asc())
+
+            query = query.limit(limit)
+
+            result = await session.execute(query)
+            rows = result.all()
+
+            players = []
+            for rank, row in enumerate(rows, 1):
+                player = row[0]
+                cur = float(row[1])
+                prev = float(row[2])
+                d = float(row[3])
+                players.append(
+                    TrendingPlayer(
+                        rank=rank,
+                        player_id=str(player.espn_id),
+                        name=player.name,
+                        team=player.team_abbrev or player.team,
+                        position=player.position,
+                        current_score=cur,
+                        previous_score=prev,
+                        delta=round(d, 2),
+                        direction="up" if d >= 0 else "down",
+                    )
+                )
+
+    except SQLAlchemyError:
+        logger.exception("Trending query error")
+        raise HTTPException(status_code=500, detail="Failed to load trending data")
+
+    return TrendingResponse(
+        sport=sport,
+        mode=mode,
+        direction=direction,
+        players=players,
+    )
+
+
+# -------------------------------------------------------------------------
+# Decision Accuracy Leaders
+# -------------------------------------------------------------------------
+
+
+class AccuracyLeader(BaseModel):
+    """A user's decision accuracy stats."""
+
+    rank: int
+    user_id: str
+    total_decisions: int
+    correct: int
+    incorrect: int
+    accuracy_pct: float
+
+
+class AccuracyResponse(BaseModel):
+    """Decision accuracy leaderboard."""
+
+    sport: str | None
+    min_decisions: int
+    leaders: list[AccuracyLeader]
+
+
+@router.get("/accuracy", response_model=AccuracyResponse)
+async def get_accuracy_leaders(
+    req: Request,
+    sport: str | None = Query(None, description="Filter by sport (optional)"),
+    min_decisions: int = Query(5, ge=1, le=100, description="Minimum decisions to qualify"),
+    limit: int = Query(10, ge=1, le=25, description="Number of leaders to return"),
+) -> Any:
+    """
+    Get decision accuracy leaderboard.
+
+    Ranks users by accuracy percentage (correct / total resolved decisions).
+    Requires a minimum number of resolved decisions to qualify.
+    """
+    if sport:
+        sport = sport.lower()
+        if sport not in VALID_SPORTS:
+            raise HTTPException(status_code=400, detail=f"Invalid sport: {sport}")
+
+    # Rate limit
+    client_ip = req.client.host if req.client else "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"accuracy:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    try:
+        async with db_service.session() as session:
+            correct_count = func.sum(
+                case((Decision.actual_outcome == "correct", 1), else_=0)
+            ).label("correct")
+            incorrect_count = func.sum(
+                case((Decision.actual_outcome == "incorrect", 1), else_=0)
+            ).label("incorrect")
+            total = (correct_count + incorrect_count).label("total")
+
+            query = select(
+                Decision.user_id,
+                correct_count,
+                incorrect_count,
+                total,
+            ).where(
+                Decision.user_id.is_not(None),
+                Decision.actual_outcome.in_(["correct", "incorrect"]),
+            )
+
+            if sport:
+                query = query.where(Decision.sport == sport)
+
+            query = (
+                query.group_by(Decision.user_id)
+                .having(total >= min_decisions)
+                .order_by(
+                    (func.cast(correct_count, Numeric) / func.cast(total, Numeric)).desc(),
+                    total.desc(),
+                )
+                .limit(limit)
+            )
+
+            result = await session.execute(query)
+            rows = result.all()
+
+            leaders = []
+            for rank, row in enumerate(rows, 1):
+                uid, cor, inc, tot = row
+                pct = round((cor / tot) * 100, 1) if tot > 0 else 0.0
+                leaders.append(
+                    AccuracyLeader(
+                        rank=rank,
+                        user_id=str(uid),
+                        total_decisions=int(tot),
+                        correct=int(cor),
+                        incorrect=int(inc),
+                        accuracy_pct=pct,
+                    )
+                )
+
+    except SQLAlchemyError:
+        logger.exception("Accuracy leaderboard query error")
+        raise HTTPException(status_code=500, detail="Failed to load accuracy data")
+
+    return AccuracyResponse(
+        sport=sport,
+        min_decisions=min_decisions,
+        leaders=leaders,
     )

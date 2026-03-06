@@ -14,9 +14,9 @@ import {
   XCircle,
   Clock,
   Sparkles,
-  Lock,
   RefreshCw,
 } from 'lucide-react';
+import { ProBanner } from '@/components/ProBanner';
 
 function formatWeekRange(start: string, end: string): string {
   try {
@@ -149,6 +149,14 @@ export default function RecapsPage() {
       const data = await api.getWeeklyRecaps();
       setRecaps(data);
     } catch (err: unknown) {
+      // 403 = pro gate — global UpgradePrompt handles it
+      if (typeof err === 'object' && err !== null && 'response' in err) {
+        const resp = (err as { response?: { status?: number } }).response;
+        if (resp?.status === 403) {
+          setError(null);
+          return;
+        }
+      }
       console.error('Failed to fetch recaps:', err);
       setError('Failed to load recaps');
     } finally {
@@ -175,6 +183,13 @@ export default function RecapsPage() {
         setError('No decisions found this week. Make some calls first!');
       }
     } catch (err: unknown) {
+      if (typeof err === 'object' && err !== null && 'response' in err) {
+        const resp = (err as { response?: { status?: number } }).response;
+        if (resp?.status === 403) {
+          setError(null);
+          return;
+        }
+      }
       const msg = (err instanceof Error ? err.message : null) || 'Failed to generate recap';
       setError(msg);
     } finally {
@@ -227,22 +242,9 @@ export default function RecapsPage() {
           </div>
 
           {/* Pro gate */}
-          {!isPro && isAuthenticated && (
-            <div className="mb-6 p-6 bg-dark-800/50 border border-primary-600/30 rounded-xl text-center">
-              <Lock className="w-10 h-10 text-primary-400 mx-auto mb-3" />
-              <h2 className="text-lg font-semibold text-dark-100">Pro Feature</h2>
-              <p className="text-dark-400 mt-1 max-w-md mx-auto">
-                Weekly AI recaps are available for Pro subscribers.
-                Upgrade to get personalized weekly analysis of your fantasy decisions.
-              </p>
-              <a
-                href="/billing"
-                className="inline-block mt-4 px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-500 transition-all"
-              >
-                Upgrade to Pro
-              </a>
-            </div>
-          )}
+          <div className="mb-6">
+            <ProBanner feature="weekly AI recaps" />
+          </div>
 
           {/* Not authenticated */}
           {!isAuthenticated && (
