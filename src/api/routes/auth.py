@@ -252,6 +252,70 @@ async def require_pro(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
+FREE_VERDICT_LIMIT = 1
+
+
+async def require_pro_or_free_verdict(
+    current_user: dict = Depends(get_current_user),
+) -> dict:
+    """Allow 1 free Goblin Verdict per user, then require Pro.
+
+    Increments verdicts_used on success. Returns current_user dict
+    with 'verdicts_used' and 'verdicts_limit' injected.
+    """
+    from services import stripe_billing
+
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    async with db_service.session() as session:
+        user = await get_user_by_id(current_user["user_id"], session)
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Pro users always pass
+    is_pro = user.subscription_tier == "pro"
+    if not is_pro:
+        if hasattr(user, "referral_pro_expires_at") and user.referral_pro_expires_at:
+            from datetime import UTC, datetime
+
+            if user.referral_pro_expires_at > datetime.now(UTC):
+                is_pro = True
+    if not is_pro:
+        try:
+            is_pro = await stripe_billing.is_league_pro(user.id)
+        except Exception:
+            pass
+
+    if is_pro:
+        return {**current_user, "verdicts_limit": -1, "verdicts_used": user.verdicts_used}
+
+    # Free tier — check if they've used their free verdict
+    if user.verdicts_used >= FREE_VERDICT_LIMIT:
+        raise HTTPException(
+            status_code=402,
+            detail={
+                "code": "VERDICT_LIMIT",
+                "message": f"You've used your {FREE_VERDICT_LIMIT} free Goblin Verdict. Upgrade to Pro for unlimited verdicts.",
+                "verdicts_used": user.verdicts_used,
+                "verdicts_limit": FREE_VERDICT_LIMIT,
+                "upgrade_url": "/billing/create-checkout",
+            },
+        )
+
+    # Increment verdict count
+    async with db_service.session() as session:
+        from sqlalchemy import update
+
+        await session.execute(
+            update(User).where(User.id == user.id).values(verdicts_used=user.verdicts_used + 1)
+        )
+        await session.commit()
+
+    return {**current_user, "verdicts_limit": FREE_VERDICT_LIMIT, "verdicts_used": user.verdicts_used + 1}
+
+
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------

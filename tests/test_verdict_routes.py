@@ -20,11 +20,13 @@ VALID_USER = {
 def authed_client(test_client):
     """Test client with auth bypassed (pro tier)."""
     from api.main import app
-    from routes.auth import require_pro
+    from routes.auth import require_pro, require_pro_or_free_verdict
 
     app.dependency_overrides[require_pro] = lambda: VALID_USER
+    app.dependency_overrides[require_pro_or_free_verdict] = lambda: VALID_USER
     yield test_client
     app.dependency_overrides.pop(require_pro, None)
+    app.dependency_overrides.pop(require_pro_or_free_verdict, None)
 
 
 def _make_player_info(name="Patrick Mahomes", team="KC", position="QB"):
