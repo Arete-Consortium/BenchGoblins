@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { MessageSquare, Settings, LogOut, CreditCard, Zap, User, BookOpen, Sparkles, Gift, Trophy, Crown, LayoutDashboard } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, CreditCard, Zap, User, BookOpen, Gift, Crown, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from './ThemeToggle';
@@ -23,8 +23,6 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 // Settings is in the account dropdown only — NOT here.
 const navItems = [
   { href: '/ask', label: 'Ask', icon: MessageSquare, primary: true },
-  { href: '/verdict', label: 'Verdict', icon: Sparkles, primary: false },
-  { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, primary: false },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: true },
   { href: '/recaps', label: 'Recaps', icon: BookOpen, primary: false },
   { href: '/commissioner', label: 'Commissioner', icon: Crown, primary: false },
