@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { Suspense, useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
@@ -363,7 +363,7 @@ function SeasonRow({ player, rank, mode, sport }: { player: SeasonPlayer; rank: 
   );
 }
 
-export default function LeaderboardPage() {
+function LeaderboardPageInner() {
   const { sport: appSport } = useAppStore();
   const searchParams = useSearchParams();
   const highlightUserId = searchParams.get('highlight');
@@ -810,5 +810,13 @@ export default function LeaderboardPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+export default function LeaderboardPage() {
+  return (
+    <Suspense>
+      <LeaderboardPageInner />
+    </Suspense>
   );
 }

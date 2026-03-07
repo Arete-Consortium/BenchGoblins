@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/stores/appStore';
 import { useLeagueStore } from '@/stores/leagueStore';
@@ -278,7 +278,7 @@ function WelcomeScreen({ sport, onConnectLeague }: { sport: Sport; onConnectLeag
   );
 }
 
-export default function AskPage() {
+function AskPageInner() {
   const { messages, isLoading, streamingContent, sport, riskMode, setSport, setRiskMode, sendMessage, clearMessages } =
     useAppStore();
   const leagueConnection = useLeagueStore((s) => s.connection);
@@ -410,5 +410,13 @@ export default function AskPage() {
 
       <LeagueConnectDialog open={leagueDialogOpen} onOpenChange={setLeagueDialogOpen} />
     </div>
+  );
+}
+
+export default function AskPage() {
+  return (
+    <Suspense>
+      <AskPageInner />
+    </Suspense>
   );
 }
