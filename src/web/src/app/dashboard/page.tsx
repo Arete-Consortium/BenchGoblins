@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { useAppStore } from '@/stores/appStore';
 import api from '@/lib/api';
-import { UsageStats, HealthResponse } from '@/types';
+import { HealthResponse } from '@/types';
 import { getSportDisplayName } from '@/lib/utils';
 import {
   MessageSquare,
@@ -69,9 +69,16 @@ interface AccuracyData {
   correct: number;
 }
 
+// Actual shape returned by /usage endpoint
+interface UsageResponse {
+  today?: { input_tokens: number; output_tokens: number; total_decisions: number; estimated_cost_usd: number };
+  this_week?: { input_tokens: number; output_tokens: number; total_decisions: number; estimated_cost_usd: number };
+  error?: string;
+}
+
 export default function DashboardPage() {
   const { sport, messages } = useAppStore();
-  const [usage, setUsage] = useState<UsageStats | null>(null);
+  const [usage, setUsage] = useState<UsageResponse | null>(null);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [accuracy, setAccuracy] = useState<AccuracyData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -84,7 +91,7 @@ export default function DashboardPage() {
           api.getHealth().catch(() => null),
           api.getAccuracyLeaders({ limit: 1 }).catch(() => null),
         ]);
-        setUsage(usageData);
+        setUsage(usageData as UsageResponse | null);
         setHealth(healthData);
         if (accuracyData?.leaders?.length) {
           const top = accuracyData.leaders[0];
@@ -128,8 +135,8 @@ export default function DashboardPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
             <StatCard
               title="Queries Today"
-              value={usage?.queries_today ?? todayQueries}
-              subtitle={usage ? `${usage.queries_limit - usage.queries_today} remaining` : undefined}
+              value={usage?.today?.total_decisions ?? todayQueries}
+              subtitle="decisions today"
               icon={MessageSquare}
               color="bg-primary-500/20 text-primary-400"
             />
@@ -142,8 +149,8 @@ export default function DashboardPage() {
             />
             <StatCard
               title="Tokens Used"
-              value={usage?.tokens_used.toLocaleString() ?? '—'}
-              subtitle={usage ? `$${usage.cost_usd.toFixed(4)}` : undefined}
+              value={usage?.today ? (usage.today.input_tokens + usage.today.output_tokens).toLocaleString() : '—'}
+              subtitle={usage?.today ? `$${usage.today.estimated_cost_usd.toFixed(4)}` : undefined}
               icon={Zap}
               color="bg-orange-500/20 text-orange-400"
             />
