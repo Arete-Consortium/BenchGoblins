@@ -27,7 +27,6 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: true },
   { href: '/recaps', label: 'Recaps', icon: BookOpen, primary: false },
   { href: '/commissioner', label: 'Commissioner', icon: Crown, primary: false },
-  { href: '/settings', label: 'Settings', icon: Settings, primary: false },
 ];
 
 function getInitials(name: string): string {
