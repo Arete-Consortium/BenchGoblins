@@ -113,11 +113,12 @@ class RecapScheduler:
         generated = 0
         skipped = 0
         failed = 0
+        emailed = 0
 
         try:
             users = await self._get_active_users()
 
-            for user_id, user_name in users:
+            for user_id, user_name, user_email in users:
                 try:
                     async with db_service.session() as session:
                         recap = await generate_weekly_recap(
@@ -127,6 +128,23 @@ class RecapScheduler:
                         )
                         if recap:
                             generated += 1
+                            # Send recap email if user has an email
+                            if user_email:
+                                try:
+                                    from services.email import email_service
+
+                                    sent = await email_service.send_recap_email(
+                                        to=user_email,
+                                        player_name=user_name,
+                                        recap_html=recap.narrative or "",
+                                    )
+                                    if sent:
+                                        emailed += 1
+                                except Exception:
+                                    logger.exception(
+                                        "Recap email failed for user=%s",
+                                        str(user_id)[:8],
+                                    )
                         else:
                             skipped += 1
                 except Exception:
@@ -137,14 +155,15 @@ class RecapScheduler:
             logger.exception("Recap batch generation failed")
 
         logger.info(
-            "Recap generation complete: %d generated, %d skipped, %d failed",
+            "Recap generation complete: %d generated, %d skipped, %d failed, %d emailed",
             generated,
             skipped,
             failed,
+            emailed,
         )
 
-    async def _get_active_users(self) -> list[tuple[int, str]]:
-        """Get all users who have made decisions (id, name pairs)."""
+    async def _get_active_users(self) -> list[tuple[int, str, str | None]]:
+        """Get all users who have made decisions (id, name, email tuples)."""
         from sqlalchemy import text
 
         from services.database import db_service
@@ -156,13 +175,13 @@ class RecapScheduler:
             async with db_service.session() as session:
                 result = await session.execute(
                     text("""
-                        SELECT DISTINCT u.id, u.name
+                        SELECT DISTINCT u.id, u.name, u.email
                         FROM users u
                         JOIN decisions d ON d.user_id = CAST(u.id AS TEXT)
                         WHERE d.created_at > NOW() - INTERVAL '7 days'
                     """)
                 )
-                return [(row[0], row[1] or "Fantasy Manager") for row in result.all()]
+                return [(row[0], row[1] or "Fantasy Manager", row[2]) for row in result.all()]
         except Exception:
             logger.exception("Failed to fetch active users for recap generation")
             return []

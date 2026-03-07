@@ -264,7 +264,7 @@ class TestRunRecaps:
     @pytest.mark.asyncio
     async def test_run_recaps_generates_for_users(self):
         scheduler = RecapScheduler()
-        users = [(1, "Alice"), (2, "Bob")]
+        users = [(1, "Alice", "alice@example.com"), (2, "Bob", "bob@example.com")]
         mock_recap = MagicMock()
 
         with (
@@ -304,7 +304,7 @@ class TestRunRecaps:
     @pytest.mark.asyncio
     async def test_run_recaps_handles_per_user_error(self, caplog):
         scheduler = RecapScheduler()
-        users = [(1, "Alice")]
+        users = [(1, "Alice", "alice@example.com")]
 
         with (
             patch.object(

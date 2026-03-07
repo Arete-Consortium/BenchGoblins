@@ -1,4 +1,4 @@
-"""Tests for admin grant-pro, player news, and accuracy calibration endpoints."""
+"""Tests for admin grant-pro, player news, calibration, and ops endpoints."""
 
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -334,3 +334,75 @@ class TestPlayerNews:
         resp = test_client.get("/dossier/news/nba/Bench%20Warmer")
         assert resp.status_code == 200
         assert resp.json()["items"] == []
+
+
+# =============================================================================
+# OPS HEALTH (admin/ops)
+# =============================================================================
+
+
+class TestAdminOps:
+    def setup_method(self):
+        _override_admin()
+
+    def teardown_method(self):
+        _clear_overrides()
+
+    @patch("api.main.db_service")
+    @patch("api.main.redis_service")
+    @patch("api.main.claude_service")
+    def test_ops_success(self, mock_claude, mock_redis, mock_db, test_client):
+        mock_claude.is_available = True
+        mock_db.is_configured = True
+        mock_redis.is_connected = True
+
+        mock_ctx, mock_session = _mock_db_session()
+        mock_db.session.return_value = mock_ctx
+
+        # Mock DB queries: tables, size, decisions
+        tables_result = MagicMock()
+        tables_result.mappings.return_value.all.return_value = [
+            {"table_name": "decisions", "row_count": 500},
+            {"table_name": "users", "row_count": 10},
+        ]
+        size_result = MagicMock()
+        size_result.scalar.return_value = "42 MB"
+        decisions_result = MagicMock()
+        decisions_result.mappings.return_value.first.return_value = {
+            "total_decisions": 500,
+            "with_outcomes": 50,
+            "oldest_decision": "2025-01-01",
+            "newest_decision": "2026-03-07",
+        }
+        mock_session.execute = AsyncMock(
+            side_effect=[tables_result, size_result, decisions_result]
+        )
+
+        resp = test_client.get("/admin/ops")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["services"]["claude"] is True
+        assert data["services"]["postgres"] is True
+        assert "database" in data
+        assert "schedulers" in data
+        assert isinstance(data["config_warnings"], list)
+
+    @patch("api.main.db_service")
+    @patch("api.main.redis_service")
+    @patch("api.main.claude_service")
+    def test_ops_db_not_configured(self, mock_claude, mock_redis, mock_db, test_client):
+        mock_claude.is_available = False
+        mock_db.is_configured = False
+        mock_redis.is_connected = False
+
+        resp = test_client.get("/admin/ops")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["services"]["postgres"] is False
+        assert data["database"] == {}
+
+    def test_ops_no_admin_key(self, test_client):
+        _clear_overrides()
+        resp = test_client.get("/admin/ops")
+        # 503 because ADMIN_API_KEY env var not set in test
+        assert resp.status_code == 503

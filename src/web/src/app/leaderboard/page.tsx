@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/layout/Header';
 import { useAppStore } from '@/stores/appStore';
 import api from '@/lib/api';
@@ -21,6 +22,9 @@ import {
   XCircle,
   Calendar,
   MessageSquare,
+  Share2,
+  Check,
+  Link as LinkIcon,
 } from 'lucide-react';
 
 // Suggested questions per sport to seed the leaderboard
@@ -248,14 +252,16 @@ function TrendingRow({ player, sport }: { player: TrendingPlayer; sport: string 
   );
 }
 
-function AccuracyRow({ leader }: { leader: AccuracyLeader }) {
+function AccuracyRow({ leader, highlighted, onShare }: { leader: AccuracyLeader; highlighted?: boolean; onShare?: (userId: string) => void }) {
   const isTop3 = leader.rank <= 3;
 
   return (
     <div className={`flex items-center gap-4 p-4 rounded-xl transition-all ${
-      isTop3
-        ? 'bg-dark-800/80 border border-dark-600'
-        : 'bg-dark-800/40 border border-dark-700/50 hover:border-dark-600'
+      highlighted
+        ? 'bg-primary-600/10 border-2 border-primary-500/50 ring-1 ring-primary-500/20'
+        : isTop3
+          ? 'bg-dark-800/80 border border-dark-600'
+          : 'bg-dark-800/40 border border-dark-700/50 hover:border-dark-600'
     }`}>
       <div className={`text-2xl font-bold w-8 text-center flex-shrink-0 ${
         leader.rank === 1 ? 'text-yellow-400' :
@@ -283,6 +289,15 @@ function AccuracyRow({ leader }: { leader: AccuracyLeader }) {
           {leader.incorrect}
         </span>
       </div>
+      {onShare && (
+        <button
+          onClick={() => onShare(leader.user_id)}
+          className="p-1.5 rounded-md text-dark-500 hover:text-dark-200 hover:bg-dark-700/50 transition-all flex-shrink-0"
+          title="Share link to this user"
+        >
+          <LinkIcon className="w-3.5 h-3.5" />
+        </button>
+      )}
       <div className="text-right flex-shrink-0">
         <div className={`text-xl font-bold ${
           leader.accuracy_pct >= 60 ? 'text-green-400' :
@@ -350,11 +365,14 @@ function SeasonRow({ player, rank, mode, sport }: { player: SeasonPlayer; rank: 
 
 export default function LeaderboardPage() {
   const { sport: appSport } = useAppStore();
+  const searchParams = useSearchParams();
+  const highlightUserId = searchParams.get('highlight');
   const [tab, setTab] = useState<Tab>('top');
   const [sport, setSport] = useState<Sport>(appSport);
   const [position, setPosition] = useState<string | null>(null);
   const [mode, setMode] = useState<RiskMode>('median');
   const [trendingDirection, setTrendingDirection] = useState<'up' | 'down'>('up');
+  const [copied, setCopied] = useState(false);
 
   // Season date range
   const [seasonRange, setSeasonRange] = useState<'7d' | '30d' | '90d'>('30d');
@@ -423,6 +441,17 @@ export default function LeaderboardPage() {
     setPosition(null);
   }, [sport]);
 
+  const handleShareLeaderboard = async (userId?: string) => {
+    const url = new URL(window.location.href);
+    url.search = '';
+    if (userId) {
+      url.searchParams.set('highlight', userId);
+    }
+    await navigator.clipboard.writeText(url.toString());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -430,14 +459,36 @@ export default function LeaderboardPage() {
       <main className="pt-20 pb-8 px-4">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
-          <div className="mb-6">
-            <h1 className="text-3xl font-bold flex items-center gap-3">
-              <Trophy className="w-8 h-8 text-yellow-400" />
-              Leaderboard
-            </h1>
-            <p className="text-dark-400 mt-2">
-              Top players ranked by BenchGoblins five-index scoring system.
-            </p>
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-3xl font-bold flex items-center gap-3">
+                <Trophy className="w-8 h-8 text-yellow-400" />
+                Leaderboard
+              </h1>
+              <p className="text-dark-400 mt-2">
+                Top players ranked by BenchGoblins five-index scoring system.
+              </p>
+            </div>
+            <button
+              onClick={() => handleShareLeaderboard()}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                copied
+                  ? 'bg-green-600/20 text-green-400 border border-green-600/30'
+                  : 'bg-dark-800 text-dark-300 border border-dark-700 hover:text-white hover:border-dark-600'
+              }`}
+            >
+              {copied ? (
+                <>
+                  <Check className="w-4 h-4" />
+                  Copied!
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-4 h-4" />
+                  Share
+                </>
+              )}
+            </button>
           </div>
 
           {/* Tab Selector */}
@@ -718,7 +769,12 @@ export default function LeaderboardPage() {
             ) : (
               <div className="space-y-2">
                 {accuracy.map((leader) => (
-                  <AccuracyRow key={leader.user_id} leader={leader} />
+                  <AccuracyRow
+                    key={leader.user_id}
+                    leader={leader}
+                    highlighted={highlightUserId === leader.user_id}
+                    onShare={handleShareLeaderboard}
+                  />
                 ))}
               </div>
             )

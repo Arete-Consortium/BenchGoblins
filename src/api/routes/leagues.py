@@ -695,6 +695,88 @@ async def disconnect_yahoo_profile(
 
 
 # -------------------------------------------------------------------------
+# Multi-League Aggregation
+# -------------------------------------------------------------------------
+
+
+class ConnectedLeagueInfo(BaseModel):
+    """Unified league info across all platforms."""
+
+    platform: str
+    league_id: str
+    sport: str
+    roster_player_count: int = 0
+    synced_at: str | None = None
+
+
+class AllLeaguesResponse(BaseModel):
+    """Aggregated leagues from all connected platforms."""
+
+    leagues: list[ConnectedLeagueInfo]
+    total: int
+
+
+@router.get("/all", response_model=AllLeaguesResponse)
+async def get_all_leagues(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Aggregate leagues from all connected platforms (Sleeper, ESPN, Yahoo).
+
+    Returns a unified list of connected leagues with platform info.
+    """
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.id == current_user["user_id"]))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+    leagues: list[ConnectedLeagueInfo] = []
+
+    # Sleeper
+    if user.sleeper_league_id:
+        leagues.append(
+            ConnectedLeagueInfo(
+                platform="sleeper",
+                league_id=user.sleeper_league_id,
+                sport="nfl",
+                roster_player_count=len(user.roster_snapshot) if user.roster_snapshot else 0,
+                synced_at=user.sleeper_synced_at.isoformat() if user.sleeper_synced_at else None,
+            )
+        )
+
+    # ESPN
+    if user.espn_league_id:
+        leagues.append(
+            ConnectedLeagueInfo(
+                platform="espn",
+                league_id=user.espn_league_id,
+                sport=user.espn_sport or "nfl",
+                roster_player_count=(
+                    len(user.espn_roster_snapshot) if user.espn_roster_snapshot else 0
+                ),
+                synced_at=user.espn_synced_at.isoformat() if user.espn_synced_at else None,
+            )
+        )
+
+    # Yahoo
+    if user.yahoo_league_key:
+        leagues.append(
+            ConnectedLeagueInfo(
+                platform="yahoo",
+                league_id=user.yahoo_league_key,
+                sport=user.yahoo_sport or "nfl",
+                roster_player_count=(
+                    len(user.yahoo_roster_snapshot) if user.yahoo_roster_snapshot else 0
+                ),
+                synced_at=user.yahoo_synced_at.isoformat() if user.yahoo_synced_at else None,
+            )
+        )
+
+    return AllLeaguesResponse(leagues=leagues, total=len(leagues))
+
+
+# -------------------------------------------------------------------------
 # Managed League Models
 # -------------------------------------------------------------------------
 

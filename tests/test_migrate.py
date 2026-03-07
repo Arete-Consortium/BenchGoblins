@@ -5,12 +5,17 @@ Tests the pure logic — version extraction, ordering, discovery —
 without requiring a real PostgreSQL database.
 """
 
+import pytest
+
+try:
+    import psycopg  # noqa: F401
+except ImportError:
+    pytest.skip("psycopg not installed", allow_module_level=True)
+
 import asyncio
 import os
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
-
-import pytest
 
 from scripts.migrate import (
     VERSION_RE,

@@ -1161,6 +1161,13 @@ async def make_decision(
         except Exception:
             logger.warning("Failed to inject Yahoo roster context")
 
+    # Resolve managed league roster context when league_id is provided
+    # but Sleeper lookup didn't produce context (ESPN/Yahoo managed leagues)
+    if request.league_id and user and not player_context:
+        managed_ctx = await _resolve_managed_league_context(request.league_id, user)
+        if managed_ctx:
+            player_context = managed_ctx
+
     # Classify query complexity
     complexity = classify_query(
         query=request.query,
@@ -2012,6 +2019,13 @@ async def make_decision_stream(
         except Exception:
             logger.warning("Failed to inject Yahoo roster context")
 
+    # Resolve managed league roster context when league_id is provided
+    # but Sleeper lookup didn't produce context (ESPN/Yahoo managed leagues)
+    if request.league_id and user and not player_context:
+        managed_ctx = await _resolve_managed_league_context(request.league_id, user)
+        if managed_ctx:
+            player_context = managed_ctx
+
     # Capture metadata for persistence after streaming
     stream_metadata: dict = {}
 
@@ -2201,6 +2215,88 @@ async def admin_grant_pro(
         "tier": "pro",
         "days": request.days,
     }
+
+
+# ---------------------------------------------------------------------------
+# Ops Health — SSL, Backups, Alerts (Items 11-13)
+# ---------------------------------------------------------------------------
+
+
+@app.get("/admin/ops", tags=["Admin"])
+async def admin_ops_health(_admin=Depends(require_admin_key)):
+    """Comprehensive ops health check: DB size, backups, schedulers, config."""
+    report: dict = {
+        "environment": os.getenv("ENVIRONMENT", "development"),
+        "services": {
+            "claude": claude_service.is_available,
+            "postgres": db_service.is_configured,
+            "redis": redis_service.is_connected,
+            "sentry": bool(SENTRY_DSN),
+        },
+        "schedulers": {},
+        "database": {},
+        "config_warnings": [],
+    }
+
+    # Scheduler status
+    for name, sched in [
+        ("outcome", outcome_scheduler),
+        ("recap", recap_scheduler),
+        ("verdict_pregen", verdict_pregen_scheduler),
+        ("rankings", rankings_scheduler),
+        ("drip", drip_scheduler),
+    ]:
+        report["schedulers"][name] = getattr(sched, "_running", False)
+
+    # DB stats
+    if db_service.is_configured:
+        try:
+            async with db_service.session() as session:
+                result = await session.execute(
+                    text("""
+                    SELECT relname AS table_name,
+                           n_live_tup AS row_count
+                    FROM pg_stat_user_tables
+                    ORDER BY n_live_tup DESC
+                    LIMIT 10
+                """)
+                )
+                rows = result.mappings().all()
+                report["database"]["tables"] = {r["table_name"]: r["row_count"] for r in rows}
+
+                result = await session.execute(
+                    text("SELECT pg_size_pretty(pg_database_size(current_database())) AS size")
+                )
+                report["database"]["size"] = result.scalar()
+
+                result = await session.execute(
+                    text("""
+                    SELECT
+                        MIN(created_at) AS oldest_decision,
+                        MAX(created_at) AS newest_decision,
+                        COUNT(*) AS total_decisions,
+                        COUNT(*) FILTER (WHERE actual_outcome IS NOT NULL) AS with_outcomes
+                    FROM decisions
+                """)
+                )
+                row = result.mappings().first()
+                if row:
+                    report["database"]["decisions"] = {
+                        "total": row["total_decisions"],
+                        "with_outcomes": row["with_outcomes"],
+                        "oldest": str(row["oldest_decision"]) if row["oldest_decision"] else None,
+                        "newest": str(row["newest_decision"]) if row["newest_decision"] else None,
+                    }
+        except Exception as e:
+            report["database"]["error"] = str(e)
+
+    # Config warnings
+    if not SENTRY_DSN:
+        report["config_warnings"].append("SENTRY_DSN not set — error tracking disabled")
+    if not os.getenv("SENDGRID_API_KEY"):
+        report["config_warnings"].append("SENDGRID_API_KEY not set — email delivery disabled")
+
+    return report
 
 
 # ---------------------------------------------------------------------------
@@ -4084,6 +4180,61 @@ async def _get_user_by_id(user_id: int) -> User | None:
     async with db_service.session() as session:
         result = await session.execute(select(User).where(User.id == user_id))
         return result.scalar_one_or_none()
+
+
+async def _resolve_managed_league_context(league_id: str, user: User | None) -> str | None:
+    """
+    Resolve a league_id against managed leagues and return roster context.
+
+    Looks up the managed League table by external_league_id. If found, uses the
+    platform to pull the correct roster snapshot from the user's profile.
+
+    Returns context string or None if not resolvable.
+    """
+    if not user or not db_service.is_configured:
+        return None
+
+    from models.database import League
+
+    try:
+        async with db_service.session() as session:
+            result = await session.execute(
+                select(League).where(League.external_league_id == league_id)
+            )
+            managed = result.scalar_one_or_none()
+
+        if not managed:
+            return None
+
+        platform = managed.platform
+        context_parts = [
+            f"{platform.upper()} League: {managed.name} ({managed.sport}, {managed.season})"
+        ]
+
+        if platform == "espn" and user.espn_roster_snapshot:
+            player_lines = [
+                f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('lineup_slot', 'ROSTER')}]"
+                for p in user.espn_roster_snapshot
+            ]
+            context_parts.append("User's roster:\n" + "\n".join(player_lines))
+        elif platform == "yahoo" and user.yahoo_roster_snapshot:
+            player_lines = [
+                f"  {p['name']} ({p.get('position', '?')}, {p.get('team', '?')}) [{p.get('status', 'Active')}]"
+                for p in user.yahoo_roster_snapshot
+            ]
+            context_parts.append("User's roster:\n" + "\n".join(player_lines))
+        elif platform == "sleeper" and user.roster_snapshot:
+            player_lines = [
+                f"  {p['full_name']} ({p.get('position', '?')}, {p.get('team', '?')})"
+                f"{' [STARTER]' if p.get('is_starter') else ' [BENCH]'}"
+                for p in user.roster_snapshot
+            ]
+            context_parts.append("User's roster:\n" + "\n".join(player_lines))
+
+        return "\n\n".join(context_parts)
+    except Exception:
+        logger.warning("Failed to resolve managed league context for %s", league_id)
+        return None
 
 
 @app.get("/billing/prices")

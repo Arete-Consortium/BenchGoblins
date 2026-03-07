@@ -3,9 +3,22 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw, Target, TrendingUp, BarChart3, Layers, Trash2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2, RefreshCw, Target, TrendingUp, BarChart3, Layers, Trash2, CheckCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
+
+interface CalibrationLevel {
+  total: number;
+  correct: number;
+  accuracy_pct: number;
+}
+
+interface CalibrationData {
+  levels: Record<string, CalibrationLevel>;
+  well_calibrated: boolean;
+  current_thresholds: Record<string, number>;
+}
 
 interface AccuracyData {
   total_decisions: number;
@@ -75,6 +88,121 @@ function ConfidenceBar({
           className={cn('h-full rounded-full transition-all', colors[level] || 'bg-primary-500')}
           style={{ width: `${total > 0 ? accuracy : 0}%` }}
         />
+      </div>
+    </div>
+  );
+}
+
+const CALIBRATION_COLORS: Record<string, { bar: string; text: string }> = {
+  high: { bar: 'bg-green-500', text: 'text-green-400' },
+  medium: { bar: 'bg-yellow-500', text: 'text-yellow-400' },
+  low: { bar: 'bg-red-500', text: 'text-red-400' },
+};
+
+function CalibrationSection() {
+  const [calibration, setCalibration] = useState<CalibrationData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function fetchCalibration() {
+      setLoading(true);
+      setError(null);
+      try {
+        const data = await api.getCalibration();
+        if (!cancelled) setCalibration(data);
+      } catch {
+        if (!cancelled) setError('Failed to load calibration data.');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchCalibration();
+    return () => { cancelled = true; };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="bg-dark-800/50 border border-dark-700 rounded-xl p-6">
+        <Skeleton className="h-6 w-48 mb-4" />
+        <div className="space-y-4">
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+          <Skeleton className="h-12 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-dark-800/50 border border-dark-700 rounded-xl p-6">
+        <p className="text-sm text-dark-400">{error}</p>
+      </div>
+    );
+  }
+
+  if (!calibration) return null;
+
+  const levels = ['high', 'medium', 'low'] as const;
+  const maxAccuracy = Math.max(
+    ...levels.map((l) => calibration.levels[l]?.accuracy_pct ?? 0),
+    1
+  );
+
+  return (
+    <div className="bg-dark-800/50 border border-dark-700 rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-lg font-semibold">Calibration</h2>
+        <span
+          className={cn(
+            'inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium border',
+            calibration.well_calibrated
+              ? 'bg-green-500/10 text-green-400 border-green-500/30'
+              : 'bg-yellow-500/10 text-yellow-400 border-yellow-500/30'
+          )}
+        >
+          {calibration.well_calibrated ? (
+            <CheckCircle className="w-3.5 h-3.5" />
+          ) : (
+            <AlertTriangle className="w-3.5 h-3.5" />
+          )}
+          {calibration.well_calibrated ? 'Well Calibrated' : 'Needs Calibration'}
+        </span>
+      </div>
+
+      <p className="text-sm text-dark-500 mb-5">
+        Accuracy should decrease from high to low confidence for well-calibrated predictions.
+      </p>
+
+      <div className="space-y-4">
+        {levels.map((level) => {
+          const data = calibration.levels[level];
+          if (!data) return null;
+          const colors = CALIBRATION_COLORS[level] ?? { bar: 'bg-primary-500', text: 'text-primary-400' };
+          const barWidth = maxAccuracy > 0 ? (data.accuracy_pct / 100) * 100 : 0;
+
+          return (
+            <div key={level} className="space-y-1.5">
+              <div className="flex items-center justify-between text-sm">
+                <span className={cn('capitalize font-medium', colors.text)}>{level}</span>
+                <span className="text-dark-400">
+                  {data.correct}/{data.total} ({data.accuracy_pct.toFixed(1)}%)
+                </span>
+              </div>
+              <div className="h-6 bg-dark-700 rounded-lg overflow-hidden relative">
+                <div
+                  className={cn('h-full rounded-lg transition-all', colors.bar)}
+                  style={{ width: `${barWidth}%` }}
+                />
+                <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-white/80">
+                  {data.accuracy_pct.toFixed(1)}%
+                </span>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -232,6 +360,9 @@ export default function AccuracyPage() {
                   })}
                 </div>
               </div>
+
+              {/* Calibration */}
+              <CalibrationSection />
 
               {/* Source comparison */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

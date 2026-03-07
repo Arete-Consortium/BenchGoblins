@@ -584,6 +584,15 @@ class APIClient {
     return response.data;
   }
 
+  async getCalibration(): Promise<{
+    levels: Record<string, { total: number; correct: number; accuracy_pct: number }>;
+    well_calibrated: boolean;
+    current_thresholds: Record<string, number>;
+  }> {
+    const response = await this.client.get('/accuracy/calibration');
+    return response.data;
+  }
+
   // ESPN Fantasy endpoints
   async syncESPN(
     swid: string,
