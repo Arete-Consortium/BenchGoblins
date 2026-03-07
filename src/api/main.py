@@ -28,7 +28,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, constr, field_validator
 from sqlalchemy import Integer as SAInteger
-from sqlalchemy import func, select, text
+from sqlalchemy import delete, func, select, text
 
 from models.database import BudgetConfig, User
 from models.database import Decision as DecisionModel
@@ -3589,6 +3589,19 @@ async def sync_outcomes(request: SyncOutcomesRequest | None = None):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Sync failed: {str(e)}")
+
+
+@app.delete("/accuracy/reset")
+async def reset_accuracy(current_user: dict = Depends(get_current_user)):
+    """Delete all decisions for the current user, resetting accuracy tracking."""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+    async with db_service.session() as session:
+        result = await session.execute(
+            delete(DecisionModel).where(DecisionModel.user_id == current_user["user_id"])
+        )
+        await session.commit()
+    return {"status": "reset", "deleted": result.rowcount}
 
 
 # ---------------------------------------------------------------------------

@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Header } from '@/components/layout/Header';
 import { Button } from '@/components/ui/button';
-import { Loader2, RefreshCw, Target, TrendingUp, BarChart3, Layers } from 'lucide-react';
+import { Loader2, RefreshCw, Target, TrendingUp, BarChart3, Layers, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
 
@@ -115,6 +115,21 @@ export default function AccuracyPage() {
     }
   };
 
+  const [resetting, setResetting] = useState(false);
+
+  const handleReset = async () => {
+    if (!confirm('Reset all your accuracy data? This cannot be undone.')) return;
+    setResetting(true);
+    try {
+      await api.resetAccuracy();
+      await fetchMetrics();
+    } catch {
+      setError('Failed to reset accuracy data.');
+    } finally {
+      setResetting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen">
       <Header />
@@ -127,20 +142,36 @@ export default function AccuracyPage() {
               <h1 className="text-3xl font-bold">Accuracy</h1>
               <p className="text-dark-400 mt-1">How well is the Goblin doing?</p>
             </div>
-            <Button
-              onClick={handleSync}
-              disabled={syncing}
-              variant="outline"
-              size="sm"
-              className="gap-2"
-            >
-              {syncing ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <RefreshCw className="h-4 w-4" />
-              )}
-              Sync Outcomes
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleReset}
+                disabled={resetting || loading}
+                variant="outline"
+                size="sm"
+                className="gap-2 border-red-500/30 text-red-400 hover:bg-red-500/10"
+              >
+                {resetting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4" />
+                )}
+                Reset
+              </Button>
+              <Button
+                onClick={handleSync}
+                disabled={syncing}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+              >
+                {syncing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <RefreshCw className="h-4 w-4" />
+                )}
+                Sync Outcomes
+              </Button>
+            </div>
           </div>
 
           {loading ? (

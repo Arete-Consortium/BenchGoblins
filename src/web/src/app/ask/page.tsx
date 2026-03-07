@@ -62,6 +62,61 @@ const SPORT_NAMES: Record<Sport, string> = {
   soccer: 'Soccer',
 };
 
+// Quick follow-up suggestions shown after each assistant response
+const FOLLOW_UP_SUGGESTIONS: Record<Sport, string[]> = {
+  nba: [
+    'Compare their floor vs ceiling scores',
+    'Who else should I start this week?',
+    'Any good waiver pickups at that position?',
+    'What about for a trade instead?',
+  ],
+  nfl: [
+    'What about in PPR scoring?',
+    'Who else should I start this week?',
+    'Best waiver wire pickups right now?',
+    'Compare their matchup profiles',
+  ],
+  mlb: [
+    'How do they do against lefties?',
+    'Who else should I start tonight?',
+    'Any waiver wire pitchers to grab?',
+    'Break down their recent stats',
+  ],
+  nhl: [
+    'How about on a back-to-back?',
+    'Who else should I start this week?',
+    'Best waiver goalies available?',
+    'Compare their playoff schedules',
+  ],
+  soccer: [
+    'Who should I captain instead?',
+    'Any good budget picks this gameweek?',
+    'Compare their fixture difficulty',
+    'Should I use my wildcard?',
+  ],
+};
+
+function FollowUpChips({ sport, onSend, disabled }: { sport: Sport; onSend: (msg: string) => void; disabled: boolean }) {
+  const suggestions = FOLLOW_UP_SUGGESTIONS[sport];
+  return (
+    <div className="flex flex-wrap gap-2 px-4 pb-2">
+      {suggestions.map((suggestion) => (
+        <button
+          key={suggestion}
+          onClick={() => onSend(suggestion)}
+          disabled={disabled}
+          className="px-3 py-1.5 rounded-full bg-dark-800 text-dark-400 text-sm
+                     hover:bg-dark-700 hover:text-dark-200 transition-all
+                     disabled:opacity-50 disabled:cursor-not-allowed
+                     border border-dark-700/50 hover:border-dark-600"
+        >
+          {suggestion}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function WelcomeScreen({ sport, onConnectLeague }: { sport: Sport; onConnectLeague: () => void }) {
   const sendMessage = useAppStore((state) => state.sendMessage);
   const connection = useLeagueStore((s) => s.connection);
@@ -145,8 +200,11 @@ export default function AskPage() {
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Coordinate sport changes with league store
+  // Coordinate sport changes with league store — reset conversation for new sport
   const handleSportChange = (newSport: Sport) => {
+    if (newSport !== sport) {
+      clearMessages();
+    }
     setSport(newSport);
     if (leagueConnection) {
       onSportChange(newSport);
@@ -233,6 +291,11 @@ export default function AskPage() {
 
               <div ref={messagesEndRef} />
             </div>
+          )}
+
+          {/* Follow-up suggestions after conversation */}
+          {messages.length > 0 && !isLoading && (
+            <FollowUpChips sport={sport} onSend={sendMessage} disabled={isLoading} />
           )}
 
           {/* Input area */}

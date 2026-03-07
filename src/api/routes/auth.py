@@ -311,11 +311,17 @@ async def require_pro_or_free_verdict(
         from models.database import User as UserModel
 
         await session.execute(
-            update(UserModel).where(UserModel.id == user.id).values(verdicts_used=user.verdicts_used + 1)
+            update(UserModel)
+            .where(UserModel.id == user.id)
+            .values(verdicts_used=user.verdicts_used + 1)
         )
         await session.commit()
 
-    return {**current_user, "verdicts_limit": FREE_VERDICT_LIMIT, "verdicts_used": user.verdicts_used + 1}
+    return {
+        **current_user,
+        "verdicts_limit": FREE_VERDICT_LIMIT,
+        "verdicts_used": user.verdicts_used + 1,
+    }
 
 
 # ---------------------------------------------------------------------------

@@ -579,6 +579,11 @@ class APIClient {
     return response.data;
   }
 
+  async resetAccuracy(): Promise<{ status: string; deleted: number }> {
+    const response = await this.client.delete('/accuracy/reset');
+    return response.data;
+  }
+
   // ESPN Fantasy endpoints
   async syncESPN(
     swid: string,

@@ -22,8 +22,12 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
     if (initRef.current) return;
     initRef.current = true;
 
-    const appUserId = isAuthenticated && user ? String(user.id) : undefined;
-    initialize(appUserId);
+    try {
+      const appUserId = isAuthenticated && user ? String(user.id) : undefined;
+      initialize(appUserId).catch((err) => console.error('RevenueCat init failed:', err));
+    } catch (err) {
+      console.error('RevenueCat init error:', err);
+    }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync with auth state changes
@@ -33,16 +37,20 @@ export function RevenueCatProvider({ children }: { children: React.ReactNode }) 
 
     if (!isInitialized) return;
 
-    // User just logged in
-    if (isAuthenticated && !wasAuthenticated && user) {
-      switchUser(String(user.id));
-    }
+    try {
+      // User just logged in
+      if (isAuthenticated && !wasAuthenticated && user) {
+        switchUser(String(user.id)).catch((err) => console.error('RevenueCat switchUser failed:', err));
+      }
 
-    // User just logged out
-    if (!isAuthenticated && wasAuthenticated) {
-      reset();
-      // Reinitialize as anonymous after a tick
-      setTimeout(() => initialize(), 0);
+      // User just logged out
+      if (!isAuthenticated && wasAuthenticated) {
+        reset();
+        // Reinitialize as anonymous after a tick
+        setTimeout(() => initialize().catch((err) => console.error('RevenueCat reinit failed:', err)), 0);
+      }
+    } catch (err) {
+      console.error('RevenueCat sync error:', err);
     }
   }, [isAuthenticated, user, isInitialized, switchUser, reset, initialize]);
 
