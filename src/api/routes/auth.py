@@ -308,8 +308,10 @@ async def require_pro_or_free_verdict(
     async with db_service.session() as session:
         from sqlalchemy import update
 
+        from models.database import User as UserModel
+
         await session.execute(
-            update(User).where(User.id == user.id).values(verdicts_used=user.verdicts_used + 1)
+            update(UserModel).where(UserModel.id == user.id).values(verdicts_used=user.verdicts_used + 1)
         )
         await session.commit()
 

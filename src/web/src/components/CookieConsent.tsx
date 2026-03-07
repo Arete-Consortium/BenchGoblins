@@ -1,22 +1,31 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { X } from 'lucide-react';
 
 const CONSENT_KEY = 'benchgoblin_cookie_consent';
 
-export default function CookieConsent() {
-  const [visible, setVisible] = useState(false);
+function subscribeToStorage(callback: () => void) {
+  window.addEventListener('storage', callback);
+  return () => window.removeEventListener('storage', callback);
+}
 
-  useEffect(() => {
-    if (!localStorage.getItem(CONSENT_KEY)) {
-      setVisible(true);
-    }
-  }, []);
+function getConsentSnapshot(): boolean {
+  return !localStorage.getItem(CONSENT_KEY);
+}
+
+function getServerSnapshot(): boolean {
+  return false;
+}
+
+export default function CookieConsent() {
+  const shouldShow = useSyncExternalStore(subscribeToStorage, getConsentSnapshot, getServerSnapshot);
+  const [dismissed, setDismissed] = useState(false);
+  const visible = shouldShow && !dismissed;
 
   const handleAccept = () => {
     localStorage.setItem(CONSENT_KEY, 'accepted');
-    setVisible(false);
+    setDismissed(true);
 
     // Update GA4 consent mode
     if (typeof window.gtag === 'function') {
@@ -28,7 +37,7 @@ export default function CookieConsent() {
 
   const handleDecline = () => {
     localStorage.setItem(CONSENT_KEY, 'declined');
-    setVisible(false);
+    setDismissed(true);
   };
 
   if (!visible) return null;
