@@ -15,7 +15,7 @@ import { useLeagueStore } from '@/stores/leagueStore';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
-import type { Sport, SleeperLeague, RosterPlayer } from '@/types';
+import type { Sport, SleeperLeague } from '@/types';
 
 const SPORT_NAMES: Record<Sport, string> = {
   nba: 'NBA',
@@ -44,6 +44,7 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
     isLoadingRoster,
     error,
     connectSleeper,
+    connectDemo,
     selectLeague,
   } = useLeagueStore();
 
@@ -168,6 +169,25 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
               >
                 Yahoo
               </Button>
+            </div>
+
+            {/* Demo mode */}
+            <button
+              onClick={() => {
+                connectDemo(sport);
+                setStep('roster');
+              }}
+              className="w-full text-left p-3 rounded-lg border border-dashed border-dark-600 bg-dark-800/30 hover:bg-dark-800 hover:border-dark-500 transition-all"
+            >
+              <div className="text-sm font-medium text-dark-300">Try Demo League</div>
+              <div className="text-xs text-dark-500 mt-0.5">
+                Pre-loaded roster with top players — no account needed
+              </div>
+            </button>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-dark-700" /></div>
+              <div className="relative flex justify-center text-xs"><span className="bg-dark-900 px-2 text-dark-500">or connect your league</span></div>
             </div>
 
             {platform === 'sleeper' && (
