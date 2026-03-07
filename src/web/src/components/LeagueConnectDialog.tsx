@@ -15,7 +15,7 @@ import { useLeagueStore } from '@/stores/leagueStore';
 import { useAppStore } from '@/stores/appStore';
 import { cn } from '@/lib/utils';
 import api from '@/lib/api';
-import type { Sport, SleeperLeague } from '@/types';
+import type { Sport, SleeperLeague, RosterPlayer } from '@/types';
 
 const SPORT_NAMES: Record<Sport, string> = {
   nba: 'NBA',

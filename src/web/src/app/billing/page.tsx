@@ -138,9 +138,16 @@ function BillingContent() {
   }, [isAuthenticated]);
 
   const handleCheckout = useCallback(async (priceKey: string) => {
+    if (!isAuthenticated) {
+      window.location.href = '/auth/login';
+      return;
+    }
+
     const priceId = prices[priceKey];
     if (!priceId) {
       setError(`Price not configured for ${priceKey}. Contact support.`);
+      // Scroll to top so the error banner is visible
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }
 
@@ -151,10 +158,12 @@ function BillingContent() {
       const { checkout_url } = await api.createCheckoutSession(priceId);
       window.location.href = checkout_url;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start checkout');
+      const message = err instanceof Error ? err.message : 'Failed to start checkout';
+      setError(message);
       setCheckoutLoading(null);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [prices]);
+  }, [prices, isAuthenticated]);
 
   const handleManageSubscription = useCallback(async () => {
     setPortalLoading(true);
@@ -195,9 +204,10 @@ function BillingContent() {
         )}
 
         {error && (
-          <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-center flex items-center justify-center gap-2">
-            <AlertCircle className="h-4 w-4" />
+          <div className="mb-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-center flex items-center justify-center gap-2 sticky top-16 z-20">
+            <AlertCircle className="h-4 w-4 shrink-0" />
             {error}
+            <button onClick={() => setError(null)} className="ml-2 text-red-500 hover:text-red-300 text-lg leading-none">&times;</button>
           </div>
         )}
 
@@ -266,17 +276,7 @@ function BillingContent() {
                       ))}
                     </ul>
 
-                    {!isAuthenticated ? (
-                      <Button
-                        asChild
-                        className={`w-full gap-2 ${plan.name === 'Annual' ? 'bg-green-600 hover:bg-green-700' : 'bg-gradient-to-r from-primary-500 to-primary-600 hover:from-primary-400 hover:to-primary-500'}`}
-                      >
-                        <Link href="/auth/login">
-                          <Crown className="h-4 w-4" />
-                          Sign in to Subscribe
-                        </Link>
-                      </Button>
-                    ) : isPro ? (
+                    {isPro ? (
                       <Button
                         onClick={handleManageSubscription}
                         variant="outline"
@@ -303,7 +303,7 @@ function BillingContent() {
                         ) : (
                           <>
                             <Crown className="h-4 w-4" />
-                            Choose {plan.name}
+                            {isAuthenticated ? `Choose ${plan.name}` : 'Sign in to Subscribe'}
                           </>
                         )}
                       </Button>
@@ -339,18 +339,7 @@ function BillingContent() {
                             </li>
                           ))}
                         </ul>
-                        {!isAuthenticated ? (
-                          <Button
-                            asChild
-                            variant="outline"
-                            className={`w-full ${plan.btnClass}`}
-                          >
-                            <Link href="/auth/login">
-                              <Crown className="h-4 w-4 mr-2" />
-                              Sign in to Subscribe
-                            </Link>
-                          </Button>
-                        ) : isPro ? (
+                        {isPro ? (
                           <Button
                             onClick={handleManageSubscription}
                             variant="outline"
@@ -378,7 +367,7 @@ function BillingContent() {
                             ) : (
                               <>
                                 <Crown className="h-4 w-4 mr-2" />
-                                Choose {plan.name}
+                                {isAuthenticated ? `Choose ${plan.name}` : 'Sign in to Subscribe'}
                               </>
                             )}
                           </Button>
