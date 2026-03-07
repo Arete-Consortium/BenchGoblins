@@ -172,8 +172,11 @@ export function LeagueConnectDialog({ open, onOpenChange }: LeagueConnectDialogP
 
             {platform === 'sleeper' && (
               <div className="space-y-3">
+                <label className="text-xs text-dark-400">
+                  Your Sleeper @username (found in Sleeper app &gt; Profile)
+                </label>
                 <Input
-                  placeholder="Sleeper username"
+                  placeholder="e.g. @fantasygoblin"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
                   onKeyDown={handleKeyDown}
