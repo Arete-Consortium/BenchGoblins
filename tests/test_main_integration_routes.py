@@ -425,6 +425,42 @@ class TestSyncOutcomes:
         assert "Sync failed" in resp.json()["detail"]
 
 
+class TestAccuracyReset:
+    @patch("api.main.db_service")
+    def test_reset_success(self, mock_db, test_client):
+        _override_user(user_id=42)
+        try:
+            mock_db.is_configured = True
+            mock_ctx, mock_session = _mock_db_session()
+            mock_db.session.return_value = mock_ctx
+            mock_result = MagicMock()
+            mock_result.rowcount = 7
+            mock_session.execute = AsyncMock(return_value=mock_result)
+
+            resp = test_client.delete("/accuracy/reset")
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["status"] == "reset"
+            assert data["deleted"] == 7
+        finally:
+            _clear_overrides()
+
+    @patch("api.main.db_service")
+    def test_reset_db_not_configured(self, mock_db, test_client):
+        _override_user(user_id=42)
+        try:
+            mock_db.is_configured = False
+            resp = test_client.delete("/accuracy/reset")
+            assert resp.status_code == 503
+        finally:
+            _clear_overrides()
+
+    def test_reset_unauthenticated(self, test_client):
+        _clear_overrides()
+        resp = test_client.delete("/accuracy/reset")
+        assert resp.status_code in (401, 403)
+
+
 # =============================================================================
 # BILLING ROUTES
 # =============================================================================

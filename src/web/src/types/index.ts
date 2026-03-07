@@ -192,23 +192,27 @@ export interface DecisionHistoryItem {
   outcome?: 'correct' | 'incorrect' | 'pending';
 }
 
-// User usage stats
-export interface UsageStats {
-  queries_today: number;
-  queries_limit: number;
-  tokens_used: number;
-  cost_usd: number;
+// Usage stats from /usage endpoint
+export interface UsagePeriod {
+  input_tokens: number;
+  output_tokens: number;
+  total_decisions: number;
+  estimated_cost_usd: number;
 }
 
-// Health check response
+export interface UsageStats {
+  today?: UsagePeriod;
+  this_week?: UsagePeriod;
+  error?: string;
+}
+
+// Health check response from /health endpoint (flat)
 export interface HealthResponse {
-  status: 'healthy' | 'degraded' | 'unhealthy';
-  components: {
-    database: boolean;
-    redis: boolean;
-    claude: boolean;
-    espn: boolean;
-  };
+  status: string;
+  postgres_connected?: boolean;
+  redis_connected?: boolean;
+  claude_available?: boolean;
+  sentry_enabled?: boolean;
 }
 
 // Goblin Verdict types
