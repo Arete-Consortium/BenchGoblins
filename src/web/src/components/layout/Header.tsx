@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter, usePathname } from 'next/navigation';
-import { History, MessageSquare, Settings, LogOut, CreditCard, Zap, User, Target, BookOpen, Sparkles, Gift, Trophy, Crown, LayoutDashboard } from 'lucide-react';
+import { MessageSquare, Settings, LogOut, CreditCard, Zap, User, BookOpen, Sparkles, Gift, Trophy, Crown, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from './ThemeToggle';
@@ -23,12 +23,10 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 const navItems = [
   { href: '/ask', label: 'Ask', icon: MessageSquare, primary: true },
   { href: '/verdict', label: 'Verdict', icon: Sparkles, primary: true },
-  { href: '/history', label: 'History', icon: History, primary: true },
   { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, primary: true },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: true },
   { href: '/recaps', label: 'Recaps', icon: BookOpen, primary: false },
   { href: '/commissioner', label: 'Commissioner', icon: Crown, primary: false },
-  { href: '/accuracy', label: 'Accuracy', icon: Target, primary: false },
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: false },
   { href: '/settings', label: 'Settings', icon: Settings, primary: false },
 ];
 
