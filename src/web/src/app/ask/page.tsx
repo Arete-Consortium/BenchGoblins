@@ -2,6 +2,7 @@
 
 import { Suspense, useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
+import Link from 'next/link';
 import { useAppStore } from '@/stores/appStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { Header, UsageIndicator } from '@/components/layout/Header';
@@ -337,9 +338,16 @@ function AskPageInner() {
                 </button>
               )}
             </div>
-            {/* Row 2: Risk mode + usage/league */}
+            {/* Row 2: Risk mode + verdict + usage/league */}
             <div className="flex items-center justify-between gap-3">
               <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
+              <Link
+                href="/verdict"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600/20 border border-primary-500/30 text-primary-400 hover:bg-primary-600/30 hover:text-primary-300 transition-all text-sm font-medium"
+              >
+                <Sparkles className="w-4 h-4" />
+                Verdict
+              </Link>
               <div className="flex items-center gap-3">
                 {isAuthenticated && user && (
                   <UsageIndicator queriesUsed={user.queries_today} queriesLimit={user.queries_limit} />

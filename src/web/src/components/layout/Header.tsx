@@ -23,7 +23,7 @@ import { useSubscriptionStore } from '@/stores/subscriptionStore';
 // Settings is in the account dropdown only — NOT here.
 const navItems = [
   { href: '/ask', label: 'Ask', icon: MessageSquare, primary: true },
-  { href: '/verdict', label: 'Verdict', icon: Sparkles, primary: true },
+  { href: '/verdict', label: 'Verdict', icon: Sparkles, primary: false },
   { href: '/leaderboard', label: 'Leaderboard', icon: Trophy, primary: false },
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: true },
   { href: '/recaps', label: 'Recaps', icon: BookOpen, primary: false },
