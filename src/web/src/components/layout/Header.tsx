@@ -38,7 +38,7 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-function UsageIndicator({ queriesUsed, queriesLimit }: { queriesUsed: number; queriesLimit: number }) {
+export function UsageIndicator({ queriesUsed, queriesLimit }: { queriesUsed: number; queriesLimit: number }) {
   const isUnlimited = queriesLimit === -1 || queriesLimit >= 999999;
   const percentage = isUnlimited ? 100 : (queriesUsed / queriesLimit) * 100;
   const isLow = !isUnlimited && percentage >= 80;
@@ -109,14 +109,6 @@ export function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-3">
-            {/* Usage indicator (only for authenticated users) */}
-            {isAuthenticated && user && (
-              <UsageIndicator
-                queriesUsed={user.queries_today}
-                queriesLimit={user.queries_limit}
-              />
-            )}
-
             <ThemeToggle />
 
             {/* User menu or Sign In button */}

@@ -4,7 +4,8 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/stores/appStore';
 import { useLeagueStore } from '@/stores/leagueStore';
-import { Header } from '@/components/layout/Header';
+import { Header, UsageIndicator } from '@/components/layout/Header';
+import { useAuthStore } from '@/stores/authStore';
 import { SportSelector } from '@/components/SportSelector';
 import { RiskModeSelector } from '@/components/RiskModeSelector';
 import { LeagueChip } from '@/components/LeagueChip';
@@ -282,6 +283,7 @@ export default function AskPage() {
     useAppStore();
   const leagueConnection = useLeagueStore((s) => s.connection);
   const onSportChange = useLeagueStore((s) => s.onSportChange);
+  const { user, isAuthenticated } = useAuthStore();
 
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -325,6 +327,9 @@ export default function AskPage() {
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
               <div className="flex items-center gap-3">
+                {isAuthenticated && user && (
+                  <UsageIndicator queriesUsed={user.queries_today} queriesLimit={user.queries_limit} />
+                )}
                 <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
                 <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
                 {messages.length > 0 && (
