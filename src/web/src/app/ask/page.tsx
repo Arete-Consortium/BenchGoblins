@@ -324,7 +324,7 @@ function AskPageInner() {
       <main className="flex-1 flex flex-col pt-16">
         {/* Top toolbar: Sport selector */}
         <div className="border-b border-dark-800/50 bg-dark-900/80 backdrop-blur-sm sticky top-16 z-10">
-          <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+          <div className="max-w-3xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
             <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
             <div className="flex items-center gap-3">
               <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
@@ -342,7 +342,7 @@ function AskPageInner() {
         </div>
 
         {/* Chat area */}
-        <div className="flex-1 flex flex-col max-w-4xl mx-auto w-full">
+        <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full">
           {messages.length === 0 ? (
             <WelcomeScreen sport={sport} onConnectLeague={() => setLeagueDialogOpen(true)} />
           ) : (
@@ -398,7 +398,7 @@ function AskPageInner() {
 
           {/* Bottom toolbar + input */}
           <div className="border-t border-dark-800/50 bg-dark-900/80 backdrop-blur-sm">
-            <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+            <div className="max-w-3xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
               <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
               <Link
                 href="/verdict"
