@@ -20,7 +20,42 @@ import {
   CheckCircle,
   XCircle,
   Calendar,
+  MessageSquare,
 } from 'lucide-react';
+
+// Suggested questions per sport to seed the leaderboard
+const SEED_QUESTIONS: Record<string, string[]> = {
+  nfl: [
+    'Compare Josh Allen vs Lamar Jackson this week',
+    'Start CeeDee Lamb or Ja\'Marr Chase in PPR?',
+    'Rank the top 5 fantasy QBs right now',
+    'Is Travis Kelce still a TE1?',
+  ],
+  nba: [
+    'Start Jayson Tatum or Anthony Edwards tonight?',
+    'Who are the top 5 fantasy point guards?',
+    'Compare Luka Doncic vs Shai Gilgeous-Alexander',
+    'Is Victor Wembanyama a must-start?',
+  ],
+  mlb: [
+    'Start Shohei Ohtani or Ronald Acuna in fantasy?',
+    'Rank the top 5 starting pitchers right now',
+    'Compare Mookie Betts vs Juan Soto ROS',
+    'Is Gunnar Henderson a top-10 fantasy player?',
+  ],
+  nhl: [
+    'Start Connor McDavid or Nathan MacKinnon tonight?',
+    'Who are the top 5 fantasy goalies?',
+    'Compare Auston Matthews vs Leon Draisaitl',
+    'Is Cale Makar the best fantasy defenseman?',
+  ],
+  soccer: [
+    'Captain Erling Haaland or Mohamed Salah this GW?',
+    'Compare Bukayo Saka vs Cole Palmer for FPL',
+    'Rank the top 5 FPL midfielders right now',
+    'Is Bruno Fernandes worth the premium?',
+  ],
+};
 
 type Tab = 'top' | 'trending' | 'accuracy' | 'season';
 
@@ -613,15 +648,27 @@ export default function LeaderboardPage() {
             </div>
           ) : tab === 'top' ? (
             players.length === 0 ? (
-              <div className="text-center py-16">
+              <div className="text-center py-12">
                 <Trophy className="w-16 h-16 text-dark-600 mx-auto mb-4" />
                 <h2 className="text-xl font-semibold text-dark-300">
                   No players found{position ? ` for ${position}` : ''}
                 </h2>
-                <p className="text-dark-500 mt-2">
-                  Player index data is generated when verdicts are requested.
-                  Try asking the Goblin about some players first!
+                <p className="text-dark-500 mt-2 mb-6">
+                  Player index data is generated when you ask about players.
+                  Try one of these to get started:
                 </p>
+                <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+                  {(SEED_QUESTIONS[sport] || []).map((q) => (
+                    <Link
+                      key={q}
+                      href={`/ask?q=${encodeURIComponent(q)}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-dark-800 text-dark-400 text-sm hover:bg-dark-700 hover:text-dark-200 transition-all border border-dark-700/50 hover:border-dark-600"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{q}</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -632,13 +679,24 @@ export default function LeaderboardPage() {
             )
           ) : tab === 'trending' ? (
             trending.length === 0 ? (
-              <div className="text-center py-16">
+              <div className="text-center py-12">
                 <TrendingUp className="w-16 h-16 text-dark-600 mx-auto mb-4" />
                 <h2 className="text-xl font-semibold text-dark-300">No trending data yet</h2>
-                <p className="text-dark-500 mt-2">
-                  Trending requires at least 7 days of player index history.
-                  Check back soon!
+                <p className="text-dark-500 mt-2 mb-6">
+                  Trending requires player index history. Ask about players to build it:
                 </p>
+                <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+                  {(SEED_QUESTIONS[sport] || []).map((q) => (
+                    <Link
+                      key={q}
+                      href={`/ask?q=${encodeURIComponent(q)}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-dark-800 text-dark-400 text-sm hover:bg-dark-700 hover:text-dark-200 transition-all border border-dark-700/50 hover:border-dark-600"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{q}</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
@@ -666,13 +724,24 @@ export default function LeaderboardPage() {
             )
           ) : (
             seasonPlayers.length === 0 ? (
-              <div className="text-center py-16">
+              <div className="text-center py-12">
                 <Calendar className="w-16 h-16 text-dark-600 mx-auto mb-4" />
                 <h2 className="text-xl font-semibold text-dark-300">No season data yet</h2>
-                <p className="text-dark-500 mt-2">
-                  Season averages build up as more player indices are calculated.
-                  Try a wider date range or check back later!
+                <p className="text-dark-500 mt-2 mb-6">
+                  Season averages build as you ask about players. Try these:
                 </p>
+                <div className="flex flex-wrap justify-center gap-2 max-w-lg mx-auto">
+                  {(SEED_QUESTIONS[sport] || []).map((q) => (
+                    <Link
+                      key={q}
+                      href={`/ask?q=${encodeURIComponent(q)}`}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-dark-800 text-dark-400 text-sm hover:bg-dark-700 hover:text-dark-200 transition-all border border-dark-700/50 hover:border-dark-600"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span className="truncate">{q}</span>
+                    </Link>
+                  ))}
+                </div>
               </div>
             ) : (
               <div className="space-y-2">

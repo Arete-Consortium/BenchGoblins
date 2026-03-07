@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAppStore } from '@/stores/appStore';
 import { useLeagueStore } from '@/stores/leagueStore';
 import { Header } from '@/components/layout/Header';
@@ -284,6 +285,18 @@ export default function AskPage() {
 
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const searchParams = useSearchParams();
+  const initialQuerySent = useRef(false);
+
+  // Auto-send question from ?q= query param (e.g. from leaderboard suggestions)
+  useEffect(() => {
+    if (initialQuerySent.current) return;
+    const q = searchParams.get('q');
+    if (q && !isLoading && messages.length === 0) {
+      initialQuerySent.current = true;
+      sendMessage(q);
+    }
+  }, [searchParams, isLoading, messages.length, sendMessage]);
 
   // Coordinate sport changes with league store — reset conversation for new sport
   const handleSportChange = (newSport: Sport) => {
