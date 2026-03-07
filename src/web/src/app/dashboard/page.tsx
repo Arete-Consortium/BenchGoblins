@@ -5,7 +5,14 @@ import Link from 'next/link';
 import { Header } from '@/components/layout/Header';
 import { useAppStore } from '@/stores/appStore';
 import api from '@/lib/api';
-import { HealthResponse } from '@/types';
+// Actual shape from /health endpoint (flat, not nested)
+interface HealthData {
+  status: string;
+  postgres_connected?: boolean;
+  redis_connected?: boolean;
+  claude_available?: boolean;
+  sentry_enabled?: boolean;
+}
 import { getSportDisplayName } from '@/lib/utils';
 import {
   MessageSquare,
@@ -79,7 +86,7 @@ interface UsageResponse {
 export default function DashboardPage() {
   const { sport, messages } = useAppStore();
   const [usage, setUsage] = useState<UsageResponse | null>(null);
-  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [health, setHealth] = useState<HealthData | null>(null);
   const [accuracy, setAccuracy] = useState<AccuracyData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -92,7 +99,7 @@ export default function DashboardPage() {
           api.getAccuracyLeaders({ limit: 1 }).catch(() => null),
         ]);
         setUsage(usageData as UsageResponse | null);
-        setHealth(healthData);
+        setHealth(healthData as HealthData | null);
         if (accuracyData?.leaders?.length) {
           const top = accuracyData.leaders[0];
           setAccuracy({
@@ -242,10 +249,9 @@ export default function DashboardPage() {
                 </div>
               ) : health ? (
                 <div className="space-y-3">
-                  <StatusIndicator status={health.components.database} label="Database" />
-                  <StatusIndicator status={health.components.redis} label="Cache (Redis)" />
-                  <StatusIndicator status={health.components.claude} label="Claude AI" />
-                  <StatusIndicator status={health.components.espn} label="ESPN API" />
+                  <StatusIndicator status={!!health.postgres_connected} label="Database" />
+                  <StatusIndicator status={!!health.redis_connected} label="Cache (Redis)" />
+                  <StatusIndicator status={!!health.claude_available} label="Claude AI" />
                   <div className="pt-3 border-t border-dark-700 mt-3">
                     <div className="flex items-center gap-2">
                       <Server className="w-4 h-4 text-dark-400" />

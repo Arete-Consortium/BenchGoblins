@@ -4,30 +4,49 @@ import { useEffect } from 'react';
 
 function ShibaFace() {
   return (
-    <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg">
-      {/* Face */}
-      <ellipse cx="40" cy="45" rx="28" ry="25" fill="#D4A054" />
-      {/* Inner face (tan) */}
-      <ellipse cx="40" cy="50" rx="20" ry="18" fill="#F5DEB3" />
-      {/* Left ear */}
-      <polygon points="14,30 8,5 28,22" fill="#2C1A0E" />
-      <polygon points="16,28 12,10 26,23" fill="#D4A054" />
-      {/* Right ear */}
-      <polygon points="66,30 72,5 52,22" fill="#2C1A0E" />
-      <polygon points="64,28 68,10 54,23" fill="#D4A054" />
+    <svg width="96" height="96" viewBox="0 0 96 96" fill="none" xmlns="http://www.w3.org/2000/svg">
+      {/* Left ear - outer (black) */}
+      <path d="M18 38 L10 8 L32 28 Z" fill="#1a1a1a" />
+      {/* Left ear - inner (tan) */}
+      <path d="M19 35 L14 14 L30 28 Z" fill="#C4884D" />
+      {/* Right ear - outer (black) */}
+      <path d="M78 38 L86 8 L64 28 Z" fill="#1a1a1a" />
+      {/* Right ear - inner (tan) */}
+      <path d="M77 35 L82 14 L66 28 Z" fill="#C4884D" />
+
+      {/* Head shape (tan/sesame) */}
+      <ellipse cx="48" cy="52" rx="32" ry="30" fill="#C4884D" />
+
+      {/* Black forehead patch */}
+      <path d="M22 42 Q48 20 74 42 Q48 35 22 42" fill="#1a1a1a" opacity="0.7" />
+
+      {/* White face mask (urajiro) */}
+      <path d="M48 38 Q28 44 24 58 Q28 76 48 80 Q68 76 72 58 Q68 44 48 38" fill="#F5E6D0" />
+
+      {/* Left eyebrow mark */}
+      <ellipse cx="34" cy="42" rx="4" ry="2" fill="#DBA55D" />
+      {/* Right eyebrow mark */}
+      <ellipse cx="62" cy="42" rx="4" ry="2" fill="#DBA55D" />
+
       {/* Left eye */}
-      <ellipse cx="30" cy="42" rx="4" ry="4.5" fill="#2C1A0E" />
-      <ellipse cx="31" cy="41" rx="1.5" ry="1.5" fill="white" />
+      <ellipse cx="36" cy="50" rx="4" ry="5" fill="#1a1a1a" />
+      <ellipse cx="37.5" cy="48.5" rx="1.5" ry="2" fill="white" opacity="0.8" />
       {/* Right eye */}
-      <ellipse cx="50" cy="42" rx="4" ry="4.5" fill="#2C1A0E" />
-      <ellipse cx="51" cy="41" rx="1.5" ry="1.5" fill="white" />
+      <ellipse cx="60" cy="50" rx="4" ry="5" fill="#1a1a1a" />
+      <ellipse cx="61.5" cy="48.5" rx="1.5" ry="2" fill="white" opacity="0.8" />
+
       {/* Nose */}
-      <ellipse cx="40" cy="52" rx="3.5" ry="2.5" fill="#2C1A0E" />
+      <ellipse cx="48" cy="60" rx="4" ry="3" fill="#1a1a1a" />
+      {/* Nose highlight */}
+      <ellipse cx="47" cy="59" rx="1.5" ry="1" fill="#333" />
+
       {/* Mouth */}
-      <path d="M36 56 Q40 60 44 56" stroke="#2C1A0E" strokeWidth="1.5" fill="none" strokeLinecap="round" />
-      {/* Cheek marks */}
-      <ellipse cx="22" cy="50" rx="4" ry="2.5" fill="#E8A0A0" opacity="0.5" />
-      <ellipse cx="58" cy="50" rx="4" ry="2.5" fill="#E8A0A0" opacity="0.5" />
+      <line x1="48" y1="63" x2="48" y2="66" stroke="#1a1a1a" strokeWidth="1.5" strokeLinecap="round" />
+      <path d="M42 66 Q45 70 48 66 Q51 70 54 66" stroke="#1a1a1a" strokeWidth="1.5" fill="none" strokeLinecap="round" />
+
+      {/* Cheek fluff */}
+      <ellipse cx="24" cy="56" rx="5" ry="4" fill="#DBA55D" opacity="0.6" />
+      <ellipse cx="72" cy="56" rx="5" ry="4" fill="#DBA55D" opacity="0.6" />
     </svg>
   );
 }
