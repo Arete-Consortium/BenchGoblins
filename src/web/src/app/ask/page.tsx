@@ -324,27 +324,29 @@ function AskPageInner() {
         {/* Controls bar — sport + risk mode stacked */}
         <div className="border-b border-dark-800/50 bg-dark-900/80 backdrop-blur-sm sticky top-16 z-10">
           <div className="max-w-4xl mx-auto px-4 py-3 space-y-2">
-            {/* Row 1: Sport selector + league/usage/clear */}
+            {/* Row 1: Sport selector */}
             <div className="flex items-center justify-between gap-3">
               <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
+              {messages.length > 0 && (
+                <button
+                  onClick={clearMessages}
+                  disabled={isLoading}
+                  className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            {/* Row 2: Risk mode + usage/league */}
+            <div className="flex items-center justify-between gap-3">
+              <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
               <div className="flex items-center gap-3">
                 {isAuthenticated && user && (
                   <UsageIndicator queriesUsed={user.queries_today} queriesLimit={user.queries_limit} />
                 )}
                 <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
-                {messages.length > 0 && (
-                  <button
-                    onClick={clearMessages}
-                    disabled={isLoading}
-                    className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all"
-                  >
-                    Clear
-                  </button>
-                )}
               </div>
             </div>
-            {/* Row 2: Risk mode selector */}
-            <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
           </div>
         </div>
 
