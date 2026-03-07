@@ -94,14 +94,15 @@ async def _resolve_player(name: str, sport: str):
             detail=f"No stats available for '{name}'",
         )
 
-    # Fetch trends and matchup data
+    # Fetch trends, matchup, and game line data
     game_logs = await espn_service.get_player_game_logs(info.id, sport)
     trends = espn_service.calculate_trends(game_logs, sport)
 
-    opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+    game = await espn_service.get_next_game(info.team_abbrev, sport)
+    opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
     matchup = await espn_service.get_team_defense(opp, sport) if opp else None
 
-    core_stats = adapt_espn_to_core(info, stats, trends=trends, matchup=matchup)
+    core_stats = adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game)
     return info, core_stats
 
 

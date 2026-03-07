@@ -749,6 +749,11 @@ class TestDecideTradeEndpoint:
                 return_value=None,
             ),
             patch(
+                "api.main.espn_service.get_next_game",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
                 "api.main._store_decision",
                 new_callable=AsyncMock,
             ),

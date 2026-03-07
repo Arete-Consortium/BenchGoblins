@@ -1,5 +1,7 @@
 """Tests for ESPN → Core scoring adapter."""
 
+from datetime import datetime
+
 import pytest
 
 from core.scoring import (
@@ -7,7 +9,7 @@ from core.scoring import (
     compare_players,
     RiskMode,
 )
-from services.espn import PlayerInfo, PlayerStats as ESPNPlayerStats
+from services.espn import GameInfo, PlayerInfo, PlayerStats as ESPNPlayerStats
 from services.scoring_adapter import adapt_espn_to_core
 
 
@@ -448,3 +450,24 @@ class TestAdapterNHL:
         assert 0 <= indices.gis <= 100
         assert -50 <= indices.od <= 50
         assert 0 <= indices.msf <= 100
+
+
+class TestAdaptWithGameInfo:
+    """Test game line data flows through adapter to core stats."""
+
+    def test_game_info_passes_over_under(self, espn_nba_player_info, espn_nba_player_stats):
+        game = GameInfo("g1", datetime.now(), "Lakers", "Celtics", "LAL", "BOS", spread=-3.5, over_under=228.0)
+        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, game=game)
+        assert core.game_over_under == 228.0
+        assert core.game_spread == -3.5
+
+    def test_no_game_info_none_fields(self, espn_nba_player_info, espn_nba_player_stats):
+        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, game=None)
+        assert core.game_over_under is None
+        assert core.game_spread is None
+
+    def test_game_with_no_odds(self, espn_nba_player_info, espn_nba_player_stats):
+        game = GameInfo("g1", datetime.now(), "Lakers", "Celtics", "LAL", "BOS")
+        core = adapt_espn_to_core(espn_nba_player_info, espn_nba_player_stats, game=game)
+        assert core.game_over_under is None
+        assert core.game_spread is None

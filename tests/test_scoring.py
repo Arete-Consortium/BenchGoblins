@@ -654,3 +654,44 @@ class TestSoccerScoring:
         )
         msf = calculate_msf(stats)
         assert msf > 50  # Favorable matchup against leaky defense
+
+
+class TestMSFOverUnder:
+    """Tests for game over/under impact on MSF scoring."""
+
+    def _make(self, sport="nba", position="PG", **kw):
+        from core.scoring import PlayerStats
+        return PlayerStats(player_id="1", name="T", team="T", position=position, sport=sport, **kw)
+
+    def _msf(self, stats):
+        from core.scoring import calculate_msf
+        return calculate_msf(stats)
+
+    def test_high_nba_over_under_boosts_msf(self):
+        msf = self._msf(self._make(game_over_under=245.0))
+        assert msf > 50
+
+    def test_low_nba_over_under_penalizes_msf(self):
+        msf = self._msf(self._make(game_over_under=200.0))
+        assert msf < 50
+
+    def test_nfl_high_over_under(self):
+        msf = self._msf(self._make(sport="nfl", position="WR", game_over_under=54.0))
+        assert msf > 50
+
+    def test_no_over_under_stays_neutral(self):
+        msf = self._msf(self._make(game_over_under=None))
+        assert msf == 50.0
+
+    def test_over_under_combined_with_defense(self):
+        msf_base = self._msf(self._make(opponent_def_rating=120.0))
+        msf_combined = self._msf(self._make(opponent_def_rating=120.0, game_over_under=245.0))
+        assert msf_combined > msf_base
+
+    def test_mlb_over_under(self):
+        msf = self._msf(self._make(sport="mlb", position="1B", game_over_under=11.0))
+        assert msf > 50
+
+    def test_soccer_over_under(self):
+        msf = self._msf(self._make(sport="soccer", position="FW", game_over_under=3.5))
+        assert msf > 50

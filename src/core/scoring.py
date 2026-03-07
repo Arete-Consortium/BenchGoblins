@@ -94,6 +94,8 @@ class PlayerStats:
     opponent_def_rating: Optional[float] = None
     opponent_pace: Optional[float] = None
     opponent_vs_position: Optional[float] = None  # FP allowed to position
+    game_over_under: Optional[float] = None  # Vegas over/under total
+    game_spread: Optional[float] = None  # Vegas spread (negative = favored)
 
 
 @dataclass
@@ -698,8 +700,12 @@ def calculate_msf(stats: PlayerStats) -> float:
     - Position-specific matchup data
     - Pace factor
     """
-    # No matchup data = neutral
-    if stats.opponent_def_rating is None and stats.opponent_vs_position is None:
+    # No matchup data at all = neutral
+    if (
+        stats.opponent_def_rating is None
+        and stats.opponent_vs_position is None
+        and stats.game_over_under is None
+    ):
         return 50.0
 
     base_msf = 50.0
@@ -748,6 +754,25 @@ def calculate_msf(stats: PlayerStats) -> float:
         if stats.sport == "nba":
             pace_boost = (stats.opponent_pace - 100) * 0.5
             base_msf += max(-10, min(10, pace_boost))
+
+    # Game total (over/under) — higher totals favor offensive players
+    if stats.game_over_under is not None:
+        if stats.sport == "nba":
+            # NBA avg ~225; higher = more scoring opportunity
+            ou_boost = (stats.game_over_under - 225) * 0.3
+        elif stats.sport == "nfl":
+            # NFL avg ~44; higher = shootout potential
+            ou_boost = (stats.game_over_under - 44) * 0.8
+        elif stats.sport == "mlb":
+            # MLB avg ~8.5
+            ou_boost = (stats.game_over_under - 8.5) * 3.0
+        elif stats.sport == "nhl":
+            # NHL avg ~6
+            ou_boost = (stats.game_over_under - 6.0) * 4.0
+        else:
+            # Soccer avg ~2.5
+            ou_boost = (stats.game_over_under - 2.5) * 8.0
+        base_msf += max(-10, min(10, ou_boost))
 
     return max(0, min(100, base_msf))
 

@@ -48,6 +48,8 @@ class PlayerInfo:
     age: int | None
     experience: int | None
     headshot_url: str | None
+    injury_status: str | None = None  # e.g. "Out", "Questionable", "Day-To-Day"
+    injury_detail: str | None = None  # e.g. "Ankle", "Knee sprain"
 
 
 @dataclass
@@ -466,6 +468,26 @@ class ESPNService:
                 home = next((c for c in competitors if c.get("homeAway") == "home"), {})
                 away = next((c for c in competitors if c.get("homeAway") == "away"), {})
 
+                # Parse odds/lines from ESPN competition data
+                spread = None
+                over_under = None
+                odds_list = comp.get("odds", [])
+                if odds_list and isinstance(odds_list, list):
+                    primary_odds = odds_list[0]
+                    spread = primary_odds.get("spread")
+                    over_under = primary_odds.get("overUnder")
+                    # Try numeric conversion
+                    if spread is not None:
+                        try:
+                            spread = float(spread)
+                        except (ValueError, TypeError):
+                            spread = None
+                    if over_under is not None:
+                        try:
+                            over_under = float(over_under)
+                        except (ValueError, TypeError):
+                            over_under = None
+
                 game = GameInfo(
                     game_id=event.get("id", ""),
                     date=game_date,
@@ -473,6 +495,8 @@ class ESPNService:
                     away_team=away.get("team", {}).get("displayName", ""),
                     home_abbrev=home.get("team", {}).get("abbreviation", ""),
                     away_abbrev=away.get("team", {}).get("abbreviation", ""),
+                    spread=spread,
+                    over_under=over_under,
                 )
                 games.append(game)
 
@@ -490,6 +514,11 @@ class ESPNService:
             return None
         game = games[0]
         return game.away_abbrev if game.home_abbrev == team_abbrev else game.home_abbrev
+
+    async def get_next_game(self, team_abbrev: str, sport: str) -> GameInfo | None:
+        """Return full GameInfo for the next upcoming game (includes odds)."""
+        games = await self.get_team_schedule(team_abbrev, sport)
+        return games[0] if games else None
 
     async def get_team_defense(self, team_abbrev: str, sport: str) -> TeamDefense | None:
         """Fetch team defensive stats from ESPN team stats endpoint."""
@@ -610,6 +639,15 @@ class ESPNService:
             headshot = data.get("headshot", {})
             headshot_url = headshot.get("href") if isinstance(headshot, dict) else None
 
+            # Parse injury data from ESPN athlete response
+            injury_status = None
+            injury_detail = None
+            injuries = data.get("injuries", [])
+            if injuries and isinstance(injuries, list):
+                latest = injuries[0]
+                injury_status = latest.get("status", latest.get("type", {}).get("description"))
+                injury_detail = latest.get("details", {}).get("type") if isinstance(latest.get("details"), dict) else latest.get("longComment", latest.get("shortComment"))
+
             return PlayerInfo(
                 id=str(data.get("id", "")),
                 name=data.get("displayName", data.get("fullName", "")),
@@ -624,6 +662,8 @@ class ESPNService:
                 if isinstance(data.get("experience"), dict)
                 else None,
                 headshot_url=headshot_url,
+                injury_status=injury_status,
+                injury_detail=injury_detail,
             )
         except Exception as e:
             logger.error("Error parsing player: %s", e)
@@ -1069,11 +1109,25 @@ class ESPNService:
 espn_service = ESPNService()
 
 
-def format_player_context(player: PlayerInfo, stats: PlayerStats | None, sport: str) -> str:
+def format_player_context(
+    player: PlayerInfo,
+    stats: PlayerStats | None,
+    sport: str,
+    trends: dict | None = None,
+    matchup_info: str | None = None,
+    game_info: "GameInfo | None" = None,
+) -> str:
     """Format player info and stats for Claude context injection."""
     lines = [
         f"**{player.name}** ({player.team_abbrev} - {player.position})",
     ]
+
+    # Injury status (critical for fantasy decisions)
+    if player.injury_status:
+        injury_line = f"- ⚠ INJURY: {player.injury_status}"
+        if player.injury_detail:
+            injury_line += f" ({player.injury_detail})"
+        lines.append(injury_line)
 
     if stats:
         if sport == "nba":
@@ -1125,5 +1179,32 @@ def format_player_context(player: PlayerInfo, stats: PlayerStats | None, sport: 
                 lines.append(f"- Clean Sheets: {stats.soccer_clean_sheets:.0f}")
             if stats.soccer_saves:
                 lines.append(f"- Saves: {stats.soccer_saves:.0f}")
+
+    # Trends context (recent form vs season average)
+    if trends:
+        trend_parts = []
+        mt = trends.get("minutes_trend", 0)
+        pt = trends.get("points_trend", 0)
+        if abs(mt) > 1:
+            direction = "↑" if mt > 0 else "↓"
+            trend_parts.append(f"minutes {direction}{abs(mt):.1f}")
+        if abs(pt) > 0.5:
+            direction = "↑" if pt > 0 else "↓"
+            trend_parts.append(f"scoring {direction}{abs(pt):.1f}")
+        if trend_parts:
+            lines.append(f"- Recent trend: {', '.join(trend_parts)}")
+
+    # Matchup context
+    if matchup_info:
+        lines.append(f"- Matchup: {matchup_info}")
+
+    # Game line / odds context
+    if game_info and (game_info.spread is not None or game_info.over_under is not None):
+        odds_parts = []
+        if game_info.spread is not None:
+            odds_parts.append(f"spread {game_info.spread:+.1f}")
+        if game_info.over_under is not None:
+            odds_parts.append(f"O/U {game_info.over_under:.1f}")
+        lines.append(f"- Game line: {', '.join(odds_parts)}")
 
     return "\n".join(lines)

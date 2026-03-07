@@ -745,6 +745,11 @@ class TestDraftEndpoint:
                 return_value=None,
             ),
             patch(
+                "api.main.espn_service.get_next_game",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
                 "api.main._store_draft_decision",
                 new_callable=AsyncMock,
             ),
@@ -798,6 +803,11 @@ class TestDraftEndpoint:
                 return_value=None,
             ),
             patch(
+                "api.main.espn_service.get_next_game",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
                 "api.main._store_draft_decision",
                 new_callable=AsyncMock,
             ),
@@ -847,6 +857,11 @@ class TestDraftEndpoint:
             ),
             patch(
                 "api.main.espn_service.get_next_opponent",
+                new_callable=AsyncMock,
+                return_value=None,
+            ),
+            patch(
+                "api.main.espn_service.get_next_game",
                 new_callable=AsyncMock,
                 return_value=None,
             ),

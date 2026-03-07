@@ -1027,19 +1027,40 @@ async def make_decision(
     elif player_b:
         player_b_data = await espn_service.find_player_by_name(player_b, request.sport.value)
 
-    # Build context string for Claude
+    # Build enriched context string for Claude (trends, matchup, injuries, odds)
     if player_a_data or player_b_data:
+        sport_val = request.sport.value
         context_parts = []
-        if player_a_data:
-            info, stats = player_a_data
+
+        for label, pdata in [("Player A", player_a_data), ("Player B", player_b_data)]:
+            if not pdata:
+                continue
+            info, stats = pdata
+            # Enrich with trends, matchup, and game line data
+            trends = None
+            next_game = None
+            matchup_str = None
+            try:
+                game_logs = await espn_service.get_player_game_logs(info.id, sport_val)
+                trends = espn_service.calculate_trends(game_logs, sport_val)
+                next_game = await espn_service.get_next_game(info.team_abbrev, sport_val)
+                if next_game:
+                    opp_abbrev = (
+                        next_game.away_abbrev
+                        if next_game.home_abbrev == info.team_abbrev
+                        else next_game.home_abbrev
+                    )
+                    matchup_def = await espn_service.get_team_defense(opp_abbrev, sport_val)
+                    if matchup_def and matchup_def.points_allowed is not None:
+                        matchup_str = f"vs {opp_abbrev} ({matchup_def.points_allowed:.1f} pts allowed/gm)"
+                    elif opp_abbrev:
+                        matchup_str = f"vs {opp_abbrev}"
+            except (AttributeError, TypeError):
+                pass  # Graceful fallback if player data lacks expected attributes
             context_parts.append(
-                f"Player A:\n{format_player_context(info, stats, request.sport.value)}"
+                f"{label}:\n{format_player_context(info, stats, sport_val, trends=trends, matchup_info=matchup_str, game_info=next_game)}"
             )
-        if player_b_data:
-            info, stats = player_b_data
-            context_parts.append(
-                f"Player B:\n{format_player_context(info, stats, request.sport.value)}"
-            )
+
         player_context = "\n\n".join(context_parts)
 
     # Auto-fill league context from authenticated user's profile (single DB lookup)
@@ -1251,15 +1272,17 @@ async def _local_decision(
     game_logs_b = await espn_service.get_player_game_logs(info_b.id, sport)
     trends_b = espn_service.calculate_trends(game_logs_b, sport)
 
-    # Fetch opponent defensive data for MSF index
-    opp_a = await espn_service.get_next_opponent(info_a.team_abbrev, sport)
+    # Fetch opponent defensive data + game info (odds) for MSF index
+    game_a = await espn_service.get_next_game(info_a.team_abbrev, sport)
+    opp_a = game_a.away_abbrev if game_a and game_a.home_abbrev == info_a.team_abbrev else (game_a.home_abbrev if game_a else None)
     matchup_a = await espn_service.get_team_defense(opp_a, sport) if opp_a else None
-    opp_b = await espn_service.get_next_opponent(info_b.team_abbrev, sport)
+    game_b = await espn_service.get_next_game(info_b.team_abbrev, sport)
+    opp_b = game_b.away_abbrev if game_b and game_b.home_abbrev == info_b.team_abbrev else (game_b.home_abbrev if game_b else None)
     matchup_b = await espn_service.get_team_defense(opp_b, sport) if opp_b else None
 
-    # Adapt ESPN stats to core scoring format
-    core_a = adapt_espn_to_core(info_a, stats_a, trends=trends_a, matchup=matchup_a)
-    core_b = adapt_espn_to_core(info_b, stats_b, trends=trends_b, matchup=matchup_b)
+    # Adapt ESPN stats to core scoring format (now includes game lines)
+    core_a = adapt_espn_to_core(info_a, stats_a, trends=trends_a, matchup=matchup_a, game=game_a)
+    core_b = adapt_espn_to_core(info_b, stats_b, trends=trends_b, matchup=matchup_b, game=game_b)
 
     # Map API risk mode to core enum
     core_mode = CoreRiskMode(request.risk_mode.value)
@@ -1338,22 +1361,24 @@ async def _local_trade_decision(
     sport = request.sport.value
     core_mode = CoreRiskMode(request.risk_mode.value)
 
-    # Convert ESPN data to core PlayerStats for each player
+    # Convert ESPN data to core PlayerStats for each player (with game lines)
     giving_core = []
     for info, stats in giving_data:
         game_logs = await espn_service.get_player_game_logs(info.id, sport)
         trends = espn_service.calculate_trends(game_logs, sport)
-        opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+        game = await espn_service.get_next_game(info.team_abbrev, sport)
+        opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
         matchup = await espn_service.get_team_defense(opp, sport) if opp else None
-        giving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup))
+        giving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game))
 
     receiving_core = []
     for info, stats in receiving_data:
         game_logs = await espn_service.get_player_game_logs(info.id, sport)
         trends = espn_service.calculate_trends(game_logs, sport)
-        opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+        game = await espn_service.get_next_game(info.team_abbrev, sport)
+        opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
         matchup = await espn_service.get_team_defense(opp, sport) if opp else None
-        receiving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup))
+        receiving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game))
 
     # Run trade analysis
     trade_result = trade_analyzer.analyze(giving_core, receiving_core, core_mode, sport)
@@ -1649,14 +1674,15 @@ async def _local_draft_decision(
     sport = request.sport.value
     core_mode = CoreRiskMode(request.risk_mode.value)
 
-    # Convert ESPN data to core PlayerStats
+    # Convert ESPN data to core PlayerStats (with game lines)
     core_players = []
     for info, stats in player_data:
         game_logs = await espn_service.get_player_game_logs(info.id, sport)
         trends = espn_service.calculate_trends(game_logs, sport)
-        opp = await espn_service.get_next_opponent(info.team_abbrev, sport)
+        game = await espn_service.get_next_game(info.team_abbrev, sport)
+        opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
         matchup = await espn_service.get_team_defense(opp, sport) if opp else None
-        core_players.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup))
+        core_players.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game))
 
     # Run draft analysis
     draft_result = draft_assistant.analyze(

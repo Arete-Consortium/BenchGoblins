@@ -7,6 +7,7 @@ import pytest
 
 from services.espn import (
     ESPNService,
+    GameInfo,
     PlayerInfo,
     PlayerStats,
     TeamDefense,
@@ -1132,3 +1133,230 @@ class TestClose:
         with patch.object(svc.client, "aclose", new_callable=AsyncMock) as m:
             await svc.close()
             m.assert_called_once()
+
+
+# =========================================================================
+# get_next_game
+# =========================================================================
+
+
+class TestGetNextGame:
+    @pytest.mark.asyncio
+    async def test_no_games(self, svc):
+        with patch.object(
+            svc, "get_team_schedule", new_callable=AsyncMock, return_value=[]
+        ):
+            result = await svc.get_next_game("LAL", "nba")
+            assert result is None
+
+    @pytest.mark.asyncio
+    async def test_returns_first_game(self, svc):
+        game = GameInfo("g1", datetime.now(), "Lakers", "Celtics", "LAL", "BOS", spread=-3.5, over_under=220.5)
+        with patch.object(
+            svc, "get_team_schedule", new_callable=AsyncMock, return_value=[game]
+        ):
+            result = await svc.get_next_game("LAL", "nba")
+            assert result is not None
+            assert result.game_id == "g1"
+            assert result.spread == -3.5
+            assert result.over_under == 220.5
+
+
+# =========================================================================
+# PlayerInfo injury fields
+# =========================================================================
+
+
+class TestPlayerInfoInjury:
+    def test_injury_fields_default_none(self):
+        info = PlayerInfo("1", "Test", "Team", "TST", "PG", "0", "", "", None, None, None)
+        assert info.injury_status is None
+        assert info.injury_detail is None
+
+    def test_injury_fields_populated(self):
+        info = PlayerInfo(
+            "1", "Test", "Team", "TST", "PG", "0", "", "", None, None, None,
+            injury_status="Questionable", injury_detail="Ankle"
+        )
+        assert info.injury_status == "Questionable"
+        assert info.injury_detail == "Ankle"
+
+
+# =========================================================================
+# Injury parsing in _parse_player
+# =========================================================================
+
+
+class TestParsePlayerInjury:
+    def test_no_injuries(self, svc):
+        data = {
+            "id": "123",
+            "displayName": "Test Player",
+            "team": {"displayName": "Lakers", "abbreviation": "LAL"},
+            "position": {"abbreviation": "PG"},
+            "headshot": {"href": "http://example.com/img.png"},
+            "jersey": "23",
+            "displayHeight": "6'6\"",
+            "displayWeight": "220 lbs",
+            "age": 30,
+            "experience": {"years": 10},
+        }
+        player = svc._parse_player(data, "nba")
+        assert player is not None
+        assert player.injury_status is None
+        assert player.injury_detail is None
+
+    def test_with_injury_data(self, svc):
+        data = {
+            "id": "123",
+            "displayName": "Injured Player",
+            "team": {"displayName": "Lakers", "abbreviation": "LAL"},
+            "position": {"abbreviation": "SG"},
+            "headshot": {},
+            "jersey": "3",
+            "displayHeight": "",
+            "displayWeight": "",
+            "age": 25,
+            "experience": {"years": 3},
+            "injuries": [
+                {
+                    "status": "Day-To-Day",
+                    "details": {"type": "Ankle sprain"},
+                }
+            ],
+        }
+        player = svc._parse_player(data, "nba")
+        assert player is not None
+        assert player.injury_status == "Day-To-Day"
+        assert player.injury_detail == "Ankle sprain"
+
+    def test_injury_with_comment_fallback(self, svc):
+        data = {
+            "id": "124",
+            "displayName": "Another Player",
+            "team": {"displayName": "Celtics", "abbreviation": "BOS"},
+            "position": {"abbreviation": "C"},
+            "headshot": {},
+            "jersey": "7",
+            "displayHeight": "",
+            "displayWeight": "",
+            "injuries": [
+                {
+                    "status": "Out",
+                    "shortComment": "Knee surgery",
+                }
+            ],
+        }
+        player = svc._parse_player(data, "nba")
+        assert player is not None
+        assert player.injury_status == "Out"
+        assert player.injury_detail == "Knee surgery"
+
+
+# =========================================================================
+# Odds parsing in get_team_schedule
+# =========================================================================
+
+
+class TestOddsParsing:
+    @pytest.mark.asyncio
+    async def test_schedule_parses_odds(self, svc):
+        """ESPN competition data with odds populates spread/over_under."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": [
+                {
+                    "id": "401",
+                    "date": "2099-01-15T19:00:00",
+                    "competitions": [
+                        {
+                            "competitors": [
+                                {"homeAway": "home", "team": {"displayName": "Lakers", "abbreviation": "LAL"}},
+                                {"homeAway": "away", "team": {"displayName": "Celtics", "abbreviation": "BOS"}},
+                            ],
+                            "odds": [
+                                {"spread": -5.5, "overUnder": 228.0}
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        with patch.object(svc.client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            games = await svc.get_team_schedule("LAL", "nba")
+            assert len(games) == 1
+            assert games[0].spread == -5.5
+            assert games[0].over_under == 228.0
+
+    @pytest.mark.asyncio
+    async def test_schedule_no_odds(self, svc):
+        """Games without odds have None for spread/over_under."""
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.raise_for_status = MagicMock()
+        mock_resp.json.return_value = {
+            "events": [
+                {
+                    "id": "402",
+                    "date": "2099-01-16T19:00:00",
+                    "competitions": [
+                        {
+                            "competitors": [
+                                {"homeAway": "home", "team": {"displayName": "Lakers", "abbreviation": "LAL"}},
+                                {"homeAway": "away", "team": {"displayName": "Celtics", "abbreviation": "BOS"}},
+                            ],
+                        }
+                    ],
+                }
+            ]
+        }
+        with patch.object(svc.client, "get", new_callable=AsyncMock, return_value=mock_resp):
+            games = await svc.get_team_schedule("LAL", "nba")
+            assert len(games) == 1
+            assert games[0].spread is None
+            assert games[0].over_under is None
+
+
+# =========================================================================
+# format_player_context enrichment
+# =========================================================================
+
+
+class TestFormatPlayerContextEnriched:
+    def test_injury_in_context(self):
+        info = PlayerInfo(
+            "1", "LeBron James", "Lakers", "LAL", "SF", "23", "", "", 39, 21, None,
+            injury_status="Questionable", injury_detail="Knee soreness"
+        )
+        result = format_player_context(info, None, "nba")
+        assert "INJURY" in result
+        assert "Questionable" in result
+        assert "Knee soreness" in result
+
+    def test_trends_in_context(self):
+        info = PlayerInfo("1", "Test", "Team", "TST", "PG", "0", "", "", None, None, None)
+        trends = {"minutes_trend": 3.5, "points_trend": -2.0, "usage_trend": 0}
+        result = format_player_context(info, None, "nba", trends=trends)
+        assert "minutes ↑3.5" in result
+        assert "scoring ↓2.0" in result
+
+    def test_matchup_in_context(self):
+        info = PlayerInfo("1", "Test", "Team", "TST", "PG", "0", "", "", None, None, None)
+        result = format_player_context(info, None, "nba", matchup_info="vs BOS (105.3 pts allowed/gm)")
+        assert "vs BOS" in result
+        assert "105.3" in result
+
+    def test_game_line_in_context(self):
+        info = PlayerInfo("1", "Test", "Team", "TST", "PG", "0", "", "", None, None, None)
+        game = GameInfo("g1", datetime.now(), "Team", "Other", "TST", "OTH", spread=-3.0, over_under=225.5)
+        result = format_player_context(info, None, "nba", game_info=game)
+        assert "spread -3.0" in result
+        assert "O/U 225.5" in result
+
+    def test_no_enrichment_still_works(self):
+        info = PlayerInfo("1", "Test Player", "Team", "TST", "PG", "0", "", "", None, None, None)
+        result = format_player_context(info, None, "nba")
+        assert "Test Player" in result
+        assert "TST" in result

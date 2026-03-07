@@ -114,6 +114,7 @@ def _mock_espn_service():
     mock.get_player_game_logs = AsyncMock(return_value=[])
     mock.calculate_trends = MagicMock(return_value={})
     mock.get_next_opponent = AsyncMock(return_value=None)
+    mock.get_next_game = AsyncMock(return_value=None)
     mock.get_team_defense = AsyncMock(return_value=None)
 
     return mock
@@ -129,6 +130,7 @@ class TestStartSitVerdict:
         mock_espn.get_player_game_logs = espn.get_player_game_logs
         mock_espn.calculate_trends = espn.calculate_trends
         mock_espn.get_next_opponent = espn.get_next_opponent
+        mock_espn.get_next_game = espn.get_next_game
         mock_espn.get_team_defense = espn.get_team_defense
         mock_claude.is_available = False
 
@@ -175,6 +177,7 @@ class TestStartSitVerdict:
         mock_espn.get_player_game_logs = espn.get_player_game_logs
         mock_espn.calculate_trends = espn.calculate_trends
         mock_espn.get_next_opponent = espn.get_next_opponent
+        mock_espn.get_next_game = espn.get_next_game
         mock_espn.get_team_defense = espn.get_team_defense
         mock_claude.is_available = True
         mock_claude.make_decision = AsyncMock(
@@ -221,6 +224,7 @@ class TestStartSitVerdict:
         mock_espn.get_player_game_logs = espn.get_player_game_logs
         mock_espn.calculate_trends = espn.calculate_trends
         mock_espn.get_next_opponent = espn.get_next_opponent
+        mock_espn.get_next_game = espn.get_next_game
         mock_espn.get_team_defense = espn.get_team_defense
         mock_claude.is_available = False
 
@@ -269,6 +273,7 @@ class TestStartSitVerdict:
         mock_espn.get_player_game_logs = espn.get_player_game_logs
         mock_espn.calculate_trends = espn.calculate_trends
         mock_espn.get_next_opponent = espn.get_next_opponent
+        mock_espn.get_next_game = espn.get_next_game
         mock_espn.get_team_defense = espn.get_team_defense
         mock_claude.is_available = True
         mock_claude.make_decision = AsyncMock(side_effect=RuntimeError("API down"))

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from core.scoring import PlayerStats as CorePlayerStats
 
-from services.espn import PlayerInfo, TeamDefense
+from services.espn import GameInfo, PlayerInfo, TeamDefense
 from services.espn import PlayerStats as ESPNPlayerStats
 
 
@@ -57,6 +57,7 @@ def adapt_espn_to_core(
     stats: ESPNPlayerStats,
     trends: dict | None = None,
     matchup: TeamDefense | None = None,
+    game: GameInfo | None = None,
 ) -> CorePlayerStats:
     """Convert ESPN player data to core scoring engine format."""
     gp = stats.games_played or 0
@@ -150,4 +151,7 @@ def adapt_espn_to_core(
         opponent_def_rating=opponent_def_rating,
         opponent_pace=opponent_pace,
         opponent_vs_position=opponent_vs_position,
+        # Game lines (from ESPN odds)
+        game_over_under=game.over_under if game else None,
+        game_spread=game.spread if game else None,
     )
