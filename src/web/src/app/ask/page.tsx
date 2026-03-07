@@ -322,39 +322,19 @@ function AskPageInner() {
       <Header />
 
       <main className="flex-1 flex flex-col pt-16">
-        {/* Controls bar — sport + risk mode stacked */}
+        {/* Top toolbar: Sport selector */}
         <div className="border-b border-dark-800/50 bg-dark-900/80 backdrop-blur-sm sticky top-16 z-10">
-          <div className="max-w-4xl mx-auto px-4 py-3 space-y-2">
-            {/* Row 1: Sport selector + league chip */}
-            <div className="flex items-center justify-between gap-3">
-              <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
-              <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
-            </div>
-            {/* Row 2: Risk mode + verdict + usage/clear */}
-            <div className="flex items-center justify-between gap-3">
-              <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
-              <Link
-                href="/verdict"
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600/20 border border-primary-500/30 text-primary-400 hover:bg-primary-600/30 hover:text-primary-300 transition-all text-sm font-medium"
+          <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+            <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
+            {messages.length > 0 && (
+              <button
+                onClick={clearMessages}
+                disabled={isLoading}
+                className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all"
               >
-                <Sparkles className="w-4 h-4" />
-                Verdict
-              </Link>
-              <div className="flex items-center gap-3">
-                {isAuthenticated && user && (
-                  <UsageIndicator queriesUsed={user.queries_today} queriesLimit={user.queries_limit} />
-                )}
-                {messages.length > 0 && (
-                  <button
-                    onClick={clearMessages}
-                    disabled={isLoading}
-                    className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-            </div>
+                Clear
+              </button>
+            )}
           </div>
         </div>
 
@@ -413,9 +393,27 @@ function AskPageInner() {
             <FollowUpChips sport={sport} onSend={sendMessage} disabled={isLoading} />
           )}
 
-          {/* Input area */}
-          <div className="border-t border-dark-800/50 p-4 bg-dark-900/80 backdrop-blur-sm">
-            <ChatInput onSend={sendMessage} disabled={isLoading} />
+          {/* Bottom toolbar + input */}
+          <div className="border-t border-dark-800/50 bg-dark-900/80 backdrop-blur-sm">
+            <div className="max-w-4xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+              <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
+              <Link
+                href="/verdict"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary-600/20 border border-primary-500/30 text-primary-400 hover:bg-primary-600/30 hover:text-primary-300 transition-all text-sm font-medium"
+              >
+                <Sparkles className="w-4 h-4" />
+                Verdict
+              </Link>
+              <div className="flex items-center gap-3">
+                {isAuthenticated && user && (
+                  <UsageIndicator queriesUsed={user.queries_today} queriesLimit={user.queries_limit} />
+                )}
+                <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
+              </div>
+            </div>
+            <div className="px-4 pb-4">
+              <ChatInput onSend={sendMessage} disabled={isLoading} />
+            </div>
           </div>
         </div>
       </main>
