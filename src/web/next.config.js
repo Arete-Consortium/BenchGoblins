@@ -24,11 +24,11 @@ const nextConfig = {
             key: 'Content-Security-Policy',
             value: [
               "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://accounts.google.com https://apis.google.com",
+              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://www.googletagmanager.com https://www.google-analytics.com https://accounts.google.com https://apis.google.com https://js.stripe.com https://googleads.g.doubleclick.net",
               "style-src 'self' 'unsafe-inline'",
               "img-src 'self' data: https: blob:",
               "font-src 'self' data:",
-              "connect-src 'self' https://backend.benchgoblins.com https://www.google-analytics.com https://analytics.google.com https://sleepercdn.com https://accounts.google.com https://oauth2.googleapis.com",
+              "connect-src 'self' https://backend.benchgoblins.com https://www.google-analytics.com https://analytics.google.com https://sleepercdn.com https://accounts.google.com https://oauth2.googleapis.com https://api.revenuecat.com https://e.revenue.cat https://www.google.com https://googleads.g.doubleclick.net",
               "frame-src 'self' https://js.stripe.com https://checkout.stripe.com https://accounts.google.com",
               "object-src 'none'",
               "base-uri 'self'",

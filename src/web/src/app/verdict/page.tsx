@@ -300,8 +300,12 @@ export default function VerdictPage() {
               <h1 className="text-3xl font-bold">
                 {verdict ? `Week ${verdict.week} Verdict` : 'Goblin Verdict'}
               </h1>
-              {verdict?.team_name && (
-                <p className="text-dark-400 mt-0.5">for {verdict.team_name}</p>
+              {(verdict?.team_name || verdict?.league_name) && (
+                <p className="text-dark-400 mt-0.5">
+                  {verdict.team_name ? `for ${verdict.team_name}` : ''}
+                  {verdict.team_name && verdict.league_name ? ' · ' : ''}
+                  {verdict.league_name || ''}
+                </p>
               )}
             </div>
 

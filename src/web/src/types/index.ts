@@ -222,6 +222,7 @@ export interface SwapRecommendation {
 
 export interface GoblinVerdict {
   team_name: string;
+  league_name: string;
   week: number;
   season: number;
   risk_mode: RiskMode;

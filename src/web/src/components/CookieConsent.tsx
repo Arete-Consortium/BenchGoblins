@@ -1,17 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X } from 'lucide-react';
 
 const CONSENT_KEY = 'benchgoblin_cookie_consent';
 
-function getInitialVisibility(): boolean {
-  if (typeof window === 'undefined') return false;
-  return !localStorage.getItem(CONSENT_KEY);
-}
-
 export default function CookieConsent() {
-  const [visible, setVisible] = useState(getInitialVisibility);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    if (!localStorage.getItem(CONSENT_KEY)) {
+      setVisible(true);
+    }
+  }, []);
 
   const handleAccept = () => {
     localStorage.setItem(CONSENT_KEY, 'accepted');

@@ -49,7 +49,9 @@ export default function SettingsPage() {
   const { sport, riskMode, setSport, setRiskMode, clearMessages } = useAppStore();
   const { connection, selectedLeagueIds, disconnect } = useLeagueStore();
   const { isAuthenticated, user, refreshUser } = useAuthStore();
-  const darkMode = theme === 'dark';
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  const darkMode = mounted ? theme === 'dark' : true;
   const [leagueDialogOpen, setLeagueDialogOpen] = useState(false);
 
   // Billing status — primary source is user object from auth store,

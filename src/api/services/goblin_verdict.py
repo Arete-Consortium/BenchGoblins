@@ -57,6 +57,7 @@ class GoblinVerdict(BaseModel):
     """Full Goblin Verdict for a user's lineup."""
 
     team_name: str = ""
+    league_name: str = ""
     week: int = 0
     season: int = 2025
     risk_mode: RiskMode = RiskMode.MEDIAN
@@ -311,6 +312,7 @@ class GoblinVerdictService:
         # Build verdict model
         verdict = GoblinVerdict(
             team_name=user_data.get("team_name", "My Team"),
+            league_name=league.name or "",
             week=week,
             season=int(league.season) if league.season.isdigit() else 2025,
             risk_mode=RiskMode(risk_mode),
