@@ -275,7 +275,10 @@ class GoblinVerdictService:
             return None
 
         # Enrich with player data
-        all_players = await sleeper_service.get_all_players(sport)
+        if league_id.startswith("demo-"):
+            all_players = self._demo_player_db()
+        else:
+            all_players = await sleeper_service.get_all_players(sport)
         starters, bench = self._split_roster(roster, all_players)
 
         # Get matchup opponent
@@ -330,7 +333,11 @@ class GoblinVerdictService:
         return verdict
 
     async def _get_user_league_data(self, user_id: str) -> dict | None:
-        """Look up user's Sleeper league info from DB."""
+        """Look up user's Sleeper league info from DB.
+
+        Checks users table first (direct Sleeper connection), then falls
+        back to league_memberships for demo leagues.
+        """
         from services.database import db_service
 
         if not db_service.is_configured:
@@ -340,6 +347,7 @@ class GoblinVerdictService:
             from sqlalchemy import text
 
             async with db_service.session() as session:
+                # Check direct Sleeper connection on user record
                 result = await session.execute(
                     text("""
                         SELECT id, sleeper_league_id, sleeper_user_id, name
@@ -358,10 +366,84 @@ class GoblinVerdictService:
                         "team_name": row[3] or "My Team",
                         "sport": "nfl",
                     }
+
+                # Fallback: check league_memberships for demo leagues
+                result = await session.execute(
+                    text("""
+                        SELECT l.external_league_id, lm.external_team_id, u.name, l.sport
+                        FROM league_memberships lm
+                        JOIN leagues l ON l.id = lm.league_id
+                        JOIN users u ON u.id = lm.user_id
+                        WHERE lm.user_id = :uid
+                          AND lm.status = 'active'
+                          AND l.external_league_id LIKE 'demo-%%'
+                        LIMIT 1
+                    """),
+                    {"uid": int(user_id)},
+                )
+                row = result.first()
+                if row:
+                    # Map external_team_id (team-N) to demo roster owner_id (owner-N)
+                    team_id = row[1] or "team-1"
+                    owner_id = team_id.replace("team-", "owner-")
+                    return {
+                        "user_id": user_id,
+                        "sleeper_league_id": row[0],
+                        "sleeper_user_id": owner_id,
+                        "team_name": row[2] or "My Team",
+                        "sport": row[3] or "nfl",
+                    }
         except Exception:
             logger.exception("Failed to fetch user league data for %s", user_id[:8])
 
         return None
+
+    @staticmethod
+    def _demo_player_db() -> dict[str, dict]:
+        """Generate synthetic player data matching demo roster IDs."""
+        # Roster 0 (owner-1 / commissioner) gets recognizable names
+        demo_players = [
+            ("p0", "Josh Allen", "QB", "BUF"),
+            ("p1", "Saquon Barkley", "RB", "PHI"),
+            ("p2", "Bijan Robinson", "RB", "ATL"),
+            ("p3", "Ja'Marr Chase", "WR", "CIN"),
+            ("p4", "CeeDee Lamb", "WR", "DAL"),
+            ("p5", "Travis Kelce", "TE", "KC"),
+            ("p6", "Puka Nacua", "WR", "LAR"),
+            ("p7", "Harrison Butker", "K", "KC"),
+            ("p8", "Bills D/ST", "DEF", "BUF"),
+            ("p9", "Lamar Jackson", "QB", "BAL"),
+            ("p10", "Breece Hall", "RB", "NYJ"),
+            ("p11", "Jaylen Waddle", "WR", "MIA"),
+            ("p12", "Dallas Goedert", "TE", "PHI"),
+            ("p13", "Derrick Henry", "RB", "BAL"),
+            ("p14", "Chris Olave", "WR", "NO"),
+            ("p15", "Jake Elliott", "K", "PHI"),
+            ("p16", "Eagles D/ST", "DEF", "PHI"),
+        ]
+        db: dict[str, dict] = {}
+        for pid, name, pos, team in demo_players:
+            db[pid] = {
+                "full_name": name,
+                "position": pos,
+                "team": team,
+                "injury_status": "Questionable" if pid == "p10" else None,
+            }
+        # Fill remaining IDs (other teams' players) with generic names
+        positions = ["QB", "RB", "RB", "WR", "WR", "TE", "WR", "K", "DEF"]
+        teams = ["SF", "KC", "DET", "MIA", "DAL", "MIN", "SEA", "LAC", "PIT", "CLE", "DEN"]
+        for i in range(1, 12):
+            for j in range(20):
+                pid = f"p{i * 20 + j}"
+                if pid not in db:
+                    pos = positions[j % len(positions)]
+                    team = teams[i - 1] if i - 1 < len(teams) else "FA"
+                    db[pid] = {
+                        "full_name": f"Demo Player {i}-{j}",
+                        "position": pos,
+                        "team": team,
+                    }
+        return db
 
     def _split_roster(
         self,

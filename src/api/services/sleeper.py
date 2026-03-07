@@ -237,6 +237,20 @@ class SleeperService:
 
     async def get_league(self, league_id: str) -> SleeperLeague | None:
         """Get league details by ID."""
+        # Demo mode — return synthetic league
+        if league_id.startswith("demo-"):
+            return SleeperLeague(
+                league_id=league_id,
+                name="The Show Fantasy League",
+                sport="nfl",
+                season="2025",
+                season_type="regular",
+                status="in_season",
+                total_rosters=12,
+                roster_positions=["QB", "RB", "RB", "WR", "WR", "TE", "FLEX", "K", "DEF"],
+                scoring_settings={"rec": 1.0},
+            )
+
         client = await self._get_client()
 
         try:
@@ -338,6 +352,24 @@ class SleeperService:
                 reserve=[f"p{i*20+18}"] if random.random() > 0.6 else None,
             ))
         return rosters
+
+    @staticmethod
+    def _get_demo_matchups() -> list["SleeperMatchup"]:
+        """Return 12 synthetic matchup entries (6 matchups) for demo mode."""
+        import random
+        random.seed(42)
+        matchups = []
+        roster_ids = list(range(1, 13))
+        random.shuffle(roster_ids)
+        for i in range(6):
+            mid = i + 1
+            for rid in roster_ids[i * 2: i * 2 + 2]:
+                matchups.append(SleeperMatchup(
+                    matchup_id=mid,
+                    roster_id=rid,
+                    points=round(random.uniform(70, 150), 2),
+                ))
+        return matchups
 
     async def get_user_roster(
         self,
@@ -478,6 +510,10 @@ class SleeperService:
         Returns:
             List of SleeperMatchup entries (two per matchup pair)
         """
+        # Demo mode — return synthetic matchups (6 matchups for 12 teams)
+        if league_id.startswith("demo-"):
+            return self._get_demo_matchups()
+
         client = await self._get_client()
         matchups = []
 
