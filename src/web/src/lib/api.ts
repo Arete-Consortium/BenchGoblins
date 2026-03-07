@@ -343,12 +343,12 @@ class APIClient {
   // Player endpoints
   async searchPlayers(query: string, sport: Sport): Promise<Player[]> {
     await this.ensureSession();
-    const response = await this.client.post<{ players: Player[] }>('/players/search', {
+    const response = await this.client.post<Player[]>('/players/search', {
       query,
       sport,
       limit: 10,
     });
-    return response.data.players;
+    return response.data;
   }
 
   async getPlayer(playerId: string, sport: Sport): Promise<Player> {
