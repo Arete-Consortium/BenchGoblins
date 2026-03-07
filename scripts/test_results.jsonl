@@ -1,0 +1,1 @@
+{"timestamp": "2026-03-07T06:30:00+00:00", "total": 200, "success": 133, "off_topic": 46, "rate_limited": 21, "errors": 0, "success_rate_pct": 66.5, "acceptable_pct": 89.5, "sources": {"claude": 133}, "latency": {"avg": 5.72, "p50": 5.41, "p95": 8.3, "min": 3.74, "max": 10.55}, "note": "baseline run - 0.3s delay caused rate limits"}
