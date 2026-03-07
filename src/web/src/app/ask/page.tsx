@@ -325,20 +325,12 @@ function AskPageInner() {
         {/* Controls bar — sport + risk mode stacked */}
         <div className="border-b border-dark-800/50 bg-dark-900/80 backdrop-blur-sm sticky top-16 z-10">
           <div className="max-w-4xl mx-auto px-4 py-3 space-y-2">
-            {/* Row 1: Sport selector */}
+            {/* Row 1: Sport selector + league chip */}
             <div className="flex items-center justify-between gap-3">
               <SportSelector value={sport} onChange={handleSportChange} disabled={isLoading} />
-              {messages.length > 0 && (
-                <button
-                  onClick={clearMessages}
-                  disabled={isLoading}
-                  className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all"
-                >
-                  Clear
-                </button>
-              )}
+              <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
             </div>
-            {/* Row 2: Risk mode + verdict + usage/league */}
+            {/* Row 2: Risk mode + verdict + usage/clear */}
             <div className="flex items-center justify-between gap-3">
               <RiskModeSelector value={riskMode} onChange={setRiskMode} disabled={isLoading} compact />
               <Link
@@ -352,7 +344,15 @@ function AskPageInner() {
                 {isAuthenticated && user && (
                   <UsageIndicator queriesUsed={user.queries_today} queriesLimit={user.queries_limit} />
                 )}
-                <LeagueChip onOpen={() => setLeagueDialogOpen(true)} />
+                {messages.length > 0 && (
+                  <button
+                    onClick={clearMessages}
+                    disabled={isLoading}
+                    className="px-3 py-1.5 text-sm text-dark-400 hover:text-dark-200 hover:bg-dark-700 rounded-lg transition-all"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
             </div>
           </div>
