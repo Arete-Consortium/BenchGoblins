@@ -19,7 +19,8 @@ import {
 import { useAuthStore } from '@/stores/authStore';
 import { useSubscriptionStore } from '@/stores/subscriptionStore';
 
-// Primary nav items always visible; secondary hidden on mobile
+// Primary nav items always visible; secondary hidden on mobile.
+// Settings is in the account dropdown only — NOT here.
 const navItems = [
   { href: '/ask', label: 'Ask', icon: MessageSquare, primary: true },
   { href: '/verdict', label: 'Verdict', icon: Sparkles, primary: true },
@@ -27,7 +28,7 @@ const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, primary: true },
   { href: '/recaps', label: 'Recaps', icon: BookOpen, primary: false },
   { href: '/commissioner', label: 'Commissioner', icon: Crown, primary: false },
-];
+] as const;
 
 function getInitials(name: string): string {
   return name
