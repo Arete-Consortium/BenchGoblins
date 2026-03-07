@@ -7,8 +7,8 @@ A fantasy sports decision engine that evaluates start/sit, waiver, and trade dec
 ## Current State
 
 - **Language**: Python
-- **Files**: 376 across 7 languages
-- **Lines**: 111,379
+- **Files**: 385 across 7 languages
+- **Lines**: 116,586
 
 ## Architecture
 
@@ -76,12 +76,12 @@ BenchGoblins/
 
 - Do NOT commit secrets, API keys, or credentials
 - Do NOT skip writing tests for new code
+- Do NOT use `any` type — define proper type interfaces
+- Do NOT use `var` — use `const` or `let`
 - Do NOT use `os.path` — use `pathlib.Path` everywhere
 - Do NOT use bare `except:` — catch specific exceptions
 - Do NOT use mutable default arguments
 - Do NOT use `print()` for logging — use the `logging` module
-- Do NOT use `any` type — define proper type interfaces
-- Do NOT use `var` — use `const` or `let`
 - Do NOT hardcode secrets in Dockerfiles — use environment variables
 - Do NOT use `latest` tag — pin specific versions
 
@@ -89,7 +89,9 @@ BenchGoblins/
 
 ### Key Models/Classes
 - `APIClient`
+- `AccuracyLeader`
 - `AccuracyMetrics`
+- `AccuracyResponse`
 - `AccuracyTracker`
 - `ActivityResponse`
 - `AdvancedNBAStats`
@@ -101,8 +103,6 @@ BenchGoblins/
 - `AuthResponse`
 - `AuthServiceError`
 - `AuthStatusResponse`
-- `BadDict`
-- `Base`
 
 ### Domain Terms
 - AI
@@ -118,9 +118,11 @@ BenchGoblins/
 
 ### API Endpoints
 - `/`
+- `/accuracy`
 - `/accuracy/metrics`
 - `/accuracy/outcome/{decision_id}`
 - `/accuracy/outcomes`
+- `/accuracy/reset`
 - `/accuracy/sync`
 - `/apply`
 - `/billing/create-checkout`
@@ -130,20 +132,18 @@ BenchGoblins/
 - `/billing/webhook`
 - `/budget`
 - `/budget/alerts`
-- `/budget/webhooks/test`
-- `/cache/clear`
 
 ### Enums/Constants
 - `ACCENT`
 - `ADMIN_KEY`
 - `AMBIGUOUS`
+- `API_BASE`
 - `ASC_BASE`
 - `AUTH_TOKEN_KEY`
 - `BACKGROUND`
 - `BBALL_REF_BASE`
 - `BENCH`
 - `BUNDLE_ID`
-- `CEILING`
 
 ### Outstanding Items
 - **NOTE**: This file should not be edited (`src/web/next-env.d.ts`)
