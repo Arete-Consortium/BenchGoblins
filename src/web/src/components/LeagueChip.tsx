@@ -43,19 +43,24 @@ export function LeagueChip({ onOpen }: LeagueChipProps) {
     );
   }
 
-  // Connected but no league selected for this sport — show username + nudge
+  // Connected but no league selected for this sport — show linked leagues
   if (connection) {
-    const linkedCount = Object.keys(selectedLeagueIds).length;
+    const leagueNames = Object.entries(selectedLeagueIds)
+      .map(([s, id]) => {
+        const leagues = useLeagueStore.getState().leaguesBySport[s as keyof typeof selectedLeagueIds];
+        return leagues?.find((l) => l.league_id === id)?.name;
+      })
+      .filter(Boolean);
+
     return (
       <button
         onClick={onOpen}
         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-800 border border-dark-700 text-dark-300 hover:text-dark-100 hover:border-dark-600 transition-all"
       >
         <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
-        <span className="text-sm truncate max-w-[120px]">{connection.displayName}</span>
-        {linkedCount > 0 && (
-          <span className="text-xs text-dark-500">{linkedCount} linked</span>
-        )}
+        <span className="text-sm truncate max-w-[160px]">
+          {leagueNames.length > 0 ? leagueNames.join(', ') : 'Select League'}
+        </span>
       </button>
     );
   }
