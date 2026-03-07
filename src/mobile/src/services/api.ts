@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { DecisionRequest, DecisionResponse, Player } from '../types';
+import { getSessionHeaders } from '../stores/sessionStore';
 
 const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -9,6 +10,13 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+});
+
+// Inject session token into every request
+api.interceptors.request.use((config) => {
+  const sessionHeaders = getSessionHeaders();
+  Object.assign(config.headers, sessionHeaders);
+  return config;
 });
 
 export async function healthCheck(): Promise<{ status: string; version: string }> {
