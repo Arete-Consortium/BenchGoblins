@@ -12,11 +12,13 @@ export function LeagueChip({ onOpen }: LeagueChipProps) {
   const sport = useAppStore((s) => s.sport);
   const connection = useLeagueStore((s) => s.connection);
   const activeLeague = useLeagueStore((s) => getActiveLeague(s, sport));
+  const selectedLeagueIds = useLeagueStore((s) => s.selectedLeagueIds);
   const disconnect = useLeagueStore((s) => s.disconnect);
 
   // Hide for soccer (Sleeper doesn't support it)
   if (sport === 'soccer') return null;
 
+  // Connected with an active league for this sport
   if (connection && activeLeague) {
     return (
       <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-800 border border-dark-700">
@@ -38,6 +40,23 @@ export function LeagueChip({ onOpen }: LeagueChipProps) {
           <X className="w-3 h-3" />
         </button>
       </div>
+    );
+  }
+
+  // Connected but no league selected for this sport — show username + nudge
+  if (connection) {
+    const linkedCount = Object.keys(selectedLeagueIds).length;
+    return (
+      <button
+        onClick={onOpen}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-dark-800 border border-dark-700 text-dark-300 hover:text-dark-100 hover:border-dark-600 transition-all"
+      >
+        <span className="w-2 h-2 rounded-full bg-yellow-400 shrink-0" />
+        <span className="text-sm truncate max-w-[120px]">{connection.displayName}</span>
+        {linkedCount > 0 && (
+          <span className="text-xs text-dark-500">{linkedCount} linked</span>
+        )}
+      </button>
     );
   }
 
