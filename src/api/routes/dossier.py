@@ -380,3 +380,109 @@ async def get_player_dossier(sport: str, player_id: str, req: Request):
         decisions=decisions_list,
         summary=summary,
     )
+
+
+# -------------------------------------------------------------------------
+# Player News / Injury Status
+# -------------------------------------------------------------------------
+
+
+class PlayerNewsItem(BaseModel):
+    type: str  # "injury", "trend", "matchup"
+    headline: str
+    detail: str | None = None
+
+
+class PlayerNewsResponse(BaseModel):
+    player_name: str
+    team: str
+    position: str
+    sport: str
+    items: list[PlayerNewsItem]
+
+
+@router.get("/news/{sport}/{player_name}", response_model=PlayerNewsResponse)
+async def get_player_news(sport: str, player_name: str, request: Request):
+    """Get aggregated news/status for a player (injury, trends, matchup)."""
+    client_ip = request.client.host if request.client else "anonymous"
+    allowed, retry_after = await rate_limiter.check_rate_limit(f"news:{client_ip}")
+    if not allowed:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Rate limit exceeded. Try again in {retry_after}s.",
+            headers={"Retry-After": str(retry_after)},
+        )
+
+    valid_sports = {"nba", "nfl", "mlb", "nhl", "soccer"}
+    if sport not in valid_sports:
+        raise HTTPException(status_code=400, detail=f"Invalid sport: {sport}")
+
+    data = await espn_service.find_player_by_name(player_name, sport)
+    if not data:
+        raise HTTPException(status_code=404, detail=f"Player not found: {player_name}")
+
+    info, stats = data
+    items: list[PlayerNewsItem] = []
+
+    # Injury status
+    if info.injury_status:
+        detail = info.injury_detail or ""
+        items.append(PlayerNewsItem(
+            type="injury",
+            headline=f"{info.injury_status}" + (f" — {detail}" if detail else ""),
+            detail=f"{info.name} is currently listed as {info.injury_status}.",
+        ))
+
+    # Recent trends
+    try:
+        game_logs = await espn_service.get_player_game_logs(info.id, sport)
+        trends = espn_service.calculate_trends(game_logs, sport)
+        mt = trends.get("minutes_trend", 0)
+        pt = trends.get("points_trend", 0)
+
+        if abs(mt) > 2:
+            direction = "increasing" if mt > 0 else "decreasing"
+            items.append(PlayerNewsItem(
+                type="trend",
+                headline=f"Minutes {direction} ({mt:+.1f} vs season avg)",
+                detail=f"Recent 5-game minutes trend shows a {direction} role.",
+            ))
+        if abs(pt) > 1:
+            direction = "up" if pt > 0 else "down"
+            items.append(PlayerNewsItem(
+                type="trend",
+                headline=f"Scoring trending {direction} ({pt:+.1f} vs season avg)",
+            ))
+    except Exception:
+        logger.debug("Could not compute trends for %s", player_name)
+
+    # Upcoming matchup
+    try:
+        next_game = await espn_service.get_next_game(info.team_abbrev, sport)
+        if next_game:
+            opp = (
+                next_game.away_abbrev
+                if next_game.home_abbrev == info.team_abbrev
+                else next_game.home_abbrev
+            )
+            home_away = "home" if next_game.home_abbrev == info.team_abbrev else "away"
+            headline = f"Next: {home_away.upper()} vs {opp}"
+            detail = None
+            if next_game.spread is not None or next_game.over_under is not None:
+                parts = []
+                if next_game.spread is not None:
+                    parts.append(f"spread {next_game.spread:+.1f}")
+                if next_game.over_under is not None:
+                    parts.append(f"O/U {next_game.over_under:.1f}")
+                detail = "Line: " + ", ".join(parts)
+            items.append(PlayerNewsItem(type="matchup", headline=headline, detail=detail))
+    except Exception:
+        logger.debug("Could not fetch matchup for %s", player_name)
+
+    return PlayerNewsResponse(
+        player_name=info.name,
+        team=info.team_abbrev,
+        position=info.position,
+        sport=sport,
+        items=items,
+    )

@@ -76,6 +76,7 @@ from services.router import (
 from services.scoring_adapter import adapt_espn_to_core
 from services.session import session_service
 from services.sleeper import sleeper_service
+from services.stats_enricher import get_advanced_context
 from services.trade_analyzer import extract_trade_players, trade_analyzer
 from services.variants import (
     assign_variant,
@@ -1052,13 +1053,21 @@ async def make_decision(
                     )
                     matchup_def = await espn_service.get_team_defense(opp_abbrev, sport_val)
                     if matchup_def and matchup_def.points_allowed is not None:
-                        matchup_str = f"vs {opp_abbrev} ({matchup_def.points_allowed:.1f} pts allowed/gm)"
+                        matchup_str = (
+                            f"vs {opp_abbrev} ({matchup_def.points_allowed:.1f} pts allowed/gm)"
+                        )
                     elif opp_abbrev:
                         matchup_str = f"vs {opp_abbrev}"
             except (AttributeError, TypeError):
                 pass  # Graceful fallback if player data lacks expected attributes
+            # Optional advanced stats from reference sites
+            advanced_ctx = None
+            try:
+                advanced_ctx = await get_advanced_context(info.name, sport_val)
+            except (AttributeError, TypeError):
+                pass
             context_parts.append(
-                f"{label}:\n{format_player_context(info, stats, sport_val, trends=trends, matchup_info=matchup_str, game_info=next_game)}"
+                f"{label}:\n{format_player_context(info, stats, sport_val, trends=trends, matchup_info=matchup_str, game_info=next_game, advanced_stats_context=advanced_ctx)}"
             )
 
         player_context = "\n\n".join(context_parts)
@@ -1274,10 +1283,18 @@ async def _local_decision(
 
     # Fetch opponent defensive data + game info (odds) for MSF index
     game_a = await espn_service.get_next_game(info_a.team_abbrev, sport)
-    opp_a = game_a.away_abbrev if game_a and game_a.home_abbrev == info_a.team_abbrev else (game_a.home_abbrev if game_a else None)
+    opp_a = (
+        game_a.away_abbrev
+        if game_a and game_a.home_abbrev == info_a.team_abbrev
+        else (game_a.home_abbrev if game_a else None)
+    )
     matchup_a = await espn_service.get_team_defense(opp_a, sport) if opp_a else None
     game_b = await espn_service.get_next_game(info_b.team_abbrev, sport)
-    opp_b = game_b.away_abbrev if game_b and game_b.home_abbrev == info_b.team_abbrev else (game_b.home_abbrev if game_b else None)
+    opp_b = (
+        game_b.away_abbrev
+        if game_b and game_b.home_abbrev == info_b.team_abbrev
+        else (game_b.home_abbrev if game_b else None)
+    )
     matchup_b = await espn_service.get_team_defense(opp_b, sport) if opp_b else None
 
     # Adapt ESPN stats to core scoring format (now includes game lines)
@@ -1367,18 +1384,30 @@ async def _local_trade_decision(
         game_logs = await espn_service.get_player_game_logs(info.id, sport)
         trends = espn_service.calculate_trends(game_logs, sport)
         game = await espn_service.get_next_game(info.team_abbrev, sport)
-        opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
+        opp = (
+            game.away_abbrev
+            if game and game.home_abbrev == info.team_abbrev
+            else (game.home_abbrev if game else None)
+        )
         matchup = await espn_service.get_team_defense(opp, sport) if opp else None
-        giving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game))
+        giving_core.append(
+            adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game)
+        )
 
     receiving_core = []
     for info, stats in receiving_data:
         game_logs = await espn_service.get_player_game_logs(info.id, sport)
         trends = espn_service.calculate_trends(game_logs, sport)
         game = await espn_service.get_next_game(info.team_abbrev, sport)
-        opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
+        opp = (
+            game.away_abbrev
+            if game and game.home_abbrev == info.team_abbrev
+            else (game.home_abbrev if game else None)
+        )
         matchup = await espn_service.get_team_defense(opp, sport) if opp else None
-        receiving_core.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game))
+        receiving_core.append(
+            adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game)
+        )
 
     # Run trade analysis
     trade_result = trade_analyzer.analyze(giving_core, receiving_core, core_mode, sport)
@@ -1680,9 +1709,15 @@ async def _local_draft_decision(
         game_logs = await espn_service.get_player_game_logs(info.id, sport)
         trends = espn_service.calculate_trends(game_logs, sport)
         game = await espn_service.get_next_game(info.team_abbrev, sport)
-        opp = game.away_abbrev if game and game.home_abbrev == info.team_abbrev else (game.home_abbrev if game else None)
+        opp = (
+            game.away_abbrev
+            if game and game.home_abbrev == info.team_abbrev
+            else (game.home_abbrev if game else None)
+        )
         matchup = await espn_service.get_team_defense(opp, sport) if opp else None
-        core_players.append(adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game))
+        core_players.append(
+            adapt_espn_to_core(info, stats, trends=trends, matchup=matchup, game=game)
+        )
 
     # Run draft analysis
     draft_result = draft_assistant.analyze(
@@ -1868,15 +1903,23 @@ async def make_decision_stream(
             player_a_data = await espn_service.find_player_by_name(player_a, request.sport.value)
             if player_a_data:
                 info, stats = player_a_data
+                try:
+                    adv_a = await get_advanced_context(info.name, request.sport.value)
+                except (AttributeError, TypeError):
+                    adv_a = None
                 context_parts.append(
-                    f"Player A:\n{format_player_context(info, stats, request.sport.value)}"
+                    f"Player A:\n{format_player_context(info, stats, request.sport.value, advanced_stats_context=adv_a)}"
                 )
         if player_b:
             player_b_data = await espn_service.find_player_by_name(player_b, request.sport.value)
             if player_b_data:
                 info, stats = player_b_data
+                try:
+                    adv_b = await get_advanced_context(info.name, request.sport.value)
+                except (AttributeError, TypeError):
+                    adv_b = None
                 context_parts.append(
-                    f"Player B:\n{format_player_context(info, stats, request.sport.value)}"
+                    f"Player B:\n{format_player_context(info, stats, request.sport.value, advanced_stats_context=adv_b)}"
                 )
         if context_parts:
             player_context = "\n\n".join(context_parts)
@@ -2126,6 +2169,37 @@ async def invalidate_sport_cache(sport: Sport, _admin=Depends(require_admin_key)
         "sport": sport.value,
         "keys_deleted": total_deleted,
         "stats_version": new_version,
+    }
+
+
+class AdminGrantProRequest(BaseModel):
+    email: str
+    days: int = 30
+
+
+@app.post("/admin/grant-pro", tags=["Admin"])
+async def admin_grant_pro(
+    request: AdminGrantProRequest,
+    _admin=Depends(require_admin_key),
+):
+    """Grant Pro subscription to a user by email. Requires admin API key."""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    async with db_service.session() as session:
+        result = await session.execute(select(User).where(User.email == request.email))
+        user = result.scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail=f"User not found: {request.email}")
+
+        user.subscription_tier = "pro"
+        await session.commit()
+
+    return {
+        "status": "granted",
+        "email": request.email,
+        "tier": "pro",
+        "days": request.days,
     }
 
 
@@ -3560,6 +3634,58 @@ async def get_accuracy_metrics(
         },
         "by_sport": metrics.by_sport,
         "by_variant": metrics.by_variant,
+    }
+
+
+@app.get("/accuracy/calibration", tags=["Accuracy"])
+async def accuracy_calibration():
+    """Report confidence calibration: are high-confidence decisions more accurate?"""
+    if not db_service.is_configured:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    async with db_service.session() as session:
+        result = await session.execute(
+            text("""
+                SELECT
+                    confidence,
+                    COUNT(*) as total,
+                    COUNT(*) FILTER (WHERE actual_outcome = decision) as correct,
+                    ROUND(
+                        COUNT(*) FILTER (WHERE actual_outcome = decision)::numeric
+                        / NULLIF(COUNT(*), 0) * 100, 1
+                    ) as accuracy_pct
+                FROM decisions
+                WHERE actual_outcome IS NOT NULL
+                GROUP BY confidence
+                ORDER BY CASE confidence
+                    WHEN 'high' THEN 1
+                    WHEN 'medium' THEN 2
+                    WHEN 'low' THEN 3
+                END
+            """)
+        )
+        rows = result.mappings().all()
+
+    levels = {
+        r["confidence"]: {
+            "total": r["total"],
+            "correct": r["correct"],
+            "accuracy_pct": float(r["accuracy_pct"]) if r["accuracy_pct"] else None,
+        }
+        for r in rows
+    }
+
+    # Calibration check: high should be more accurate than low
+    high_acc = levels.get("high", {}).get("accuracy_pct")
+    low_acc = levels.get("low", {}).get("accuracy_pct")
+    calibrated = None
+    if high_acc is not None and low_acc is not None:
+        calibrated = high_acc >= low_acc
+
+    return {
+        "levels": levels,
+        "well_calibrated": calibrated,
+        "current_thresholds": {"low": "margin < 5", "medium": "margin 5-15", "high": "margin > 15"},
     }
 
 

@@ -1116,6 +1116,7 @@ def format_player_context(
     trends: dict | None = None,
     matchup_info: str | None = None,
     game_info: "GameInfo | None" = None,
+    advanced_stats_context: str | None = None,
 ) -> str:
     """Format player info and stats for Claude context injection."""
     lines = [
@@ -1206,5 +1207,9 @@ def format_player_context(
         if game_info.over_under is not None:
             odds_parts.append(f"O/U {game_info.over_under:.1f}")
         lines.append(f"- Game line: {', '.join(odds_parts)}")
+
+    # Advanced stats from reference sites (optional enrichment)
+    if advanced_stats_context:
+        lines.append(advanced_stats_context)
 
     return "\n".join(lines)
