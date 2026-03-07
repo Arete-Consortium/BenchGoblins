@@ -185,6 +185,18 @@ async def get_power_rankings(
             generated_at=datetime.now(UTC).isoformat(),
         )
 
+    # Build display name map from league memberships
+    display_names: dict[int, str] = {}
+    if league.external_league_id.startswith("demo-"):
+        async with db_service.session() as session:
+            result = await session.execute(
+                select(LeagueMembership)
+                .options(selectinload(LeagueMembership.user))
+                .where(LeagueMembership.league_id == league.id, LeagueMembership.status == "active")
+            )
+            for idx, m in enumerate(result.scalars().all()):
+                display_names[idx + 1] = m.user.name if m.user else f"Team {idx + 1}"
+
     # Score each roster by total player count (as a proxy — full scoring
     # requires player stats enrichment which is expensive per-call)
     rankings = []
@@ -198,6 +210,7 @@ async def get_power_rankings(
             RosterRanking(
                 rank=0,
                 owner_id=roster.owner_id,
+                display_name=display_names.get(roster.roster_id),
                 roster_size=player_count,
                 strength_score=round(strength, 1),
             )
@@ -287,6 +300,18 @@ async def get_roster_analysis(
             detail=f"Failed to fetch rosters: {e}",
         )
 
+    # Build display name map for demo leagues
+    display_names: dict[int, str] = {}
+    if league.external_league_id.startswith("demo-"):
+        async with db_service.session() as session:
+            result = await session.execute(
+                select(LeagueMembership)
+                .options(selectinload(LeagueMembership.user))
+                .where(LeagueMembership.league_id == league.id, LeagueMembership.status == "active")
+            )
+            for idx, m in enumerate(result.scalars().all()):
+                display_names[idx + 1] = m.user.name if m.user else f"Team {idx + 1}"
+
     teams = []
     for roster in rosters or []:
         player_count = len(roster.players) if roster.players else 0
@@ -310,6 +335,7 @@ async def get_roster_analysis(
         teams.append(
             TeamAnalysis(
                 owner_id=roster.owner_id,
+                display_name=display_names.get(roster.roster_id),
                 roster_size=player_count,
                 starters_count=starter_count,
                 strengths=strengths,

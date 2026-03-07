@@ -285,6 +285,10 @@ class SleeperService:
 
     async def get_league_rosters(self, league_id: str) -> list[SleeperRoster]:
         """Get all rosters in a league."""
+        # Demo mode — return synthetic rosters
+        if league_id.startswith("demo-"):
+            return self._get_demo_rosters()
+
         client = await self._get_client()
         rosters = []
 
@@ -307,6 +311,32 @@ class SleeperService:
         except httpx.HTTPError:
             pass
 
+        return rosters
+
+    @staticmethod
+    def _get_demo_rosters() -> list["SleeperRoster"]:
+        """Return 12 synthetic rosters for demo mode."""
+        import random
+        random.seed(42)  # deterministic
+
+        team_names = [
+            "Arete Driver", "Mike Johnson", "Sarah Williams", "David Chen",
+            "Emily Rodriguez", "Chris Thompson", "Jessica Lee", "Ryan Martinez",
+            "Amanda Davis", "Kevin Brown", "Lauren Wilson", "Marcus Taylor",
+        ]
+        rosters = []
+        for i, name in enumerate(team_names):
+            # Vary roster sizes: 13-17 players, 9 starters
+            total = random.randint(13, 17)
+            starters = [f"p{i*20+j}" for j in range(9)]
+            bench = [f"p{i*20+9+j}" for j in range(total - 9)]
+            rosters.append(SleeperRoster(
+                roster_id=i + 1,
+                owner_id=f"owner-{i+1}",
+                players=starters + bench,
+                starters=starters,
+                reserve=[f"p{i*20+18}"] if random.random() > 0.6 else None,
+            ))
         return rosters
 
     async def get_user_roster(

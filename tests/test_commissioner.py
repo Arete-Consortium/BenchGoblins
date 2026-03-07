@@ -250,11 +250,13 @@ class TestPowerRankings:
         mock_db.session.return_value.__aexit__ = AsyncMock(return_value=False)
 
         roster1 = MagicMock(spec=SleeperRoster)
+        roster1.roster_id = 1
         roster1.owner_id = "owner1"
         roster1.players = ["p1", "p2", "p3", "p4", "p5"]
         roster1.starters = ["p1", "p2", "p3"]
 
         roster2 = MagicMock(spec=SleeperRoster)
+        roster2.roster_id = 2
         roster2.owner_id = "owner2"
         roster2.players = ["p6", "p7"]
         roster2.starters = ["p6"]
@@ -723,12 +725,14 @@ class TestRosterAnalysis:
 
         # Deep roster (15+ players, 9+ starters)
         deep_roster = MagicMock(spec=SleeperRoster)
+        deep_roster.roster_id = 1
         deep_roster.owner_id = "owner_deep"
         deep_roster.players = [f"p{i}" for i in range(16)]
         deep_roster.starters = [f"p{i}" for i in range(9)]
 
         # Thin roster (< 10 players, < 3 bench)
         thin_roster = MagicMock(spec=SleeperRoster)
+        thin_roster.roster_id = 2
         thin_roster.owner_id = "owner_thin"
         thin_roster.players = ["p1", "p2", "p3", "p4", "p5", "p6", "p7", "p8"]
         thin_roster.starters = ["p1", "p2", "p3", "p4", "p5", "p6"]
